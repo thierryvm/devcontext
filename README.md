@@ -10,6 +10,12 @@ Conçu pour le modèle « 1 Gmail dédié par client, transféré au client en f
 état neutre, c'est l'identité du dernier qui a parlé — exactement ce que ce module
 existe pour supprimer.
 
+| | |
+|---|---|
+| **[INSTALLATION.md](INSTALLATION.md)** | poser le module sur une machine neuve, et ce que ce dépôt ne restaure pas |
+| **[POURQUOI.md](POURQUOI.md)** | ce que ce module cherche à empêcher, et ce qui l'a fait naître |
+| Ce fichier | l'usage quotidien |
+
 ---
 
 ## Installation
@@ -19,14 +25,22 @@ existe pour supprimer.
 Install-Module Microsoft.PowerShell.SecretManagement -Scope CurrentUser
 Install-Module Microsoft.PowerShell.SecretStore      -Scope CurrentUser
 
-# 2. Poser le module
-$dest = "$HOME\Documents\PowerShell\Modules\DevContext"
-New-Item -ItemType Directory -Force -Path $dest
-Copy-Item .\DevContext.psm1 $dest
+# 2. LIER le dépôt — pas le copier. Terminal administrateur.
+New-Item -ItemType SymbolicLink `
+  -Path   "$HOME\Documents\PowerShell\Modules\DevContext" `
+  -Target (Resolve-Path .)
 
 # 3. Charger au démarrage
 Add-Content $PROFILE "`nImport-Module DevContext"
 ```
+
+> ⚠️ **Un lien, jamais une copie.** L'étape 2 disait autrefois `Copy-Item`. Le
+> module se retrouvait alors en deux exemplaires : celui qu'on lit et modifie,
+> et celui que PowerShell charge réellement. Le 12/08/2026, une correction
+> apportée au premier n'a eu **aucun effet**, en silence — il a fallu comparer
+> les deux fichiers pour le comprendre.
+>
+> Procédure complète, vérification et retour arrière : **[INSTALLATION.md](INSTALLATION.md)**.
 
 Racine des contextes : `F:\CTX` par défaut, surchargeable via `$env:DEVCTX_ROOT`
 (à poser dans `$PROFILE` **avant** l'`Import-Module`).

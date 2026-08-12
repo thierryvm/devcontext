@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevContext — quoi faire, où, quand</title>
+<style>
+  :root{
+    --bg:#faf9f7; --panel:#ffffff; --ink:#1c1b19; --muted:#6b6862;
+    --line:#e6e3dd; --accent:#b4501e; --accent-soft:#fdf2ec;
+    --ok:#2f6b3f; --ok-soft:#eef6f0; --warn:#8a6100; --warn-soft:#fdf6e6;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#16151a; --panel:#1e1d23; --ink:#eceaf0; --muted:#9a96a3;
+           --line:#302e38; --accent:#e8875a; --accent-soft:#2a211d;
+           --ok:#7cc796; --ok-soft:#1c2620; --warn:#e0b45c; --warn-soft:#2a2418; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 ui-sans-serif,-apple-system,"Segoe UI",Inter,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:56px 28px 90px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:34px}
+  h1{margin:0;font-size:32px;letter-spacing:-.02em;font-weight:650}
+  .sub{color:var(--muted);font-size:14px;margin-top:7px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);
+     font-weight:650;margin:52px 0 16px;padding-top:8px}
+  h3{font-size:16px;font-weight:650;margin:28px 0 10px}
+  p{margin:0 0 12px}
+  .lead{font-size:17px}
+  table{width:100%;border-collapse:collapse;font-size:14px;background:var(--panel);
+        border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;
+     color:var(--muted);font-weight:650;padding:12px 14px;border-bottom:1px solid var(--line)}
+  td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .nm{font-weight:600}
+  code{font-family:var(--mono);font-size:12.5px;color:var(--accent);
+       background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+  td code,th code{white-space:nowrap}
+  pre{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+      border-radius:8px;padding:14px 16px;overflow-x:auto;margin:0 0 14px;
+      font-family:var(--mono);font-size:13px;line-height:1.55}
+  pre code{background:none;padding:0;color:var(--ink);font-size:13px;white-space:pre}
+  pre .c{color:var(--muted)}
+  .box{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+       border-radius:8px;padding:16px 20px;margin:0 0 14px;font-size:14.5px}
+  .box b{display:block;margin-bottom:4px}
+  .box p:last-child{margin-bottom:0}
+  .box.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+  .box.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+  .box.stop{border-left-color:#c0392b;background:var(--accent-soft)}
+  ol{padding-left:22px;margin:0 0 14px}
+  ol>li{margin-bottom:18px}
+  ul{padding-left:22px;margin:0 0 12px}
+  ul>li{margin-bottom:6px}
+  .yes{color:var(--ok);font-weight:650}
+  .no{color:var(--accent);font-weight:650}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:20px 24px;margin-bottom:14px}
+  .step .h{font-weight:650;font-size:15px;margin-bottom:3px}
+  .step .w{font-size:12px;color:var(--muted);text-transform:uppercase;
+           letter-spacing:.07em;margin-bottom:12px}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+       padding:18px 24px;font-size:14.5px;columns:2;column-gap:36px}
+  .toc a{display:block;padding:3px 0;break-inside:avoid}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+  a:hover{border-bottom-color:var(--accent)}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:13px}
+  @media(max-width:760px){.wrap{padding:32px 18px 60px}h1{font-size:26px}
+    .toc{columns:1}table{font-size:13px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>DevContext — quoi faire, où, quand</h1>
+  <div class="sub">Guide opérationnel · 8 août 2026 · complète <code>README.md</code> (le quoi) et <code>POURQUOI.md</code> (le pourquoi)</div>
+</header>
+
+<div class="box ok">
+  <b>État au 8 août 2026 — les deux contextes sont opérationnels</b>
+  <table style="margin-top:10px">
+    <thead><tr><th>Contexte</th><th>Racine</th><th>git</th><th>gh</th><th>vercel</th><th>supabase</th><th><code>ctx</code></th></tr></thead>
+    <tbody>
+      <tr><td><b>perso</b></td><td><code>F:\PROJECTS\Apps</code></td><td>thierryvm@gmail.com</td><td>thierryvm</td><td>session dédiée</td><td>2 comptes, routage auto</td><td class="yes">GO</td></tr>
+      <tr><td><b>client-a</b></td><td><code>F:\PROJECTS\Clients\client-a</code></td><td>contact@exemple.com</td><td>login-client</td><td>session dédiée</td><td>compte client</td><td class="yes">GO</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:10px">Trois configurations <code>gh</code> coexistent sans interférence — contexte perso, contexte client, et la globale de la machine. Un <code>gh auth switch</code> lancé ailleurs n'a plus aucun effet sur les contextes.</p>
+</div>
+
+<div class="box warn">
+  <b>Piège Windows résolu le 8 août — deux <code>ssh.exe</code> cohabitent</b>
+  <p>Git utilise par défaut <code>C:\Program Files\Git\usr\bin\ssh.exe</code>, qui <b>ne sait pas parler à l'agent SSH de Windows</b>. Une clé protégée par phrase secrète échoue donc silencieusement en <code>Permission denied (publickey)</code>, alors qu'un <code>ssh -T</code> tapé à la main fonctionne — celui-ci utilise <code>C:\WINDOWS\System32\OpenSSH\ssh.exe</code>.</p>
+  <p><b>Correctif appliqué :</b> <code>git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"</code>. À rejouer sur toute machine Windows où une clé porte une phrase secrète.</p>
+</div>
+
+<div class="toc">
+  <a href="#principe">1 · Le principe : ce qui est deviné, ce qui ne l'est pas</a>
+  <a href="#qui-decide">2 · Qui décide du compte, outil par outil</a>
+  <a href="#branchements">3 · Branchements perso — une seule fois</a>
+  <a href="#quotidien">4 · Comment tu bosses, concrètement</a>
+  <a href="#suis-je">5 · « Suis-je sur le bon compte ? »</a>
+  <a href="#nouveau-perso">6 · Nouveau projet perso</a>
+  <a href="#nouveau-pro">7 · Nouveau client pro</a>
+  <a href="#remote">8 · Le piège des URL de remote</a>
+  <a href="#supabase">9 · Deux comptes Supabase</a>
+  <a href="#fin">10 · Fin de mission</a>
+  <a href="#depannage">11 · Dépannage</a>
+  <a href="#limites">12 · Ce qui n'est pas protégé</a>
+  <a href="#memo"><b>Mémo — les 8 commandes</b></a>
+</div>
+
+<h2 id="principe">1 · Le principe : ce qui est deviné, ce qui ne l'est pas</h2>
+
+<p class="lead">Aucune application ne devine quoi que ce soit. Il n'y a que <b>deux</b> mécanismes, et un seul est automatique.</p>
+
+<h3><span class="yes">Automatique</span> — git décide par le chemin du dossier</h3>
+<p><code>ctx-new</code> écrit ceci dans <code>~/.gitconfig</code> :</p>
+<pre><code>[includeIf "gitdir/i:F:/PROJECTS/Apps/"]
+	path = F:/CTX/perso/gitconfig</code></pre>
+<p>git relit ce fichier à <b>chaque commande</b> et choisit l'identité selon l'emplacement du dépôt. Rien à taper, jamais. Ça marche depuis le bouton Source Control de VS Code, depuis un agent IA, depuis n'importe quel terminal. C'est pour ça que Client A a dû sortir de <code>Apps\</code> : deux racines imbriquées rendaient la règle ambiguë.</p>
+
+<h3><span class="no">Manuel</span> — tout le reste dépend du <i>lancement</i></h3>
+<p>Les comptes connectés (GitHub, Vercel, Supabase, Copilot) ne sont pas attachés au dossier. Ils sont attachés :</p>
+<ul>
+  <li>soit au <b>terminal</b> dans lequel tu es → posé par <code>work &lt;contexte&gt;</code></li>
+  <li>soit à <b>comment l'application a été démarrée</b> → <code>code-ctx</code>, <code>web-ctx</code></li>
+</ul>
+
+<div class="box">
+  <b>La question que tu as posée : « j'ai ankora ouvert dans VS Code, si je tape <code>work perso</code> dans le terminal, il comprend ? »</b>
+  <p><b>Le terminal, oui.</b> Il reçoit les variables du contexte. Attention : <code>work</code> fait aussi un <code>cd</code> vers la racine — tu sortirais d'ankora. Pour rester où tu es : <code>work perso -NoCd</code>.</p>
+  <p><b>La fenêtre VS Code, non.</b> Son compte GitHub et son Copilot restent ceux de l'instance globale. Un terminal intégré ne peut pas reconfigurer l'éditeur qui l'héberge. Pour une fenêtre VS Code réellement « perso », il faut l'ouvrir avec <code>code-ctx perso</code> — c'est le <code>--user-data-dir</code> séparé qui isole les sessions d'auth.</p>
+  <p><b>git dans ankora, déjà bon</b>, sans rien taper : ankora est sous <code>F:\PROJECTS\Apps\</code>, donc le <code>includeIf</code> s'applique.</p>
+</div>
+
+<h2 id="qui-decide">2 · Qui décide du compte, outil par outil</h2>
+
+<table>
+  <thead><tr><th>Outil</th><th>Ce qui détermine le compte</th><th>Auto ?</th><th>Le geste</th></tr></thead>
+  <tbody>
+    <tr><td class="nm">git — identité de commit</td><td><code>includeIf</code> par chemin</td><td class="yes">oui</td><td>aucun</td></tr>
+    <tr><td class="nm">git — push / pull</td><td><code>insteadOf</code> → clé SSH <code>github-&lt;ctx&gt;</code></td><td class="yes">oui</td><td>aucun</td></tr>
+    <tr><td class="nm">VS Code — GitHub, Copilot</td><td><code>--user-data-dir</code> séparé</td><td class="no">non</td><td><code>code-ctx &lt;ctx&gt;</code></td></tr>
+    <tr><td class="nm">gh (CLI GitHub)</td><td><code>GH_CONFIG_DIR</code></td><td class="no">non</td><td><code>work &lt;ctx&gt;</code></td></tr>
+    <tr><td class="nm">vercel (CLI)</td><td><code>--global-config</code> via le wrapper</td><td class="no">non</td><td><code>work &lt;ctx&gt;</code></td></tr>
+    <tr><td class="nm">supabase (CLI)</td><td>wrapper : <code>project-ref</code> du dossier → jeton</td><td class="yes">oui*</td><td><code>work &lt;ctx&gt;</code> une fois</td></tr>
+    <tr><td class="nm">Dashboards web</td><td>profil Chrome dédié</td><td class="no">non</td><td><code>web-ctx &lt;ctx&gt;</code></td></tr>
+    <tr><td class="nm">L'application elle-même</td><td><code>.env.local</code> du projet</td><td class="yes">oui</td><td>aucun (par dossier)</td></tr>
+  </tbody>
+</table>
+
+<div class="box warn">
+  <b>Une asymétrie à connaître</b>
+  <p><code>gh</code> et <code>vercel</code> savent utiliser un <b>dossier de config dédié</b> : tu fais <code>gh auth login</code> / <code>vercel login</code> une fois par contexte, et c'est réglé pour toujours, sans jeton à gérer.</p>
+  <p><code>supabase</code>, lui, n'a <b>aucun équivalent</b>. Son seul point d'entrée est la variable <code>SUPABASE_ACCESS_TOKEN</code>. Pour Supabase — et seulement lui — tu es <b>obligé</b> de créer un jeton et de le mettre au coffre.</p>
+  <p>* C'est pour ça qu'un wrapper a été ajouté au module : il rend Supabase automatique <i>par projet</i>, y compris avec plusieurs comptes dans un même contexte. Voir <a href="#supabase">section 9</a>.</p>
+</div>
+
+<h2 id="branchements">3 · Branchements perso — une seule fois</h2>
+
+<div class="box ok">
+  <b>Fait le 8 août 2026 — cette section est un historique, pas une liste de tâches</b>
+  <p>Les 6 étapes ci-dessous sont toutes effectuées pour le contexte <code>perso</code>. Elles restent ici comme référence : c'est la même séquence à rejouer pour chaque nouveau contexte client.</p>
+</div>
+
+<table>
+  <thead><tr><th>Branchement</th><th>État</th><th>Preuve</th></tr></thead>
+  <tbody>
+    <tr><td>Clé SSH sur GitHub</td><td class="yes">fait</td><td><code>ssh -T git@github-perso</code> → <i>Hi thierryvm!</i></td></tr>
+    <tr><td><code>gh</code> isolé</td><td class="yes">fait</td><td><code>thierryvm</code> dans le contexte, <code>login-client</code> hors contexte</td></tr>
+    <tr><td>Vercel isolé</td><td class="yes">fait</td><td><code>auth.json</code> propre dans <code>F:\CTX\perso\vercel\</code></td></tr>
+    <tr><td>Supabase — 2 comptes</td><td class="yes">fait</td><td>wrapper + index, bascule auto par projet</td></tr>
+    <tr><td>Profil Chrome</td><td class="yes">fait</td><td><code>chromeProfile = "Default"</code></td></tr>
+    <tr><td>VS Code isolé</td><td class="yes">fait</td><td><code>F:\CTX\perso\vscode</code>, Settings Sync activé</td></tr>
+    <tr><td>Login Supabase global</td><td class="yes">supprimé</td><td>hors contexte : <code>Access token not provided</code></td></tr>
+  </tbody>
+</table>
+
+<p><b>Où :</b> un terminal PowerShell 7 (<code>pwsh</code>), n'importe où.</p>
+
+<div class="step">
+  <div class="h">1 — Clé SSH sur GitHub</div>
+  <div class="w">Étape bloquante : sans elle, <code>Permission denied (publickey)</code> sur <b>tous</b> les dépôts de la racine, dès la création du contexte</div>
+  <pre><code>Get-Content F:\CTX\perso\ssh\id_ed25519.pub | Set-Clipboard</code></pre>
+  <p>Puis <a href="https://github.com/settings/ssh/new">github.com/settings/ssh/new</a> — connecté sur <b>thierryvm</b> :<br>
+  Title = <code>DevContext perso</code> · Key type = <b>Authentication Key</b> · coller · <i>Add SSH key</i>.</p>
+  <p>Vérifier tout de suite :</p>
+  <pre><code>ssh -T git@github-perso
+<span class="c"># attendu : "Hi thierryvm! You've successfully authenticated..."</span></code></pre>
+</div>
+
+<div class="step">
+  <div class="h">2 — Connecter <code>gh</code> dans le contexte</div>
+  <div class="w">Isole la CLI GitHub dans <code>F:\CTX\perso\gh\</code></div>
+  <pre><code>work perso
+gh auth login   <span class="c"># GitHub.com → SSH → la clé F:\CTX\perso\ssh → navigateur</span>
+gh api user --jq .login   <span class="c"># attendu : thierryvm</span></code></pre>
+  <p>Pas besoin de créer un token personnel. <code>gh auth login</code> est plus sûr et se renouvelle tout seul.</p>
+</div>
+
+<div class="step">
+  <div class="h">3 — Connecter Vercel dans le contexte</div>
+  <div class="w">Le wrapper <code>vercel</code> injecte <code>--global-config F:\CTX\perso\vercel</code></div>
+  <pre><code>work perso
+vercel login
+vercel whoami</code></pre>
+</div>
+
+<div class="step">
+  <div class="h">4 — Supabase : jeton obligatoire</div>
+  <div class="w">Seul outil sans dossier de config isolé</div>
+  <p>Créer un jeton sur <a href="https://supabase.com/dashboard/account/tokens">supabase.com/dashboard/account/tokens</a>, puis :</p>
+  <pre><code>$t = Read-Host "Supabase PAT" -AsSecureString
+Set-Secret -Vault DevContext -Name "devctx/perso/supabase-token" -SecureStringSecret $t
+Remove-Variable t
+
+work perso            <span class="c"># recharge le coffre dans le terminal</span>
+supabase projects list</code></pre>
+  <p>Le jeton n'est jamais écrit sur disque en clair : il vit dans SecretStore et n'existe qu'en mémoire du terminal.</p>
+</div>
+
+<div class="step">
+  <div class="h">5 — Profil Chrome</div>
+  <div class="w">Pour les dashboards web (Vercel, Supabase, GitHub)</div>
+  <p>Profils détectés sur ta machine : <code>Default</code> = « Votre Chrome » · <code>Profile 1</code> = « Client A ».</p>
+  <pre><code>$f = 'F:\CTX\perso\context.json'
+$j = Get-Content $f -Raw | ConvertFrom-Json
+$j.chromeProfile = 'Default'
+$j | ConvertTo-Json -Depth 5 | Set-Content $f -Encoding UTF8
+
+web-ctx perso</code></pre>
+</div>
+
+<div class="step">
+  <div class="h">6 — VS Code perso</div>
+  <div class="w">Première ouverture : instance vierge, à connecter une fois</div>
+  <pre><code>code-ctx perso</code></pre>
+  <p>La fenêtre s'ouvre <b>sans tes extensions ni tes réglages</b> — c'est normal, elle a son propre <code>--extensions-dir</code>. Réinstalle ce dont tu as besoin et connecte GitHub/Copilot sur <b>thierryvm</b>. Cette fenêtre garde ce compte pour toujours, en parallèle de celle du client.</p>
+</div>
+
+<h2 id="quotidien">4 · Comment tu bosses, concrètement</h2>
+
+<p class="lead">Deux commandes couvrent 95 % des cas. Le reste, c'est du bon sens sur <i>quelle fenêtre</i> tu utilises.</p>
+
+<h3>La règle en une phrase</h3>
+<div class="box ok">
+  <p><b>Une fenêtre VS Code par contexte, et <code>work</code> dans tout terminal que tu ouvres toi-même.</b> Tes projets perso s'ouvrent tous dans la <i>même</i> fenêtre — il n'y a pas une fenêtre par projet.</p>
+</div>
+
+<h3>Cas 1 — Je démarre ma journée sur un projet</h3>
+<pre><code>work perso
+code-ctx perso "F:\PROJECTS\Apps\ankora"</code></pre>
+<p>Le second argument est <b>le projet</b> que tu veux ouvrir. C'est la forme à privilégier : VS Code s'ouvre directement sur <code>ankora</code>, avec son <code>package.json</code>, son <code>tsconfig</code>, son <code>node_modules</code> — les extensions (ESLint, TypeScript, Tailwind) trouvent leur configuration là où elles l'attendent.</p>
+
+<pre><code>code-ctx perso    <span class="c"># sans chemin → ouvre toute la racine F:\PROJECTS\Apps</span></code></pre>
+<p>Sans chemin, tu obtiens l'arborescence complète de tes 17 projets dans l'explorateur. Pratique pour naviguer, <b>moins bon pour travailler</b> : les extensions raisonnent alors sur la racine et non sur le projet, ce qui les rend lentes ou muettes.</p>
+
+<div class="box">
+  <b>La bonne habitude</b>
+  <p>Un projet = <code>code-ctx perso "&lt;chemin du projet&gt;"</code>. Tu peux en ouvrir plusieurs : ils apparaissent comme des fenêtres distinctes, mais partagent le même <code>--user-data-dir</code>, donc le même compte GitHub. Une identité, plusieurs fenêtres.</p>
+</div>
+
+<h3>Cas 2 — J'ouvre un terminal dans VS Code</h3>
+<p>Le terminal intégré hérite du contexte <b>si la fenêtre a été lancée à froid depuis un shell où <code>work</code> était passé</b>. Sinon, non. Dans le doute, une seule commande :</p>
+<pre><code>ctx</code></pre>
+<p><b>GO</b> → tu peux y aller. <b>NO-GO</b> → lis la ligne rouge, elle dit quoi faire. Le correctif est presque toujours :</p>
+<pre><code>work perso -NoCd     <span class="c"># -NoCd = reste dans le dossier courant</span></code></pre>
+
+<h3>Cas 3 — Je vais pousser du code</h3>
+<p>Le seul réflexe qui compte vraiment :</p>
+<pre><code>ctx</code></pre>
+<p>Il croise trois choses d'un coup — le dossier, l'identité active, et le compte GitHub <i>réellement</i> authentifié. C'est le seul moyen d'attraper le scénario dangereux : être dans le dossier d'un contexte avec l'identité d'un autre.</p>
+
+<h3>Cas 4 — Je lance un agent IA (Claude Code, Cursor…)</h3>
+<p>Lance-le depuis un terminal où <code>work</code> est passé. L'agent hérite des variables d'environnement du terminal, donc des jetons du contexte — et <b>uniquement</b> de ceux-là. C'est ce qui le rend capable de travailler sans jamais avoir les secrets d'un autre client.</p>
+
+<div class="box ok">
+  <b>Claude Code connaît le dispositif — dans tous tes projets</b>
+  <p>Un protocole agent est chargé automatiquement à chaque session, quel que soit le projet ouvert : <code>~\.claude\CLAUDE.md</code> importe <code>~\.claude\devcontext-agent.md</code>.</p>
+  <p>Il lui demande de lancer <code>ctx</code> au démarrage et de <b>rapporter le verdict</b>, de refuser de pousser ou déployer sur un <code>NO-GO</code>, de connaître les pièges (URL avec <code>login@</code>, <code>user.email</code> en dur, index Supabase périmé) et de ne jamais écrire un jeton ailleurs que dans le coffre.</p>
+  <p><b>Pourquoi pas un fichier par projet :</b> ankora et Terminal Learning sont des dépôts <b>publics</b>. Un <code>CLAUDE.md</code> par projet publierait tes chemins, emails et noms de comptes. Le fichier global ne part que dans <code>claude-config</code>, qui est privé.</p>
+  <p>Concrètement : demande <i>« on est bien sur le bon compte ? »</i> dans n'importe quel projet, il saura quoi vérifier et quoi te répondre.</p>
+</div>
+
+<h3>Ce que tu ne fais plus jamais</h3>
+<ul>
+  <li>Te déconnecter de GitHub pour passer d'un compte à l'autre</li>
+  <li>Faire <code>gh auth switch</code></li>
+  <li>Te demander « sous quelle identité je viens de commiter ? » — git décide par le dossier</li>
+  <li>Ouvrir une fenêtre VS Code par projet — une par <i>contexte</i> suffit</li>
+</ul>
+
+<h3>Quelle fenêtre VS Code garder ?</h3>
+
+<p><b>La nouvelle</b>, celle lancée par <code>code-ctx</code>. L'ancienne (lancée par l'icône du menu Démarrer) utilise la config <b>globale</b> de la machine — dont le compte <code>gh</code>, qui est celui du client. Elle n'est pas dangereuse pour tes commits (git décide par le chemin), mais Copilot, le panneau Source Control et ses terminaux y sont sur le compte global.</p>
+
+<table>
+  <thead><tr><th>Question</th><th>Réponse</th></tr></thead>
+  <tbody>
+    <tr><td>Je ferme l'ancienne ?</td><td><b>Oui</b>, une fois la synchro terminée. Ensuite, n'ouvre VS Code que par <code>code-ctx</code>.</td></tr>
+    <tr><td>Je perds mes extensions / mon thème ?</td><td>Non — Settings Sync les a rapatriés dans la nouvelle.</td></tr>
+    <tr><td>Je perds mon historique Claude Code ?</td><td><b>Non.</b> Les sessions vivent dans <code>C:\Users\thier\.claude\projects\</code>, pas dans VS Code. Elles sont communes aux deux fenêtres.</td></tr>
+    <tr><td>Je dois relancer <code>code-ctx</code> à chaque projet ?</td><td>Oui, avec le chemin du projet. C'est une commande, pas une reconfiguration.</td></tr>
+    <tr><td>Une fenêtre par projet, ou une pour tout ?</td><td>Une <b>par projet ouvert</b>, mais toutes partagent la même identité perso.</td></tr>
+  </tbody>
+</table>
+
+<div class="box warn">
+  <b>Erreur <code>tsserver.js ne pointe pas vers une installation valide</code></b>
+  <p>Symptôme d'une fenêtre ouverte sur <b>la racine</b> <code>F:\PROJECTS\Apps</code> au lieu d'un projet. Ton réglage <code>"typescript.tsdk": "node_modules/typescript/lib"</code> est relatif au dossier ouvert, et il n'y a pas de <code>node_modules</code> à la racine.</p>
+  <p><b>Correctif :</b> rien à reconfigurer — ouvre le projet, pas la racine : <code>code-ctx perso "F:\PROJECTS\Apps\ankora"</code>.</p>
+</div>
+
+<h3>Et si je bosse sur mon autre portable ?</h3>
+<p>DevContext n'y est pas forcément installé. Deux repères :</p>
+<ul>
+  <li><code>ctx</code> introuvable → le dispositif n'est pas là. Ni <code>includeIf</code>, ni clés dédiées : l'identité git est celle configurée globalement sur cette machine. Vérifie avec <code>git config user.email</code> avant de commiter.</li>
+  <li>Le protocole agent (ci-dessous) demande à Claude Code de le signaler explicitement au lieu de supposer.</li>
+</ul>
+
+<h2 id="suis-je">5 · « Suis-je sur le bon compte ? »</h2>
+
+<p>C'est <code>ctx</code>. Il ne se contente pas d'afficher : il <b>juge</b>. Trois questions, un verdict.</p>
+<pre><code>ctx</code></pre>
+<table>
+  <thead><tr><th>Il vérifie</th><th>Comment</th></tr></thead>
+  <tbody>
+    <tr><td>Le dossier courant appartient-il au contexte actif ?</td><td>racine la plus longue qui préfixe le chemin</td></tr>
+    <tr><td>Le compte GitHub réellement authentifié est-il le bon ?</td><td><code>gh api user</code> comparé à <code>github.login</code> du manifeste</td></tr>
+    <tr><td>Un contexte est-il seulement actif, <code>GH_CONFIG_DIR</code> posé ?</td><td>variables d'environnement</td></tr>
+  </tbody>
+</table>
+<p>Il affiche aussi l'email git résolu, le compte <code>gh</code>, la présence des jetons Vercel/Supabase et l'URL de push du dépôt. <b>Réflexe : <code>ctx</code> avant tout push qui compte.</b></p>
+<p><code>ctx-check</code> fait la même chose mais <b>lève une exception</b> au lieu d'afficher — à mettre en tête d'un script ou dans un hook git.<br>
+<code>ctx-who</code> répond juste : « ce dossier appartient à quel contexte ? »</p>
+
+<h2 id="nouveau-perso">6 · Nouveau projet perso</h2>
+
+<p>Rien à créer côté DevContext. Le contexte <code>perso</code> couvre <b>toute</b> la racine <code>F:\PROJECTS\Apps\</code>.</p>
+<pre><code>work perso                      <span class="c"># cd automatique sur F:\PROJECTS\Apps</span>
+mkdir mon-projet ; cd mon-projet
+git init
+ctx                             <span class="c"># GO attendu</span>
+
+gh repo create thierryvm/mon-projet --private --source=. --remote=origin
+git remote get-url --push origin
+<span class="c"># attendu : git@github-perso:thierryvm/mon-projet.git</span></code></pre>
+<div class="box warn">
+  <b>La seule règle à ne pas casser</b>
+  <p>Le projet doit vivre <b>sous <code>F:\PROJECTS\Apps\</code></b>. Ailleurs, le <code>includeIf</code> ne s'applique pas et tu commits sous l'identité git globale de la machine.</p>
+</div>
+
+<h2 id="nouveau-pro">7 · Nouveau client pro — procédure éprouvée</h2>
+
+<p>Modèle : <b>un Gmail dédié par client</b>, transféré au client en fin de mission. La séquence ci-dessous est celle réellement exécutée pour <code>client-a</code> le 8 août 2026, corrections comprises. Compter <b>30 à 40 minutes</b>, et ne pas la lancer entre deux rendez-vous.</p>
+
+<div class="box ok">
+  <b>Le principe qui rend l'opération sans risque</b>
+  <p><code>ctx-new</code> active la réécriture d'URL <b>immédiatement</b>, alors que la clé n'est pas encore sur GitHub. Entre les deux, les <code>git push</code> de ce dépôt échouent. L'étape 3 supprime complètement cette fenêtre : on neutralise la règle juste après sa création, et on ne la réactive qu'une fois la clé vérifiée.</p>
+</div>
+
+<div class="step">
+  <div class="h">0 — Agent SSH <span style="font-weight:400;color:var(--muted)">— une seule fois par machine</span></div>
+  <div class="w">Terminal <b>administrateur</b> · à sauter s'il tourne déjà</div>
+  <p>Sans agent, une clé protégée par phrase secrète la redemande à chaque push. Avec, tu la donnes une fois et c'est réglé, y compris après redémarrage.</p>
+  <pre><code>Set-Service ssh-agent -StartupType Automatic
+Start-Service ssh-agent
+Get-Service ssh-agent   <span class="c"># attendu : Running / Automatic</span></code></pre>
+</div>
+
+<div class="step">
+  <div class="h">1 — Ranger le code hors de <code>Apps\</code></div>
+  <div class="w">Deux contextes ne peuvent pas partager une racine — <code>ctx-new</code> refuse</div>
+  <pre><code>F:\PROJECTS\Clients\&lt;client&gt;\</code></pre>
+  <p>Si le dépôt a des <b>worktrees</b>, les déplacer ensemble puis <code>git worktree repair</code>. Et penser à l'historique Claude Code, indexé par chemin (voir section 11).</p>
+</div>
+
+<div class="step">
+  <div class="h">2 — Créer le contexte</div>
+  <div class="w">Générer d'abord la phrase secrète dans KeePassXC, et l'y <b>enregistrer</b></div>
+  <pre><code>ctx-new &lt;client&gt; `
+  -Label "Nom Client" `
+  -Email "compte.client@gmail.com" `
+  -Root "F:\PROJECTS\Clients\&lt;client&gt;" `
+  -GithubLogin "login-github-du-client"</code></pre>
+  <p><code>ssh-keygen</code> demande la phrase secrète <b>deux fois</b>, en aveugle — rien ne s'affiche. Mets-en une : cette clé ouvre les dépôts d'un client, et les vers npm de 2026 ciblent précisément les clés SSH.</p>
+  <p>Puis 4 demandes de jetons → <b>Entrée × 4</b>. <code>gh</code> et <code>vercel</code> se branchent par navigateur, c'est plus propre qu'un jeton.</p>
+</div>
+
+<div class="step">
+  <div class="h">3 — Neutraliser la règle <span style="color:#c0392b">← à faire tout de suite</span></div>
+  <div class="w">Ramène la fenêtre de casse à zéro</div>
+  <pre><code>Rename-Item 'F:\CTX\&lt;client&gt;\gitconfig' 'gitconfig.off'</code></pre>
+  <p>Le <code>includeIf</code> pointe vers ce fichier ; absent, git l'ignore silencieusement. Tu retrouves <b>exactement</b> le comportement d'avant <code>ctx-new</code>. Vérifie-le :</p>
+  <pre><code>git -C '&lt;repo&gt;' remote get-url --push origin   <span class="c"># doit rester en https://</span>
+git -C '&lt;repo&gt;' ls-remote --heads origin       <span class="c"># doit passer</span></code></pre>
+</div>
+
+<div class="step">
+  <div class="h">4 — Clé SSH sur le compte GitHub <u>du client</u></div>
+  <div class="w">Chaque contexte a sa propre clé — c'est tout l'intérêt</div>
+  <pre><code>Get-Content F:\CTX\&lt;client&gt;\ssh\id_ed25519.pub | Set-Clipboard
+ssh-keygen -lf F:\CTX\&lt;client&gt;\ssh\id_ed25519.pub   <span class="c"># note l'empreinte</span></code></pre>
+  <p>Connecte-toi à GitHub <b>avec le compte du client</b> — profil Chrome dédié ou navigation privée — puis <a href="https://github.com/settings/ssh/new">Settings → SSH keys → New</a>. Type = <b>Authentication Key</b>, jamais <i>Signing Key</i>.</p>
+  <p><b>Contrôle :</b> l'empreinte affichée par GitHub après ajout doit correspondre à celle relevée ci-dessus. Si elle correspond à ta clé perso, tu t'es trompé de compte.</p>
+</div>
+
+<div class="step">
+  <div class="h">5 — Charger la clé et tester</div>
+  <pre><code>ssh-add F:\CTX\&lt;client&gt;\ssh\id_ed25519   <span class="c"># phrase secrète, une fois pour toutes</span>
+ssh -T git@github-&lt;client&gt;</code></pre>
+  <p><b>Point de bascule.</b> Tant que la réponse n'est pas <code>Hi &lt;login-client&gt;!</code>, ne réactive rien.</p>
+</div>
+
+<div class="step">
+  <div class="h">6 — Réactiver, et pointer git vers le bon <code>ssh.exe</code></div>
+  <pre><code>Rename-Item 'F:\CTX\&lt;client&gt;\gitconfig.off' 'gitconfig'
+git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"</code></pre>
+  <p>La seconde ligne est <b>indispensable dès qu'une clé porte une phrase secrète</b> — voir l'encadré des deux <code>ssh.exe</code> en tête de guide. Sans elle : <code>Permission denied (publickey)</code> alors que <code>ssh -T</code> fonctionne.</p>
+  <pre><code>git -C '&lt;repo&gt;' remote get-url --push origin   <span class="c"># git@github-&lt;client&gt;:…</span>
+git -C '&lt;repo&gt;' ls-remote --heads origin       <span class="c"># doit passer</span></code></pre>
+  <p>Vérifie aussi <b>un dépôt perso</b> au passage : c'est le seul moment où une régression croisée est possible.</p>
+</div>
+
+<div class="step">
+  <div class="h">7 — Nettoyer l'URL du remote</div>
+  <div class="w">Sans ça, la réécriture ne s'applique pas — voir section 8</div>
+  <pre><code>git -C '&lt;repo&gt;' remote set-url origin https://github.com/&lt;org&gt;/&lt;repo&gt;.git</code></pre>
+</div>
+
+<div class="step">
+  <div class="h">8 — Brancher <code>gh</code>, Vercel, Supabase</div>
+  <pre><code>work &lt;client&gt;
+gh auth login       <span class="c"># GitHub.com → SSH → Skip → navigateur</span>
+vercel login        <span class="c"># Continue with GitHub</span></code></pre>
+  <p>⚠️ <b>Deux pièges au même endroit :</b> à la question <i>« Upload your SSH public key? »</i>, réponds <b>Skip</b> — sinon <code>gh</code> enverrait ta clé <i>perso</i> sur le compte du client. Et vérifie le compte affiché dans le navigateur <b>avant</b> d'autoriser : il ouvre ta session par défaut, souvent la mauvaise.</p>
+  <p>Supabase, jeton depuis le compte du client :</p>
+  <pre><code>$t = Read-Host "PAT Supabase client" -AsSecureString
+Set-Secret -Vault DevContext -Name "devctx/&lt;client&gt;/supabase-token" -SecureStringSecret $t
+Remove-Variable t
+work &lt;client&gt; ; sb-index</code></pre>
+  <p>Profil Chrome : créer un profil dédié, relever son dossier via <code>chrome://version</code> (« Chemin du profil »), puis le renseigner dans <code>F:\CTX\&lt;client&gt;\context.json</code>.</p>
+</div>
+
+<div class="step">
+  <div class="h">9 — La fenêtre VS Code du client</div>
+  <pre><code>work &lt;client&gt;
+code-ctx &lt;client&gt; "F:\PROJECTS\Clients\&lt;client&gt;\&lt;repo&gt;"</code></pre>
+  <p>Elle s'ouvre <b>vierge</b> : 0 extension, pas de réglages. Deux connexions, et <b>ce sont deux comptes différents</b> :</p>
+  <table>
+    <thead><tr><th>Quoi</th><th>Quel compte</th><th>Pourquoi</th></tr></thead>
+    <tbody>
+      <tr><td><b>Sign In</b> (Copilot, Source Control)</td><td>le <b>client</b></td><td>c'est l'identité qui touche à son code</td></tr>
+      <tr><td><b>Settings Sync</b></td><td>le <b>tien</b></td><td>thème, extensions, raccourcis, MCP, agents — ton environnement te suit</td></tr>
+    </tbody>
+  </table>
+  <p>Pour le second : <code>Ctrl+Shift+P</code> → <code>Settings Sync: Turn On</code> → <b>« Sign in with another account »</b>. VS Code proposera le compte client par défaut : ne le prends pas, son cloud est vide.</p>
+  <div class="box warn">
+    <b>La connexion GitHub rouvre la mauvaise fenêtre</b>
+    <p>Le retour du navigateur passe par une URL <code>vscode://</code>, protocole enregistré <b>au niveau de l'installation</b> et non de la fenêtre : il réveille l'instance par défaut. Ferme les autres fenêtres avant, ou utilise le lien <i>« Having trouble? »</i> de la page GitHub, qui donne un code à coller directement.</p>
+    <p><b>Ce n'est pas bloquant :</b> <code>git commit</code>, <code>push</code> et le panneau Source Control fonctionnent <b>sans</b> cette connexion — ils passent par la clé SSH. Seuls Copilot et les onglets PR/Issues en dépendent.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="h">10 — Vérifier</div>
+  <pre><code>work &lt;client&gt; ; ctx        <span class="c"># GO sur les 5 axes</span>
+work perso -NoCd ; ctx     <span class="c"># non-régression</span></code></pre>
+</div>
+
+<h2 id="remote">8 · Le piège des URL de remote</h2>
+
+<p>La réécriture <code>insteadOf</code> est un <b>préfixe de chaîne</b>, pas une compréhension d'URL. Une URL qui contient un nom d'utilisateur ne matche pas :</p>
+<table>
+  <thead><tr><th>URL du remote</th><th>Après réécriture</th></tr></thead>
+  <tbody>
+    <tr><td><code>https://github.com/org/repo.git</code></td><td class="yes">git@github-&lt;ctx&gt;:org/repo.git ✓</td></tr>
+    <tr><td><code>git@github.com:org/repo.git</code></td><td class="yes">git@github-&lt;ctx&gt;:org/repo.git ✓</td></tr>
+    <tr><td><code>https://<b>login@</b>github.com/org/repo.git</code></td><td class="no">inchangée ✗</td></tr>
+  </tbody>
+</table>
+<p>Une URL non réécrite part en HTTPS via le credential helper, donc sur le compte <code>gh</code> global — le dernier connecté. C'est exactement la panne que le dispositif existe pour empêcher.</p>
+<div class="box">
+  <b>Le réflexe, sur tout dépôt nouveau ou cloné</b>
+  <pre style="margin:8px 0 0"><code>git remote get-url --push origin</code></pre>
+  <p style="margin-top:8px">Si la réponse ne commence pas par <code>git@github-&lt;ctx&gt;:</code>, corrige avec <code>remote set-url</code> en retirant le <code>login@</code>.</p>
+</div>
+
+<h2 id="supabase">9 · Plusieurs comptes Supabase dans un même contexte</h2>
+
+<p>DevContext ne prévoyait qu'<b>un</b> <code>supabase-token</code> par contexte. Un wrapper a été ajouté au module le 8 août 2026 pour lever cette limite : <b>c'est le dossier du projet qui choisit le compte</b>, comme le <code>includeIf</code> le fait déjà pour l'identité git.</p>
+
+<div class="box ok">
+  <b>Tu ne tapes rien de plus</b>
+  <p>Exactement les mêmes commandes qu'avant. Le wrapper est invisible : il se contente de charger le bon jeton avant de passer la main à la vraie CLI.</p>
+</div>
+
+<h3>Comment il décide</h3>
+<ol>
+  <li>Il remonte l'arborescence depuis le dossier courant à la recherche de <code>supabase\.temp\project-ref</code> — un fichier que la CLI Supabase écrit elle-même au moment du <code>supabase link</code>.</li>
+  <li>Il consulte l'index <code>F:\CTX\&lt;ctx&gt;\supabase-index.json</code>, qui associe chaque <code>project-ref</code> à une clé du coffre.</li>
+  <li>Il charge ce jeton le temps de la commande, puis restaure l'état précédent.</li>
+</ol>
+<p>Hors contexte, ou dans un dossier sans projet lié, il ne décide rien et laisse passer ce que <code>work</code> a déjà posé. Un wrapper qui devine serait pire que pas de wrapper.</p>
+
+<div class="box warn">
+  <b>Correctif du 8 août 2026 — le wrapper ne suffisait pas</b>
+  <p>Le wrapper n'intercepte que les commandes tapées <b>dans PowerShell</b>. Un binaire appelé directement — <code>execFileSync</code> depuis Node, un script bash, un agent IA — ne le traverse jamais : il ne voit que la variable <code>SUPABASE_ACCESS_TOKEN</code>, que <code>work</code> figeait sur le compte par défaut.</p>
+  <p>Résultat : le préflight d'Ankora listait trois projets sans jamais voir <code>ankora-prod</code>. <b>La commande réussissait, sur le mauvais compte</b> — pire qu'une panne, parce qu'invisible.</p>
+  <p><b>Corrigé à la racine :</b> <code>work</code> résout maintenant le jeton d'après le dossier, et un hook le resynchronise à chaque <code>cd</code>. <code>$env:DEVCTX_SUPABASE_KEY</code> dit quelle clé est active, et <code>ctx</code> rend <b>NO-GO</b> si elle ne correspond pas au projet.</p>
+</div>
+
+<h3>Ce que tu vois</h3>
+<pre><code>PS F:\PROJECTS\Apps\ankora&gt; supabase projects list
+  [ankora-prod -&gt; supabase-token-2]     <span class="c">← bascule signalée</span>
+  ankora-prod
+
+PS F:\PROJECTS\Apps\airsoft-aywaille&gt; supabase projects list
+  Terminal Learning                     <span class="c">← compte par défaut, aucun message</span>
+  IronTrack
+  airsoft-aywaille</code></pre>
+<p>Le message n'apparaît que lorsque le compte utilisé <b>n'est pas</b> celui chargé par <code>work</code>. Signaler l'exception, pas la normale.</p>
+
+<h3>Reconstruire l'index — <code>sb-index</code></h3>
+<p>L'index se construit tout seul en listant les projets de chaque jeton du coffre. Aucune table à tenir à la main.</p>
+<pre><code>work perso
+sb-index</code></pre>
+<p><b>Quand le relancer :</b> après avoir créé un projet Supabase, après un <code>supabase link</code> sur un nouveau dépôt, ou après avoir ajouté un compte. Si tu oublies, le wrapper te le dit : <code>Projet 'xxx' absent de l'index Supabase. Lance 'sb-index'.</code></p>
+
+<h3>Ajouter un troisième compte</h3>
+<pre><code>$t = Read-Host "PAT compte n°3" -AsSecureString
+Set-Secret -Vault DevContext -Name "devctx/perso/supabase-token-3" -SecureStringSecret $t
+Remove-Variable t
+sb-index</code></pre>
+<p>N'importe quelle clé commençant par <code>supabase-token</code> est ramassée automatiquement. Seule <code>supabase-token</code> (sans suffixe) est le compte « par défaut », celui que <code>work</code> charge et que le wrapper n'annonce pas.</p>
+
+<div class="box warn">
+  <b>Le login Supabase global a été supprimé</b>
+  <p><code>supabase logout</code> a été exécuté le 8 août 2026. Conséquence voulue : hors contexte, la CLI répond <code>Access token not provided</code> au lieu de partir silencieusement sur un compte non choisi. Si tu vois cette erreur, la réponse est <code>work &lt;contexte&gt;</code>.</p>
+</div>
+
+<div class="box">
+  <b>Ce que le wrapper ne couvre pas</b>
+  <p>L'application qui tourne (URL, anon key, service_role) se connecte via le <code>.env.local</code> de chaque projet — déjà isolé par dossier, sans rapport avec le wrapper. Le wrapper ne concerne que la <b>CLI</b> : <code>link</code>, <code>db push</code>, <code>functions deploy</code>, <code>projects list</code>, <code>migration</code>…</p>
+</div>
+
+<h2 id="fin">10 · Fin de mission</h2>
+<pre><code>ctx-end &lt;client&gt;            <span class="c"># affiche la checklist de transfert</span>
+ctx-off                     <span class="c"># obligatoire : on ne purge pas sous soi</span>
+ctx-end &lt;client&gt; -Purge      <span class="c"># + supprime secrets et dossier de contexte</span></code></pre>
+<p>La checklist couvre ce qui casse un transfert de comptes : 2FA encore liée à ton téléphone, moyen de paiement personnel, email de récupération, tokens non révoqués.</p>
+<div class="box warn">
+  <b>Supprimer un token du coffre ne le révoque pas</b>
+  <p>Il faut aller le révoquer chez le fournisseur. <code>ctx-end</code> rappelle les URL.</p>
+</div>
+<p><code>-Purge</code> ne touche pas au dossier projet, seulement à l'identité sur ta machine. Les blocs dans <code>~/.ssh/config</code> et <code>~/.gitconfig</code> sont à retirer <b>à la main</b> — volontaire, une suppression automatique dans ces fichiers serait trop risquée.</p>
+
+<h2 id="depannage">11 · Dépannage</h2>
+<table>
+  <thead><tr><th>Symptôme</th><th>Cause</th><th>Correctif</th></tr></thead>
+  <tbody>
+    <tr><td><code>Permission denied (publickey)</code> au push</td><td>La clé du contexte n'est pas sur le compte GitHub</td><td>Étape 1 des branchements</td></tr>
+    <tr><td><code>ctx-new</code> introuvable</td><td>Terminal « Windows PowerShell » 5.1 — le module utilise une syntaxe PS7</td><td>Ouvrir <code>pwsh</code></td></tr>
+    <tr><td>NO-GO « ce dossier appartient à X, mais Y est actif »</td><td>Bon dossier, mauvaise identité — le scénario dangereux</td><td><code>work X -NoCd</code></td></tr>
+    <tr><td>NO-GO « compte GitHub actif Z, le contexte attend W »</td><td><code>gh</code> connecté au mauvais compte dans ce <code>GH_CONFIG_DIR</code></td><td><code>gh auth logout</code> puis <code>gh auth login</code></td></tr>
+    <tr><td>NO-GO « GH_CONFIG_DIR absent »</td><td>Aucun <code>work</code> dans ce terminal</td><td><code>work &lt;ctx&gt;</code></td></tr>
+    <tr><td>Push part sur le mauvais compte</td><td>URL du remote avec <code>login@</code>, non réécrite</td><td>Section 8</td></tr>
+    <tr><td>VS Code demande de réinstaller les extensions</td><td>Normal : <code>--extensions-dir</code> dédié au contexte</td><td>Réinstaller une fois</td></tr>
+    <tr><td>Le commit part sous la mauvaise identité</td><td><code>user.email</code> en dur dans <code>.git/config</code> du dépôt — il prime sur le <code>includeIf</code></td><td><code>git config --unset user.email</code></td></tr>
+    <tr><td>Supabase : <code>Access token not provided</code></td><td>Aucun contexte actif — le login global a été supprimé volontairement</td><td><code>work &lt;ctx&gt;</code></td></tr>
+    <tr><td>Supabase : <code>Projet 'xxx' absent de l'index</code></td><td>Nouveau projet ou nouveau <code>link</code> depuis la dernière indexation</td><td><code>sb-index</code></td></tr>
+    <tr><td><code>Permission denied (publickey)</code> alors que <code>ssh -T</code> <b>fonctionne</b></td><td>git utilise le <code>ssh.exe</code> de Git for Windows, qui ne parle pas à l'agent SSH de Windows — la phrase secrète ne peut donc pas être fournie</td><td><code>git config --global core.sshCommand "C:/Windows/System32/OpenSSH/ssh.exe"</code></td></tr>
+    <tr><td>La clé demande sa phrase secrète à chaque push</td><td>Service <code>ssh-agent</code> arrêté, ou clé jamais ajoutée</td><td><code>Start-Service ssh-agent</code> puis <code>ssh-add &lt;chemin&gt;</code></td></tr>
+    <tr><td>La connexion GitHub de VS Code rouvre une autre fenêtre</td><td>Le protocole <code>vscode://</code> est enregistré par installation, pas par fenêtre</td><td>Fermer les autres fenêtres, ou utiliser le lien « Having trouble? » de GitHub</td></tr>
+    <tr><td>Historique Claude Code disparu après un déplacement de dossier</td><td>Les sessions sont indexées par chemin : <code>~/.claude/projects/&lt;chemin-encodé&gt;/</code></td><td>Copier le dossier sous le nom encodé du <b>nouveau</b> chemin (<code>F:\PROJECTS\X\Y</code> → <code>F--PROJECTS-X-Y</code>)</td></tr>
+    <tr><td>Un contexte à deux fenêtres VS Code affiche deux comptes</td><td>Normal et voulu : GitHub pour le code, Settings Sync pour ton environnement</td><td>rien — voir section 7, étape 9</td></tr>
+  </tbody>
+</table>
+
+<h2 id="limites">12 · Ce qui n'est pas protégé</h2>
+<ul>
+  <li><b>Ce n'est pas une frontière cryptographique.</b> DPAPI est scopé à ton compte Windows : les bases restent déchiffrables par le même utilisateur. Contre le mélange de comptes, efficace. Contre un attaquant local, non — il faudrait des comptes Windows séparés ou des VM.</li>
+  <li><b>Les jetons vivent en variables d'environnement.</b> Tout processus enfant du terminal en hérite, <b>y compris un agent IA</b>. C'est ce qui le rend capable de travailler, et ce qui fait qu'il n'a jamais les secrets d'un autre contexte. À connaître avant de lancer un agent.</li>
+  <li><b>Un dépôt hors des racines déclarées n'est couvert par rien.</b> Ni <code>includeIf</code>, ni <code>insteadOf</code>. <code>ctx</code> le signale : « hors de la racine du contexte actif ».</li>
+  <li><b>Un <code>user.email</code> local dans <code>.git/config</code> court-circuite le garde-fou</b> — il prime sur le <code>includeIf</code>. Utile à savoir quand une valeur semble « bonne » sans que le mécanisme y soit pour quelque chose.</li>
+</ul>
+
+<h2 id="memo">Mémo — les 8 commandes</h2>
+<table>
+  <thead><tr><th>Commande</th><th>Ce qu'elle fait</th><th>Quand</th></tr></thead>
+  <tbody>
+    <tr><td><code>work &lt;ctx&gt;</code></td><td>pose l'identité dans ce terminal (+ <code>cd</code> sur la racine)</td><td>chaque nouveau terminal</td></tr>
+    <tr><td><code>work &lt;ctx&gt; -NoCd</code></td><td>idem, sans changer de dossier</td><td>terminal intégré VS Code</td></tr>
+    <tr><td><code>ctx</code></td><td>verdict <b>GO / NO-GO</b> sur 5 axes</td><td>avant tout push qui compte</td></tr>
+    <tr><td><code>code-ctx &lt;ctx&gt; "&lt;projet&gt;"</code></td><td>VS Code isolé, sur ce projet</td><td>début de journée</td></tr>
+    <tr><td><code>web-ctx &lt;ctx&gt;</code></td><td>Chrome, profil dédié</td><td>dashboards</td></tr>
+    <tr><td><code>sb-index</code></td><td>reconstruit l'index Supabase</td><td>après un <code>supabase link</code></td></tr>
+    <tr><td><code>ctx-who</code></td><td>« ce dossier appartient à quel contexte ? »</td><td>en cas de doute</td></tr>
+    <tr><td><code>ctx-list</code></td><td>tous les contextes</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  <b>Mis à jour le 8 août 2026</b> — après création des contextes <code>perso</code> et <code>client-a</code>.
+  La section 7 décrit la procédure telle qu'elle a réellement été exécutée, corrections comprises.<br><br>
+  Racine des contextes : <code>F:\CTX\</code> · Module : <code>~\Documents\PowerShell\Modules\DevContext\</code><br>
+  Contextes : <code>perso</code> → <code>F:\PROJECTS\Apps</code> · <code>client-a</code> → <code>F:\PROJECTS\Clients\client-a</code><br>
+  Voir aussi <code>README.md</code> (référence des commandes), <code>POURQUOI.md</code> (décisions de conception)
+  et <code>~\.claude\devcontext-agent.md</code> (protocole chargé par les agents IA).
+</footer>
+
+</div>
+</body>
+</html>

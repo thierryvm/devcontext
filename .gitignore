@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Ce dépôt ne contient QUE le code du module.
+#
+# Ce qu'il ne doit JAMAIS contenir, et qui n'y est pas :
+#   • les jetons — ils vivent dans le coffre SecretStore `DevContext` ;
+#   • les identités des contextes — elles vivent dans F:\CTX\<contexte>\ ;
+#   • les clés SSH — elles vivent dans ~\.ssh\ ;
+#   • les configurations gh/vercel par contexte — dans F:\CTX\<contexte>\.
+#
+# Aucun de ces emplacements n'est sous ce dépôt. Les règles ci-dessous sont un
+# filet, pas la protection principale : si l'un d'eux atterrit ici un jour,
+# c'est qu'une erreur a déjà été commise en amont.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Secrets et identités — ne doivent jamais approcher
+*.key
+*.pem
+*.ppk
+id_rsa*
+id_ed25519*
+context.json
+.env
+.env.*
+secrets*
+*token*
+*credential*
+
+# Sauvegardes et artefacts d'édition
+*.bak
+*.avant-*
+*.mutation-sauvegarde
+*.orig
+*~
+
+# Windows
+Thumbs.db
+desktop.ini

@@ -538,6 +538,72 @@ function Set-CtxSupabaseToken {
     else { $env:SUPABASE_ACCESS_TOKEN = $Value }
 }
 
+# ---------------------------------------------------------------------------
+# Environment tagging — which project is production?
+# ---------------------------------------------------------------------------
+
+# Naming conventions, not a source of truth. sb-index proposes, the human
+# disposes: anything marked 'manual' is never recomputed.
+#
+# The word boundaries matter: without them 'reproduction-bug' would read as
+# production, and a false refusal on a command that had every right to run is
+# how a guard loses the trust that makes it useful.
+$script:EnvPatternProd = '(^|[^a-z])(prod|production)([^a-z]|$)'
+$script:EnvPatternDev  = '(^|[^a-z])(dev|develop|staging|preview|test|sandbox)([^a-z]|$)'
+
+function Get-CtxSupabaseEnvGuess {
+    param([AllowNull()][AllowEmptyString()][string]$ProjectName)
+    if (-not $ProjectName) { return $null }
+    $n = $ProjectName.ToLowerInvariant()
+    # Production wins a tie: erring towards the guarded value is the safe side.
+    if ($n -match $script:EnvPatternProd) { return 'prod' }
+    if ($n -match $script:EnvPatternDev)  { return 'dev' }
+    return $null
+}
+
+function Merge-CtxSupabaseEnv {
+    <#
+      Keeps a hand-set value, recomputes an automatic one.
+
+      An entry written before this version carries neither field. Absence of
+      'manual' is therefore read as 'auto' -- an old index gets enriched rather
+      than mistaken for a deliberate choice.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Ref,
+        [AllowNull()][AllowEmptyString()][string]$ProjectName,
+        $Previous
+    )
+    # Get-CtxProp rather than direct access: an index written before this
+    # version carries neither field, and reading an absent property throws
+    # under StrictMode. That is not hypothetical -- every existing index on
+    # disk is in exactly that state.
+    $old = if ($Previous -and $Previous[$Ref]) { $Previous[$Ref] } else { $null }
+    if ($old -and (Get-CtxProp $old 'envSource') -eq 'manual') {
+        return [pscustomobject]@{ env = (Get-CtxProp $old 'env'); envSource = 'manual' }
+    }
+    [pscustomobject]@{ env = (Get-CtxSupabaseEnvGuess $ProjectName); envSource = 'auto' }
+}
+
+function Get-CtxSupabaseEnv {
+    # Reads the tag for one project. Returns $null on anything unexpected --
+    # a missing index, a broken index, an unknown ref -- because the guard
+    # treats $null as 'do not judge'.
+    param(
+        [Parameter(Mandatory)][string]$Ref,
+        [Parameter(Mandatory)][string]$ContextName
+    )
+    $path = Get-CtxSupabaseIndexPath $ContextName
+    if (-not (Test-Path $path)) { return $null }
+    try {
+        $index = Get-Content $path -Raw | ConvertFrom-Json
+        $entry = $index.PSObject.Properties | Where-Object { $_.Name -eq $Ref } | Select-Object -First 1
+        if ($entry) { return (Get-CtxProp $entry.Value 'env') }
+    }
+    catch { return $null }
+    return $null
+}
+
 function Update-DevSupabaseIndex {
     [CmdletBinding()]
     param([string]$Name = $env:DEVCTX)
@@ -547,6 +613,19 @@ function Update-DevSupabaseIndex {
 
     $keys = @(Get-CtxSupabaseKeys $Name)
     if (-not $keys) { throw "Aucun secret 'supabase-token*' au coffre pour le contexte '$Name'." }
+
+    # Read the existing index BEFORE rebuilding. This function writes a brand
+    # new object over the old file, so without this a hand-set env would not
+    # survive the first sb-index after someone set it.
+    $former = @{}
+    $formerPath = Get-CtxSupabaseIndexPath $Name
+    if (Test-Path $formerPath) {
+        try {
+            (Get-Content $formerPath -Raw | ConvertFrom-Json).PSObject.Properties |
+                ForEach-Object { $former[$_.Name] = $_.Value }
+        }
+        catch { Write-Warning "Index existant illisible, il sera reconstruit sans les marquages manuels." }
+    }
 
     $index    = [ordered]@{}
     $previous = $env:SUPABASE_ACCESS_TOKEN
@@ -569,7 +648,13 @@ function Update-DevSupabaseIndex {
 
             $count = 0
             foreach ($p in ($raw.Substring($start) | ConvertFrom-Json)) {
-                $index[$p.id] = [ordered]@{ key = $key; name = $p.name }
+                $merged = Merge-CtxSupabaseEnv -Ref $p.id -ProjectName $p.name -Previous $former
+                $index[$p.id] = [ordered]@{
+                    key       = $key
+                    name      = $p.name
+                    env       = $merged.env
+                    envSource = $merged.envSource
+                }
                 $count++
             }
             Write-Host ("  {0,-22} {1} projet(s)" -f $key, $count) -ForegroundColor DarkGray

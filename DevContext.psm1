@@ -611,6 +611,78 @@ function Sync-CtxSupabaseEnv {
     }
 }
 
+# ---------------------------------------------------------------------------
+# Production guard — pure decision, no I/O
+# ---------------------------------------------------------------------------
+
+# Sub-commands that destroy data. No legitimate use against a production
+# project, in any scenario -- which is what makes refusing them cost nothing.
+$script:GuardDestructive = @('db reset')
+
+# Sub-commands that ARE legitimate in production, but only from the repo's
+# default branch. Pushing migrations from a side branch is how a schema goes
+# backwards: on 13 Aug 2026 a worktree carried 19 migrations against 22 on main.
+$script:GuardBranchBound = @('db push', 'migration repair', 'migration up')
+
+function Get-CtxSupabaseSubcommand {
+    # First two non-option arguments, lowercased. Options may appear anywhere,
+    # so they are filtered rather than skipped by position.
+    param([string[]]$Arguments = @())
+    $words = @($Arguments | Where-Object { $_ -and -not $_.StartsWith('-') })
+    if ($words.Count -eq 0) { return '' }
+    (($words | Select-Object -First 2) -join ' ').ToLowerInvariant()
+}
+
+function Test-CtxSupabaseGuard {
+    <#
+      Pure decision. No network, no vault, no filesystem, no git. Everything it
+      needs is passed in -- which is what makes it testable on its own, and what
+      lets the shim be the only place that gathers state.
+
+      Every uncertain path returns Allowed. A guard that breaks when it
+      hesitates is a guard that gets uninstalled within the week.
+    #>
+    [CmdletBinding()]
+    param(
+        [string[]]$Arguments = @(),
+        [AllowNull()][string]$Environment,
+        [AllowNull()][string]$CurrentBranch,
+        [AllowNull()][string]$DefaultBranch,
+        [switch]$Override
+    )
+
+    $pass = { param($rule) [pscustomobject]@{ Allowed = $true; Rule = $rule; Reason = '' } }
+
+    if ($Environment -ne 'prod') { return (& $pass 'not-production') }
+
+    $sub = Get-CtxSupabaseSubcommand $Arguments
+    $destructive = $sub -in $script:GuardDestructive
+    $branchBound = $sub -in $script:GuardBranchBound
+    if (-not $destructive -and -not $branchBound) { return (& $pass 'not-guarded') }
+
+    if ($Override) { return (& $pass 'override') }
+
+    if ($destructive) {
+        return [pscustomobject]@{
+            Allowed = $false
+            Rule    = 'db-reset-prod'
+            Reason  = "'$sub' detruit et recree la base. Refuse sur un projet de production."
+        }
+    }
+
+    # Branch-bound from here. Any doubt lets the command through.
+    if (-not $CurrentBranch -or -not $DefaultBranch) { return (& $pass 'branch-unknown') }
+    if ($CurrentBranch -eq $DefaultBranch)           { return (& $pass 'default-branch') }
+
+    [pscustomobject]@{
+        Allowed = $false
+        Rule    = 'branch-mismatch'
+        Reason  = "'$sub' vers un projet de production depuis la branche '$CurrentBranch' au lieu de '$DefaultBranch'."
+    }
+}
+
+# ---------------------------------------------------------------------------
+
 function Invoke-DevSupabase {
     [CmdletBinding()]
     param([Parameter(ValueFromRemainingArguments)]$Rest)
@@ -1006,7 +1078,7 @@ $exportedFunctions = @(
     'Use-DevContext', 'Clear-DevContext', 'Get-DevContextList', 'New-DevContext',
     'Close-DevContext', 'Open-DevCode', 'Open-DevBrowser', 'Test-DevContext',
     'Assert-DevContext', 'Resolve-DevContextForPath', 'Invoke-DevVercel',
-    'Invoke-DevSupabase', 'Update-DevSupabaseIndex'
+    'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',

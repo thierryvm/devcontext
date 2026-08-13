@@ -316,9 +316,17 @@ function Test-CtxSupabaseGuard {
 
 - [ ] **Étape 5 : exporter la fonction**
 
-Dans `DevContext.psm1`, ajouter `'Test-CtxSupabaseGuard'` à `$exportedFunctions`
-(ligne 1005). `Get-CtxSupabaseSubcommand` reste interne — les tests y accèdent
-par `InModuleScope`.
+**Deux endroits, pas un.** Le `psm1` et le manifeste filtrent tous les deux, et
+l'export réel est leur intersection. Ajouter la fonction au seul `psm1` la rend
+invisible de l'extérieur, sans le moindre message d'erreur.
+
+1. Dans `DevContext.psm1`, ajouter `'Test-CtxSupabaseGuard'` à
+   `$exportedFunctions` (ligne 1005).
+2. Dans `DevContext.psd1`, ajouter `'Test-CtxSupabaseGuard'` à
+   `FunctionsToExport`, avant `'Test-DevContext'` — la liste est triée.
+
+`Get-CtxSupabaseSubcommand` reste interne : les tests y accèdent par
+`InModuleScope`.
 
 - [ ] **Étape 6 : lancer les tests pour vérifier qu'ils passent**
 
@@ -835,15 +843,10 @@ Créer `shims/supabase.cmd` :
 
 ```bat
 @echo off
-rem Coarse filter first: only pay the pwsh startup cost when an argument could
-rem possibly match the blacklist. Every other supabase call stays as fast as
-rem before.
-echo %* | findstr /i /r "\<reset\> \<push\> \<repair\> \<up\>" >nul
-if errorlevel 1 (
-    for /f "delims=" %%i in ('pwsh -NoLogo -NoProfile -Command "(Get-Command supabase -CommandType Application -All | Where-Object { (Split-Path $_.Source -Parent) -ne '%~dp0'.TrimEnd('\') } | Select-Object -First 1).Source"') do set "REAL=%%i"
-    "%REAL%" %*
-    exit /b %ERRORLEVEL%
-)
+rem Always delegate. An earlier draft filtered arguments in batch first, to
+rem skip the pwsh startup on harmless calls -- but that put the most fragile
+rem quoting in the codebase on the guard's only entry point, to save a few
+rem hundred milliseconds on a command that takes seconds. Not worth it.
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0supabase.ps1" %*
 exit /b %ERRORLEVEL%
 ```
@@ -1081,8 +1084,14 @@ Dans `DevContext.psm1` :
 Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
 ```
 
-Ajouter `'Get-DevSupabaseMap'` à `$exportedFunctions` et `'ctx-sb'` à
-`$exportedAliases`.
+Puis, dans **les deux** fichiers d'export — l'export réel est leur intersection,
+et n'en modifier qu'un ne produit aucune erreur, juste une commande introuvable :
+
+1. `DevContext.psm1` : `'Get-DevSupabaseMap'` dans `$exportedFunctions`,
+   `'ctx-sb'` dans `$exportedAliases`.
+2. `DevContext.psd1` : `'Get-DevSupabaseMap'` dans `FunctionsToExport`
+   (après `'Get-DevContextList'`), `'ctx-sb'` dans `AliasesToExport`
+   (après `'ctx-off'`) — les deux listes sont triées.
 
 - [ ] **Étape 5 : lancer les tests**
 

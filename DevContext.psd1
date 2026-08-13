@@ -41,6 +41,7 @@
         'Open-DevBrowser'
         'Open-DevCode'
         'Resolve-DevContextForPath'
+        'Test-CtxSupabaseGuard'
         'Test-DevContext'
         'Update-DevSupabaseIndex'
         'Use-DevContext'

@@ -754,11 +754,13 @@ function Get-DevSupabaseMap {
     } | Sort-Object Compte, Projet
 }
 
-# Default columns, so `ctx-sb` alone reads well without a Format-Table.
-# -Force because the module is imported with -Force during development.
-Update-TypeData -TypeName 'DevContext.SupabaseMapEntry' `
-    -DefaultDisplayPropertySet 'Compte', 'Projet', 'Env', 'Partage', 'Dossiers' `
-    -Force
+# Layout lives entirely in DevContext.format.ps1xml.
+#
+# An Update-TypeData -DefaultDisplayPropertySet used to sit here as a fallback.
+# It did the opposite of its intent: PSStandardMembers takes precedence over a
+# format file, so the table view was loaded and then ignored, and ctx-sb kept
+# printing one object per paragraph. Two mechanisms for one job, the weaker one
+# winning silently.
 
 function Resolve-CtxSupabaseKey {
     # Quelle cle de secret ce dossier attend-il ? Renvoie $null si le projet est

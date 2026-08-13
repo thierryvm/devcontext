@@ -66,6 +66,40 @@ Rename-Item "$HOME\Documents\PowerShell\Modules\DevContext.avant-lien" "DevConte
 
 ---
 
+## Ce qui pointe vers ce dépôt depuis l'extérieur
+
+Le lien symbolique ne couvre que PowerShell. **Trois autres choses référencent ce
+dossier par son chemin absolu**, et aucune ne suit un déplacement :
+
+| Consommateur | Ce qu'il vise | Comment le remettre en place |
+|---|---|---|
+| 10 raccourcis `Desktop\Raccourcis-outils\VS Code — *.lnk` | `lancer-vscode.ps1` | réécrire l'argument `-File` de chaque `.lnk` |
+| Clé `HKCU\Software\Classes\vscode\shell\open\command` | `vscode-uri-router.ps1` | relancer `installer-uri-router.ps1` **depuis le dépôt** |
+| `~\.claude\devcontext-agent.md` | chemin cité dans la doc agent | corriger à la main |
+
+**Déplacer ce dépôt sans faire ces trois choses casse tout en silence.** Vécu le
+13 août 2026 : le dossier `Desktop\02-OUTILS\DevContext\` a été supprimé après la
+migration, les raccourcis ont ouvert un terminal qui se fermait aussitôt (script
+introuvable), et le routeur `vscode://` pointant dans le vide a fait revenir la
+réauthentification GitHub permanente sur tous les projets.
+
+Vérification après tout déplacement :
+
+```powershell
+# les raccourcis visent-ils un script qui existe ?
+$sh = New-Object -ComObject WScript.Shell
+Get-ChildItem "$HOME\Desktop\Raccourcis-outils" -Filter 'VS Code*.lnk' | ForEach-Object {
+    $a = $sh.CreateShortcut($_.FullName).Arguments
+    $f = [regex]::Match($a, '-File "([^"]+)"').Groups[1].Value
+    '{0,-34} {1}' -f $_.BaseName, (Test-Path -LiteralPath $f)
+}
+
+# le routeur d'URI est-il actif ET verrouillé ?
+.\installer-uri-router.ps1 -Verifier
+```
+
+---
+
 ## Ce que ce dépôt ne contient pas, et ne contiendra jamais
 
 | Quoi | Où ça vit réellement |

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Display formats for DevContext.
+
+    Why this file exists: PowerShell falls back to a list layout as soon as an
+    object exposes more than four display properties, and ctx-sb needs five to
+    be useful. A command whose whole purpose is "see the estate at a glance"
+    cannot ship a one-object-per-paragraph layout.
+
+    The '!' column marks a project several folders point at: the shape that
+    let three worktrees aim at demo-app-prod unnoticed until 13 Aug 2026.
+
+    Note for future edits: an XML comment cannot contain a double hyphen.
+    Getting that wrong does not merely break the layout, it makes the manifest
+    refuse to load the whole module, so work and ctx stop existing.
+-->
+<Configuration>
+  <ViewDefinitions>
+    <View>
+      <Name>DevContext.SupabaseMapEntry</Name>
+      <ViewSelectedBy>
+        <TypeName>DevContext.SupabaseMapEntry</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>Compte</Label>
+            <Width>18</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Projet</Label>
+            <Width>20</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Env</Label>
+            <Width>5</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>!</Label>
+            <Width>1</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Dossiers</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <PropertyName>Compte</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Projet</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.Env) { $_.Env.ToUpper() } else { '-' }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.Partage) { '!' } else { '' }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.Dossiers.Count) { $_.Dossiers -join ', ' } else { '(aucun dossier local)' }</ScriptBlock>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+  </ViewDefinitions>
+</Configuration>

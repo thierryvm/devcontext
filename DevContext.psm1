@@ -446,7 +446,7 @@ function Invoke-DevVercel {
         & $exe.Source '--global-config' $env:DEVCTX_VERCEL_CONFIG @Rest
     }
     else {
-        & $exe.Source @Rest
+        & $exe @Rest
     }
 }
 
@@ -474,6 +474,32 @@ function Invoke-DevVercel {
 function Get-CtxSupabaseIndexPath {
     param([Parameter(Mandatory)][string]$Name)
     Join-Path (Get-CtxPath $Name) 'supabase-index.json'
+}
+
+# The shims live inside the repository, never copied elsewhere -- same doctrine
+# as the module itself. See the 12 Aug 2026 entry in CHANGELOG.md: two copies,
+# one of them silently ignored, and a fix that had no effect.
+$script:ShimDir = Join-Path $PSScriptRoot 'shims'
+
+function Get-CtxSupabaseExe {
+    <#
+      Resolves the REAL supabase binary, skipping our own shim directory.
+
+      Once the shim sits in the PATH, `Get-Command supabase` finds IT first.
+      Without this exclusion the shim would invoke itself forever, and the
+      module would drive the guard instead of the CLI.
+    #>
+    param([string]$ExcludeDir = $script:ShimDir)
+
+    $excluded = if ($ExcludeDir) { $ExcludeDir.TrimEnd('\', '/') } else { $null }
+
+    $candidate = Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue |
+        Where-Object {
+            -not $excluded -or (Split-Path $_.Source -Parent).TrimEnd('\', '/') -ne $excluded
+        } | Select-Object -First 1
+
+    if (-not $candidate) { throw "supabase introuvable dans le PATH (hors shims)." }
+    $candidate.Source
 }
 
 function Get-CtxSupabaseKeys {
@@ -517,8 +543,7 @@ function Update-DevSupabaseIndex {
     param([string]$Name = $env:DEVCTX)
 
     if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'sb-index <contexte>'." }
-    $exe = Get-Command supabase -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $exe) { throw "supabase introuvable dans le PATH." }
+    $exe = Get-CtxSupabaseExe
 
     $keys = @(Get-CtxSupabaseKeys $Name)
     if (-not $keys) { throw "Aucun secret 'supabase-token*' au coffre pour le contexte '$Name'." }
@@ -534,7 +559,7 @@ function Update-DevSupabaseIndex {
             Set-CtxSupabaseToken $token
             # stderr ecarte : la CLI y ecrit « Cannot find project ref » des qu'on
             # n'est pas dans un projet lie, ce qui casserait le parsing JSON.
-            $raw = (& $exe.Source projects list -o json 2>$null) -join "`n"
+            $raw = (& $exe projects list -o json 2>$null) -join "`n"
 
             $start = $raw.IndexOf('[')
             if ($start -lt 0) {
@@ -687,8 +712,7 @@ function Invoke-DevSupabase {
     [CmdletBinding()]
     param([Parameter(ValueFromRemainingArguments)]$Rest)
 
-    $exe = Get-Command supabase -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $exe) { throw "supabase introuvable dans le PATH." }
+    $exe = Get-CtxSupabaseExe
 
     $token = $null
     if ($env:DEVCTX) {
@@ -720,12 +744,12 @@ function Invoke-DevSupabase {
         $previous = $env:SUPABASE_ACCESS_TOKEN
         try {
             Set-CtxSupabaseToken $token
-            & $exe.Source @Rest
+            & $exe @Rest
         }
         finally { Set-CtxSupabaseToken $previous }
     }
     else {
-        & $exe.Source @Rest
+        & $exe @Rest
     }
 }
 

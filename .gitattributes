@@ -1,0 +1,22 @@
+# Line endings, decided here rather than by each machine's git config.
+#
+# The reason is shims/supabase: a POSIX script whose shebang must be followed
+# by LF. Checked out with CRLF on a Unix machine it fails with
+# "bad interpreter: /bin/sh^M" -- an error that names the interpreter and not
+# the real cause, which is exactly the kind of bug that costs an afternoon.
+
+* text=auto eol=lf
+
+# Batch stays CRLF: cmd.exe is the one interpreter that genuinely prefers it.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# PowerShell 7 reads both on every platform. LF keeps diffs clean across OSes.
+*.ps1  text eol=lf
+*.psm1 text eol=lf
+*.psd1 text eol=lf
+
+# Binary, never touched.
+*.png binary
+*.jpg binary
+*.ico binary

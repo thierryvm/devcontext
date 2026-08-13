@@ -667,6 +667,99 @@ function Update-DevSupabaseIndex {
     Write-Host "  index ecrit : $path" -ForegroundColor Green
 }
 
+# ---------------------------------------------------------------------------
+# ctx-sb — which project lives on which account
+# ---------------------------------------------------------------------------
+
+function Get-CtxSupabaseMapRoot {
+    # Own function so tests can point it elsewhere without a fake manifest.
+    param([Parameter(Mandatory)][string]$Name)
+    Get-CtxProp (Read-CtxManifest $Name) 'root'
+}
+
+function Get-DevSupabaseMap {
+    <#
+      .SYNOPSIS
+        Which Supabase project lives on which account, which one is production,
+        and which folders point at it.
+
+      .DESCRIPTION
+        Crosses the context index with every `supabase/.temp/project-ref` found
+        under the context root, and flags any project targeted by more than one
+        folder.
+
+        This is not a convenience. On 13 Aug 2026 the question "which account
+        is airsoft-aywaille on?" could only be answered by reading the index by
+        hand, though the answer had been on the machine since the beginning. A
+        guard whose data cannot be inspected is a guard that eventually gets
+        switched off.
+
+      .EXAMPLE
+        ctx-sb
+
+      .EXAMPLE
+        ctx-sb | Where-Object Partage
+        Only the projects several folders point at.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Position = 0)][string]$Name = $env:DEVCTX)
+
+    if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'ctx-sb <contexte>'." }
+
+    $indexPath = Get-CtxSupabaseIndexPath $Name
+    if (-not (Test-Path $indexPath)) { throw "Aucun index Supabase pour '$Name'. Lance 'sb-index'." }
+    $index = Get-Content $indexPath -Raw | ConvertFrom-Json
+
+    $root = Get-CtxSupabaseMapRoot $Name
+    $byRef = @{}
+
+    if ($root -and (Test-Path $root)) {
+        $rootLength = $root.TrimEnd('\', '/').Length + 1
+        Get-ChildItem $root -Recurse -Depth 4 -Filter 'project-ref' -File -ErrorAction SilentlyContinue |
+            Where-Object {
+                # Structural check rather than a wildcard: a file merely NAMED
+                # project-ref elsewhere in the tree is not a Supabase link.
+                (Split-Path $_.DirectoryName -Leaf) -eq '.temp' -and
+                (Split-Path (Split-Path $_.DirectoryName -Parent) -Leaf) -eq 'supabase'
+            } |
+            ForEach-Object {
+                $ref = (Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue)
+                if (-not $ref) { return }
+                $ref = $ref.Trim()
+
+                # project-ref -> .temp -> supabase -> the project folder
+                $projectDir = Split-Path (Split-Path (Split-Path $_.FullName -Parent) -Parent) -Parent
+                $relative = if ($projectDir.Length -gt $rootLength) {
+                    $projectDir.Substring($rootLength)
+                } else { Split-Path $projectDir -Leaf }
+
+                if (-not $byRef.ContainsKey($ref)) { $byRef[$ref] = @() }
+                $byRef[$ref] += $relative
+            }
+    }
+
+    $index.PSObject.Properties | ForEach-Object {
+        $folders = @(if ($byRef.ContainsKey($_.Name)) { $byRef[$_.Name] } else { @() })
+        $entry = [pscustomobject]@{
+            Compte   = Get-CtxProp $_.Value 'key'
+            Projet   = Get-CtxProp $_.Value 'name'
+            Env      = Get-CtxProp $_.Value 'env'
+            Partage  = ($folders.Count -gt 1)
+            Dossiers = $folders
+            Ref      = $_.Name
+            Source   = Get-CtxProp $_.Value 'envSource'
+        }
+        $entry.PSObject.TypeNames.Insert(0, 'DevContext.SupabaseMapEntry')
+        $entry
+    } | Sort-Object Compte, Projet
+}
+
+# Default columns, so `ctx-sb` alone reads well without a Format-Table.
+# -Force because the module is imported with -Force during development.
+Update-TypeData -TypeName 'DevContext.SupabaseMapEntry' `
+    -DefaultDisplayPropertySet 'Compte', 'Projet', 'Env', 'Partage', 'Dossiers' `
+    -Force
+
 function Resolve-CtxSupabaseKey {
     # Quelle cle de secret ce dossier attend-il ? Renvoie $null si le projet est
     # lie mais absent de l'index (l'appelant doit alors alerter, pas deviner).
@@ -1182,16 +1275,18 @@ Set-Alias -Name web-ctx   -Value Open-DevBrowser
 Set-Alias -Name vercel    -Value Invoke-DevVercel
 Set-Alias -Name supabase  -Value Invoke-DevSupabase
 Set-Alias -Name sb-index  -Value Update-DevSupabaseIndex
+Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
 
 $exportedFunctions = @(
     'Use-DevContext', 'Clear-DevContext', 'Get-DevContextList', 'New-DevContext',
     'Close-DevContext', 'Open-DevCode', 'Open-DevBrowser', 'Test-DevContext',
     'Assert-DevContext', 'Resolve-DevContextForPath', 'Invoke-DevVercel',
-    'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard'
+    'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard',
+    'Get-DevSupabaseMap'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',
-    'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index'
+    'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index', 'ctx-sb'
 )
 
 Export-ModuleMember -Function $exportedFunctions -Alias $exportedAliases

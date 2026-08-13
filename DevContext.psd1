@@ -18,6 +18,11 @@
 
     PowerShellVersion = '7.0'
 
+    # Table view for ctx-sb. PowerShell falls back to a list layout past four
+    # display properties, and a command meant to show the estate at a glance
+    # cannot ship one object per paragraph.
+    FormatsToProcess  = @('DevContext.format.ps1xml')
+
     # Le coffre est une dépendance DURE : sans lui, aucun jeton n'est chargé et
     # le module ne peut pas tenir sa promesse. Le module vérifie déjà sa
     # présence à l'import et lève une erreur explicite ; on le déclare ici pour
@@ -35,6 +40,7 @@
         'Clear-DevContext'
         'Close-DevContext'
         'Get-DevContextList'
+        'Get-DevSupabaseMap'
         'Invoke-DevSupabase'
         'Invoke-DevVercel'
         'New-DevContext'
@@ -57,6 +63,7 @@
         'ctx-list'
         'ctx-new'
         'ctx-off'
+        'ctx-sb'
         'ctx-who'
         'sb-index'
         'supabase'

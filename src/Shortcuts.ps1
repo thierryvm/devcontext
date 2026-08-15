@@ -124,25 +124,34 @@ function Test-CtxDoctorRaccourci {
         [string]$ShimDir = ''
     )
 
+    # RIEN, et non un constat « OK, ne lance pas un editeur ».
+    #
+    # La version precedente rendait un constat que l'appelant reconnaissait en
+    # comparant son texte : `if ($verdict.Detail -eq 'ne lance pas un editeur')`.
+    # Le jour ou ce texte est devenu traduisible, le filtre ne matchait plus en
+    # anglais et deux cents raccourcis sans rapport auraient inonde le rapport.
+    # Troisieme occurrence du meme defaut dans ce depot : une valeur AFFICHEE ne
+    # sert jamais de valeur de DECISION. L'absence de constat, elle, ne se
+    # traduit pas.
     if (-not (Test-CtxShortcutLaunchesEditor -Target $Target -Arguments $Arguments `
                 -EditeurExecutables $EditeurExecutables -ShimDir $ShimDir)) {
-        return New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'OK' -Detail 'ne lance pas un editeur'
+        return
     }
 
     if (Test-CtxShortcutIsolated -Target $Target -Arguments $Arguments -ShimDir $ShimDir) {
-        $ou = if ($Contexte) { "contexte $Contexte" } else { 'profil dedie' }
-        return New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'OK' -Detail "profil isole ($ou)"
+        $ou = if ($Contexte) { T 'rac.doc.dansContexte' $Contexte } else { T 'rac.doc.profilDedie' }
+        return New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'OK' -Detail (T 'rac.doc.isole' $ou)
     }
 
     if ($Contexte) {
         return New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'PROBLEME' `
-            -Detail "ouvre un projet du contexte '$Contexte' sur le profil PARTAGE : les sessions GitHub, Copilot et marketplace y sont communes a tous les contextes" `
-            -Correctif "ctx-shortcut -Path <projet> -Force"
+            -Detail (T 'rac.doc.partage' $Contexte) `
+            -Correctif 'ctx-shortcut -Path <projet> -Force'
     }
 
     New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'ATTENTION' `
-        -Detail 'lance un editeur sans dossier : il rouvrira ce que le profil partage avait en dernier' `
-        -Correctif "viser 'code' plutot que le chemin absolu de l executable, ou passer par ctx-shortcut"
+        -Detail (T 'rac.doc.sansDossier') `
+        -Correctif (T 'rac.doc.sansDossierFix')
 }
 
 function Get-CtxShortcutFacts {
@@ -230,8 +239,10 @@ function Get-CtxRaccourciChecks {
                 -Arguments $raccourci.Arguments -Contexte $contexte `
                 -EditeurExecutables $executables -ShimDir $resolu
 
-            if ($verdict.Detail -eq 'ne lance pas un editeur') { continue }
-            $verdict
+            # Un raccourci sans rapport ne rend RIEN : plus de filtre sur un
+            # libelle, qui cessait de matcher des que la sortie changeait de
+            # langue.
+            if ($verdict) { $verdict }
         }
 
         # Les raccourcis SANS dossier sont, pour l'essentiel, les entrees que
@@ -243,9 +254,13 @@ function Get-CtxRaccourciChecks {
 
         if ($sansDossier.Count) {
             $noms = ($sansDossier | Select-Object -ExpandProperty Sujet -Unique | Sort-Object) -join ', '
+            # Sujet reste un IDENTIFIANT stable, jamais traduit : c'est la
+            # colonne par laquelle `ctx doctor -Json` est filtre par un agent ou
+            # une CI, et une cle qui change avec la langue du poste ne serait
+            # plus une cle. Detail et Correctif, eux, s'adressent a un humain.
             New-CtxCheck -Domaine 'raccourci' -Sujet 'lanceurs simples' -Verdict 'INFO' `
-                -Detail "$($sansDossier.Count) raccourci(s) ouvrant un editeur sans dossier ($noms) : ils atterrissent sur le profil partage" `
-                -Correctif 'ctx-shortcut -Path <projet>  pour un raccourci lie a un contexte'
+                -Detail (T 'rac.doc.regroupes' $sansDossier.Count $noms) `
+                -Correctif 'ctx-shortcut -Path <projet>'
         }
     }
 
@@ -294,13 +309,13 @@ function Get-CtxRaccourciChecks {
         )
 
         if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
-            throw "Dossier introuvable : $Path"
+            throw (T 'rac.dossierAbsent' $Path)
         }
         $projet = (Resolve-Path -LiteralPath $Path).Path
 
         $manifeste = Resolve-DevContextForPath -Path $projet
         if (-not $manifeste) {
-            throw "Aucun contexte ne possede '$projet'. Un raccourci qui n isole rien est precisement celui qu on remplace ici. 'ctx-list' pour voir les contextes."
+            throw (T 'rac.horsContexte' $projet)
         }
         $contexte = Get-CtxProp $manifeste 'name'
 
@@ -308,7 +323,7 @@ function Get-CtxRaccourciChecks {
         if ($Editor) { $editeurs = @($editeurs | Where-Object Name -eq $Editor) }
         $choisi = $editeurs | Select-Object -First 1
         if (-not $choisi) {
-            throw "Aucun editeur enrobable trouve$(if ($Editor) { " sous le nom '$Editor'" }). 'ctx-editors' dit ce qui a ete detecte."
+            throw (T 'rac.aucunEditeur' $(if ($Editor) { T 'rac.sousLeNom' $Editor } else { '' }))
         }
 
         # Le raccourci vise le LANCEUR, pas le shim.
@@ -320,7 +335,7 @@ function Get-CtxRaccourciChecks {
         # contexte derriere.
         $lanceur = Join-Path (Split-Path $PSScriptRoot -Parent) 'lancer-editeur.ps1'
         if (-not (Test-Path -LiteralPath $lanceur)) {
-            throw "Lanceur absent : $lanceur. Depot incomplet."
+            throw (T 'rac.lanceurAbsent' $lanceur)
         }
 
         $pwsh = (Get-Process -Id $PID).Path
@@ -329,7 +344,7 @@ function Get-CtxRaccourciChecks {
         if (-not $Name) { $Name = '{0} - {1}' -f $choisi.Label, (Split-Path $projet -Leaf) }
         $fichier = Join-Path $Destination "$Name.lnk"
         if ((Test-Path -LiteralPath $fichier) -and -not $Force) {
-            throw "Le raccourci existe deja : $fichier. -Force pour le reecrire."
+            throw (T 'rac.existeDeja' $fichier)
         }
 
         if (-not $PSCmdlet.ShouldProcess($fichier, "ecrire un raccourci vers $projet ($contexte)")) { return }
@@ -351,9 +366,9 @@ function Get-CtxRaccourciChecks {
         }
 
         Write-Host ''
-        Write-Host "  Raccourci ecrit : $fichier" -ForegroundColor Green
-        Write-Host "    projet   : $projet"
-        Write-Host "    contexte : $contexte"
-        Write-Host "    editeur  : $($choisi.Label) (par le shim, jamais par chemin absolu)" -ForegroundColor DarkGray
+        Write-Host "  $(T 'rac.ecrit' $fichier)" -ForegroundColor Green
+        Write-Host "    $(T 'rac.projet' $projet)"
+        Write-Host "    $(T 'rac.contexte' $contexte)"
+        Write-Host "    $(T 'rac.editeur' $choisi.Label)" -ForegroundColor DarkGray
         Write-Host ''
     }

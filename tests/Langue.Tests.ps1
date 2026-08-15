@@ -180,8 +180,12 @@ Describe 'Aucune decision prise sur du texte affiche' {
         # Filet plus large : si une comparaison porte sur une valeur qui existe
         # dans les tables de textes, c'est presque surement le meme defaut.
         $racine = Split-Path $PSScriptRoot -Parent
+        # Les libelles AVEC espaces comptent aussi. Les exclure a laisse passer
+        # une troisieme occurrence du defaut -- un filtre sur
+        # « ne lance pas un editeur », qui aurait cesse de matcher en anglais et
+        # noye le rapport sous deux cents raccourcis sans rapport.
         $textes = (Import-PowerShellDataFile (Join-Path $racine 'lang/fr.psd1')).Values |
-            Where-Object { $_ -and $_.Length -ge 4 -and $_ -notmatch '\{|\s' }
+            Where-Object { $_ -and $_.Length -ge 4 -and $_ -notmatch '\{' }
 
         # Sur les JETONS, pas sur le texte brut. La premiere version signalait le
         # commentaire qui DECRIT le bug -- exactement la meme confusion entre

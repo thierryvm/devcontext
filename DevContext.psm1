@@ -219,7 +219,7 @@ function Read-CtxManifest {
 
     $manifest = Join-Path (Get-CtxPath $Name) 'context.json'
     if (-not (Test-Path $manifest)) {
-        throw "Contexte '$Name' introuvable ($manifest). 'ctx-list' pour voir les contextes existants."
+        throw (T 'manifeste.introuvable' $Name $manifest)
     }
     Get-Content $manifest -Raw | ConvertFrom-Json
 }
@@ -257,10 +257,10 @@ function Get-NormalizedRoot {
 
 function Test-CtxVault {
     if (-not (Get-Module -ListAvailable Microsoft.PowerShell.SecretManagement)) {
-        throw "Module SecretManagement absent. Installer :`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"
+        throw (T 'vault.absent')
     }
     if (-not (Get-SecretVault -Name $script:VaultName -ErrorAction SilentlyContinue)) {
-        Write-Host "Creation du coffre '$($script:VaultName)'..." -ForegroundColor Yellow
+        Write-Host (T 'vault.creation' $script:VaultName) -ForegroundColor Yellow
         Register-SecretVault -Name $script:VaultName -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault:$false
     }
 }
@@ -512,14 +512,16 @@ function Clear-DevContext {
 
     $Host.UI.RawUI.WindowTitle = 'PowerShell — AUCUN CONTEXTE'
     Write-Host ""
-    Write-Host "  Aucun contexte actif." -ForegroundColor Red
+    Write-Host "  $(T 'off.aucunActif')" -ForegroundColor Red
     if (-not (Test-Path $manifest)) {
-        Write-Host "  Le contexte '$homeCtx' n'existe pas. Tant qu'il manque, l'identite" -ForegroundColor Yellow
-        Write-Host "  perso retombe sur la config GLOBALE de la machine — celle du" -ForegroundColor Yellow
-        Write-Host "  dernier compte connecte. C'est le seul trou du dispositif." -ForegroundColor Yellow
+        Write-Host "  $(T 'off.manquant1' $homeCtx)" -ForegroundColor Yellow
+        Write-Host "  $(T 'off.manquant2')" -ForegroundColor Yellow
+        Write-Host "  $(T 'off.manquant3')" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "    ctx-new $homeCtx -Label 'Perso' -Email '<ton-gmail>' \``" -ForegroundColor DarkGray
-        Write-Host "      -Root 'F:\PROJECTS\Apps' -GithubLogin '<ton-login>'" -ForegroundColor DarkGray
+        # L'exemple ne code plus le lecteur de l'auteur en dur : il montre un
+        # chemin sous le dossier personnel, valable sur n'importe quelle machine.
+        Write-Host "    $(T 'off.exemple' $homeCtx)" -ForegroundColor DarkGray
+        Write-Host "      $(T 'off.exempleSuite' ([System.IO.Path]::Combine($HOME, 'dev')))" -ForegroundColor DarkGray
     }
     Write-Host ""
 }
@@ -549,7 +551,7 @@ function Open-DevCode {
         [string]$Editor = 'code'
     )
 
-    if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'code-ctx <contexte>'." }
+    if (-not $Name) { throw (T 'code.aucunActif') }
 
     $m   = Read-CtxManifest $Name
     $ctx = Get-CtxPath $Name
@@ -557,7 +559,7 @@ function Open-DevCode {
 
     $editeur = Get-CtxEditorFacts | Where-Object Name -eq $Editor | Select-Object -First 1
     if (-not $editeur) {
-        throw "'$Editor' introuvable sur cette machine. 'ctx-editors' dit ce qui a ete detecte. Pour VS Code : Ctrl+Shift+P > 'Shell Command: Install code command in PATH'."
+        throw (T 'code.editeurInconnu' $Editor)
     }
 
     # L'isolation reelle : ces editeurs chiffrent leurs sessions d'auth (DPAPI
@@ -568,15 +570,15 @@ function Open-DevCode {
         -ProfileName $editeur.Profile -Arguments @($Path)
 
     if (-not $capacites.UserDataDir) {
-        Write-Warning "$($editeur.Label) n'expose pas --user-data-dir : ses sessions restent communes a tous les contextes."
+        Write-Warning (T 'editeur.sansUserDataDir' $editeur.Label)
     }
 
     $codeCmd = if ($editeur.Cli) { [pscustomobject]@{ Source = $editeur.Cli } }
     if (-not $codeCmd) {
-        throw "'$Editor' est installe mais n'expose aucun point d'entree en ligne de commande. Il ne peut pas etre lance par DevContext."
+        throw (T 'code.sansCli' $Editor)
     }
 
-    Write-Host "  $($editeur.Label) [$(Get-CtxProp $m 'label' $Name)] -> $Path" -ForegroundColor Cyan
+    Write-Host "  $(T 'code.ouverture' $editeur.Label (Get-CtxProp $m 'label' $Name) $Path)" -ForegroundColor Cyan
 
     # Lancement DETACHE. `code.cmd` execute `Code.exe cli.js` en avant-plan, sans
     # `start` : cmd.exe attend donc la fin du processus, et le terminal appelant
@@ -628,12 +630,12 @@ function Open-DevBrowser {
     [CmdletBinding()]
     param([Parameter(Position = 0)][string]$Name = $env:DEVCTX)
 
-    if (-not $Name) { throw "Aucun contexte actif." }
+    if (-not $Name) { throw (T 'web.aucunActif') }
     $m = Read-CtxManifest $Name
 
     $chromeProfile = Get-CtxProp $m 'chromeProfile'
     if (-not $chromeProfile) {
-        throw "Pas de 'chromeProfile' dans context.json pour '$Name'. Creer le profil dans Chrome, puis relever son dossier via chrome://version (champ 'Chemin du profil')."
+        throw (T 'web.sansProfil' $Name)
     }
 
     $chrome = @(
@@ -642,7 +644,7 @@ function Open-DevBrowser {
         "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
     ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-    if (-not $chrome) { throw "chrome.exe introuvable." }
+    if (-not $chrome) { throw (T 'web.chromeAbsent') }
 
     Start-Process $chrome -ArgumentList "--profile-directory=`"$chromeProfile`""
 }
@@ -665,7 +667,7 @@ function Invoke-DevVercel {
 
     $exe = Get-Command vercel -CommandType Application, ExternalScript -ErrorAction SilentlyContinue |
         Select-Object -First 1
-    if (-not $exe) { throw "vercel introuvable dans le PATH." }
+    if (-not $exe) { throw (T 'bin.vercelAbsent') }
 
     if ($env:DEVCTX_VERCEL_CONFIG) {
         if (-not (Test-Path $env:DEVCTX_VERCEL_CONFIG)) {
@@ -726,7 +728,7 @@ function Get-CtxSupabaseExe {
             -not $excluded -or (Split-Path $_.Source -Parent).TrimEnd('\', '/') -ne $excluded
         } | Select-Object -First 1
 
-    if (-not $candidate) { throw "supabase introuvable dans le PATH (hors shims)." }
+    if (-not $candidate) { throw (T 'bin.supabaseAbsent') }
     $candidate.Source
 }
 
@@ -863,7 +865,7 @@ function Update-DevSupabaseIndex {
     [CmdletBinding(SupportsShouldProcess)]
     param([string]$Name = $env:DEVCTX)
 
-    if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'sb-index <contexte>'." }
+    if (-not $Name) { throw (T 'index.aucunActif') }
     $exe = Get-CtxSupabaseExe
 
     $keys = @(Get-CtxSupabaseKeys $Name)
@@ -880,7 +882,7 @@ function Update-DevSupabaseIndex {
                 ForEach-Object { $former[$_.Name] = $_.Value }
         }
         # Message litteral, sans donnee interpolee : rien a caviarder ici.
-        catch { Write-Warning "Index existant illisible, il sera reconstruit sans les marquages manuels." }
+        catch { Write-Warning (T 'index.ancienIllisible') }
     }
 
     $index    = [ordered]@{}
@@ -898,7 +900,7 @@ function Update-DevSupabaseIndex {
 
             $start = $raw.IndexOf('[')
             if ($start -lt 0) {
-                Write-Warning "$key : reponse illisible (jeton revoque ou expire ?). Ignore."
+                Write-Warning (T 'index.reponseIllisible' $key)
                 continue
             }
 
@@ -922,7 +924,7 @@ function Update-DevSupabaseIndex {
     if ($PSCmdlet.ShouldProcess($path, 'reecrire l index Supabase')) {
         $index | ConvertTo-Json -Depth 4 | Set-Content $path -Encoding UTF8
     }
-    Write-Host "  index ecrit : $path" -ForegroundColor Green
+    Write-Host "  $(T 'index.ecrit' $path)" -ForegroundColor Green
 }
 
 # ---------------------------------------------------------------------------
@@ -962,10 +964,10 @@ function Get-DevSupabaseMap {
     [CmdletBinding()]
     param([Parameter(Position = 0)][string]$Name = $env:DEVCTX)
 
-    if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'ctx-sb <contexte>'." }
+    if (-not $Name) { throw (T 'sb.aucunActif') }
 
     $indexPath = Get-CtxSupabaseIndexPath $Name
-    if (-not (Test-Path $indexPath)) { throw "Aucun index Supabase pour '$Name'. Lance 'sb-index'." }
+    if (-not (Test-Path $indexPath)) { throw (T 'sb.sansIndex' $Name) }
     $index = Get-Content $indexPath -Raw | ConvertFrom-Json
 
     $root = Get-CtxSupabaseMapRoot $Name
@@ -1260,7 +1262,7 @@ function Invoke-DevSupabase {
                     # Annonce uniquement quand le compte n'est PAS celui que `work`
                     # a charge : signaler l'exception, pas la normale.
                     if ($token -and $entry.Value.key -ne 'supabase-token') {
-                        Write-Host "  [$($entry.Value.name) -> $($entry.Value.key)]" -ForegroundColor DarkGray
+                        Write-Host "  $(T 'sb.projetActif' $entry.Value.name $entry.Value.key)" -ForegroundColor DarkGray
                     }
                 }
                 else {
@@ -1268,7 +1270,7 @@ function Invoke-DevSupabase {
                 }
             }
             else {
-                Write-Warning "Aucun index Supabase pour '$env:DEVCTX'. Lance 'sb-index'."
+                Write-Warning (T 'sb.sansIndexAvert' $env:DEVCTX)
             }
         }
     }
@@ -1320,7 +1322,7 @@ function New-DevContext {
     )
 
     if ($Name -notmatch '^[a-z0-9][a-z0-9-]*$') {
-        throw "Nom de contexte invalide : minuscules, chiffres et tirets uniquement."
+        throw (T 'new.nomInvalide')
     }
 
     if (-not $Label) { $Label = $Name }
@@ -1332,7 +1334,7 @@ function New-DevContext {
 
     Test-CtxVault
     $ctx = Get-CtxPath $Name
-    if (Test-Path $ctx) { throw "Le contexte '$Name' existe deja ($ctx)." }
+    if (Test-Path $ctx) { throw (T 'new.existeDeja' $Name $ctx) }
 
     # Le defaut visait 'F:\PROJECTS\Clients\<nom>' -- le lecteur de l'auteur. Sur
     # toute autre machine, la creation echouait sur un volume absent, ou pire,
@@ -1347,7 +1349,7 @@ function New-DevContext {
         if (-not $existing) { continue }
         $existingRoot = Get-NormalizedRoot $existing
         if ($newRoot -eq $existingRoot) {
-            throw "La racine '$Root' est deja celle du contexte '$($m.name)'."
+            throw (T 'new.racinePrise' $Root $m.name)
         }
     }
 
@@ -1396,12 +1398,12 @@ function New-DevContext {
                 "  - dans un script ou une CI    : ajouter -NoKey, puis generer la cle plus tard`n" +
                 "Le contexte '$Name' a bien ete cree : $ctx")
         }
-        Write-Host "  Generation de la cle SSH du contexte (passphrase recommandee) :" -ForegroundColor Cyan
+        Write-Host "  $(T 'new.cleGeneration')" -ForegroundColor Cyan
         ssh-keygen -t ed25519 -C $Email -f $keyPath
     }
     elseif ($NoKey -and -not (Test-Path $keyPath)) {
-        Write-Host "  Cle SSH NON generee (-NoKey)." -ForegroundColor Yellow
-        Write-Host "    ssh-keygen -t ed25519 -C '$Email' -f '$keyPath'" -ForegroundColor DarkGray
+        Write-Host "  $(T 'new.cleSansGeneration')" -ForegroundColor Yellow
+        Write-Host "    $(T 'new.cleCommande' $Email $keyPath)" -ForegroundColor DarkGray
     }
 
     # --- gitconfig du contexte (inclus conditionnellement) ---
@@ -1456,14 +1458,14 @@ Host github-$Name
     # personne ne voit.
     if ([Console]::IsInputRedirected) {
         Write-Host ""
-        Write-Host "  Saisie des jetons ignoree (entree non interactive)." -ForegroundColor Yellow
-        Write-Host "  Les poser plus tard, un par un :" -ForegroundColor DarkGray
-        Write-Host "    Set-Secret -Vault DevContext -Name 'devctx/$Name/<cle>' -SecureStringSecret `$s" -ForegroundColor DarkGray
-        Write-Host "    cles : $($script:SecretMap.Keys -join ', ')" -ForegroundColor DarkGray
+        Write-Host "  $(T 'new.jetonsIgnores')" -ForegroundColor Yellow
+        Write-Host "  $(T 'new.jetonsPlusTard')" -ForegroundColor DarkGray
+        Write-Host "    $(T 'new.jetonsCommande' $Name)" -ForegroundColor DarkGray
+        Write-Host "    $(T 'new.jetonsCles' ($script:SecretMap.Keys -join ', '))" -ForegroundColor DarkGray
     }
     else {
         Write-Host ""
-        Write-Host "  Tokens du contexte (Entree pour passer)" -ForegroundColor Cyan
+        Write-Host "  $(T 'new.jetonsSaisie')" -ForegroundColor Cyan
         foreach ($key in $script:SecretMap.Keys) {
             $secure = Read-Host "    $key" -AsSecureString
             if ($secure.Length -gt 0) { Set-CtxSecret -Name $Name -Key $key -Value $secure }
@@ -1471,26 +1473,26 @@ Host github-$Name
     }
 
     Write-Host ""
-    Write-Host "  Contexte '$Label' cree." -ForegroundColor Green
+    Write-Host "  $(T 'new.cree' $Label)" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Reste a faire, une seule fois :" -ForegroundColor Yellow
+    Write-Host "  $(T 'new.resteAFaire')" -ForegroundColor Yellow
     # La liste ne doit designer que ce qui existe. Avec -NoKey elle envoyait
     # chercher une cle publique jamais generee -- une impasse de plus, de la
     # meme famille que celles corrigees plus haut.
     if (Test-Path -LiteralPath "$keyPath.pub") {
-        Write-Host "    1. Ajouter la cle publique au compte GitHub $Email :"
+        Write-Host "    $(T 'new.etape1' $Email)"
         Write-Host "       $keyPath.pub"
     }
     else {
-        Write-Host "    1. Generer la cle SSH, puis l ajouter au compte GitHub $Email :" -ForegroundColor Yellow
-        Write-Host "       ssh-keygen -t ed25519 -C '$Email' -f '$keyPath'" -ForegroundColor Yellow
+        Write-Host "    $(T 'new.etape1Sans' $Email)" -ForegroundColor Yellow
+        Write-Host "       $(T 'new.cleCommande' $Email $keyPath)" -ForegroundColor Yellow
     }
-    Write-Host "    2. work $Name ; gh auth login   (config isolee dans $ctx\gh)"
-    Write-Host "    3. Creer le profil Chrome dedie, puis renseigner 'chromeProfile' dans context.json"
-    Write-Host "    4. code-ctx $Name   (VS Code vierge : connecter le compte du client)"
+    Write-Host "    $(T 'new.etape2' $Name (Join-Path $ctx 'gh'))"
+    Write-Host "    $(T 'new.etape3')"
+    Write-Host "    $(T 'new.etape4' $Name)"
     if (-not $GithubLogin) {
-        Write-Host "    5. Renseigner 'github.login' dans context.json — sans lui, 'ctx' ne peut" -ForegroundColor Yellow
-        Write-Host "       que rapporter le compte actif, jamais verifier que c'est le bon." -ForegroundColor Yellow
+        Write-Host "    $(T 'new.etape5a')" -ForegroundColor Yellow
+        Write-Host "       $(T 'new.etape5b')" -ForegroundColor Yellow
     }
     Write-Host ""
 }
@@ -1510,26 +1512,26 @@ function Close-DevContext {
     $ctx = Get-CtxPath $Name
 
     Write-Host ""
-    Write-Host "  TRANSFERT — $(Get-CtxProp $m 'label' $Name) ($(Get-CtxProp $m 'email'))" -ForegroundColor Cyan
+    Write-Host "  $(T 'end.titre' (Get-CtxProp $m 'label' $Name) (Get-CtxProp $m 'email'))" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  A verifier avant de purger :" -ForegroundColor Yellow
-    Write-Host "    [ ] 2FA du Gmail bascule sur le client (pas ton telephone / ton authenticator)"
-    Write-Host "    [ ] Numero de recuperation et email de secours retires du compte Google"
-    Write-Host "    [ ] Moyen de paiement retire de Vercel et Supabase, remplace par celui du client"
-    Write-Host "    [ ] Ta cle SSH perso absente des Deploy keys du/des depots"
-    Write-Host "    [ ] Tokens revoques cote fournisseur (les supprimer du coffre ne les revoque pas) :"
-    Write-Host "          github.com/settings/tokens  |  vercel.com/account/tokens  |  supabase.com/dashboard/account/tokens"
-    Write-Host "    [ ] Mot de passe du Gmail change et transmis au client"
-    Write-Host "    [ ] Sauvegarde du depot archivee de ton cote si le contrat le prevoit"
+    Write-Host "  $(T 'end.avantPurge')" -ForegroundColor Yellow
+    Write-Host "    $(T 'end.item1')"
+    Write-Host "    $(T 'end.item2')"
+    Write-Host "    $(T 'end.item3')"
+    Write-Host "    $(T 'end.item4')"
+    Write-Host "    $(T 'end.item5')"
+    Write-Host "          $(T 'end.item5Urls')"
+    Write-Host "    $(T 'end.item6')"
+    Write-Host "    $(T 'end.item7')"
     Write-Host ""
 
     if (-not $Purge) {
-        Write-Host "  Relancer avec -Purge pour supprimer secrets et dossier de contexte." -ForegroundColor DarkGray
+        Write-Host "  $(T 'end.relancer')" -ForegroundColor DarkGray
         return
     }
 
     if ($env:DEVCTX -eq $Name) {
-        throw "Le contexte '$Name' est actif dans ce terminal. 'ctx-off' d'abord — purger sous soi laisse des secrets charges en memoire."
+        throw (T 'end.actifIci' $Name)
     }
 
     if (-not $PSCmdlet.ShouldProcess($Name, 'Purger secrets, contexte, entrees git et ssh')) { return }
@@ -1539,10 +1541,10 @@ function Close-DevContext {
     }
     if (Test-Path $ctx) { Remove-Item $ctx -Recurse -Force }
 
-    Write-Host "  Secrets et dossier supprimes." -ForegroundColor Green
-    Write-Host "  Retirer manuellement le bloc 'Host github-$Name' de $($script:SshConfig)" -ForegroundColor Yellow
-    Write-Host "  et le bloc includeIf correspondant de $($script:GitConfig)." -ForegroundColor Yellow
-    Write-Host "  Le dossier projet $(Get-CtxProp $m 'root') n'a pas ete touche." -ForegroundColor DarkGray
+    Write-Host "  $(T 'end.supprime')" -ForegroundColor Green
+    Write-Host "  $(T 'end.sshManuel1' $Name $script:SshConfig)" -ForegroundColor Yellow
+    Write-Host "  $(T 'end.sshManuel2' $script:GitConfig)" -ForegroundColor Yellow
+    Write-Host "  $(T 'end.projetIntact' (Get-CtxProp $m 'root'))" -ForegroundColor DarkGray
 }
 
 # ---------------------------------------------------------------------------
@@ -1718,7 +1720,7 @@ function Assert-DevContext {
         # Le detail n'est utile qu'en cas d'echec : on le reaffiche alors, au
         # prix d'un second controle. Sur le chemin nominal, aucune sortie.
         Test-DevContext | Out-Null
-        throw "Contexte incoherent — commande interrompue."
+        throw (T 'ctx.incoherent')
     }
 }
 

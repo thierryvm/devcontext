@@ -40,6 +40,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Script autonome : T est interne au module, il faut sourcer la langue soi-meme.
+. (Join-Path $PSScriptRoot 'src' 'Langue.ps1')
+Set-CtxLangue | Out-Null
+
 function Stop-WithMessage {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
         Justification = 'Affiche un motif et termine le script ; ne modifie aucun etat.')]
@@ -47,7 +51,7 @@ function Stop-WithMessage {
     Write-Host ""
     Write-Host "  $Message" -ForegroundColor Red
     Write-Host ""
-    Read-Host "  Entree pour fermer"
+    Read-Host ("  " + (T 'lanceur.fermer'))
     exit 1
 }
 
@@ -76,5 +80,5 @@ if (-not (Test-DevContext -Quiet)) {
     Stop-WithMessage "NO-GO — VS Code n'a pas ete lance. Corriger avant de pousser ou deployer."
 }
 
-Write-Host "  GO" -ForegroundColor Green
+Write-Host "  $(T 'lanceur.go')" -ForegroundColor Green
 Open-DevCode $Context $Path

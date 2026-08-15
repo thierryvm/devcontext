@@ -38,6 +38,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# T est INTERNE au module : un script autonome doit sourcer le fichier de langue
+# lui-meme. L'oublier n'a pas de symptome visible autre que des messages du type
+# « [inst.pose] » -- et c'est exactement pourquoi une cle manquante s'affiche au
+# lieu de disparaitre.
+. (Join-Path $PSScriptRoot 'src' 'Langue.ps1')
+Set-CtxLangue | Out-Null
+
 $script:ShimDir  = Join-Path $PSScriptRoot 'shims'
 $script:ShimFichiers = @('supabase.ps1', 'supabase.cmd', 'supabase', 'editor.ps1')
 
@@ -170,8 +177,8 @@ public static extern IntPtr SendMessageTimeout(
             [IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$resultat)
     }
     catch {
-        Write-Warning "Diffusion WM_SETTINGCHANGE impossible : $($_.Exception.Message)"
-        Write-Warning "Le PATH est correct dans le registre. Les applications deja lancees ne le verront qu'apres redemarrage."
+        Write-Warning (T 'inst.broadcast' $_.Exception.Message)
+        Write-Warning (T 'inst.broadcastSuite')
     }
 }
 
@@ -297,7 +304,7 @@ function Test-CtxShimComplet {
     #>
     $manquants = @($script:ShimFichiers | Where-Object { -not (Test-Path -LiteralPath (Join-Path $script:ShimDir $_)) })
     if ($manquants.Count) {
-        throw "Fichiers de shim manquants : $($manquants -join ', '). Depot incomplet, installation interrompue."
+        throw (T 'inst.shimsManquants' ($manquants -join ', '))
     }
 }
 
@@ -315,7 +322,7 @@ function Get-CtxEditeursEnrobables {
         Import-Module (Join-Path $PSScriptRoot 'DevContext.psd1') -Force -ErrorAction Stop
     }
     catch {
-        Write-Warning "Module DevContext illisible, points d entree editeurs ignores : $($_.Exception.Message)"
+        Write-Warning (T 'inst.moduleIllisible' $_.Exception.Message)
         return @()
     }
 
@@ -340,12 +347,12 @@ $pose  = -not (Add-CtxPathEntry -Entry $script:ShimDir -Current $etat.Value)
 
 if ($Verifier) {
     Write-Host ''
-    if ($pose) { Write-Host '  SHIM ACTIF dans le PATH utilisateur' -ForegroundColor Green }
-    else       { Write-Host '  SHIM ABSENT du PATH utilisateur' -ForegroundColor Yellow }
-    Write-Host "    dossier : $script:ShimDir"
-    Write-Host "    registre: HKCU\Environment\Path ($($etat.Kind))"
+    if ($pose) { Write-Host "  $(T 'inst.actif')" -ForegroundColor Green }
+    else       { Write-Host "  $(T 'inst.absent')" -ForegroundColor Yellow }
+    Write-Host "    $(T 'inst.dossier' $script:ShimDir)"
+    Write-Host "    $(T 'inst.registre' $etat.Kind)"
     Write-Host ''
-    Write-Host '  Fichiers de shim :'
+    Write-Host "  $(T 'inst.fichiers')"
     foreach ($f in $script:ShimFichiers) {
         $p = Join-Path $script:ShimDir $f
         $ok = Test-Path -LiteralPath $p
@@ -353,14 +360,14 @@ if ($Verifier) {
             -ForegroundColor $(if ($ok) { 'DarkGray' } else { 'Red' })
     }
     Write-Host ''
-    Write-Host '  Points d entree editeurs generes :'
+    Write-Host "  $(T 'inst.pointsEntree')"
     $generes = @(Get-CtxEntryPointsExistants)
-    if (-not $generes) { Write-Host '    (aucun)' -ForegroundColor DarkGray }
+    if (-not $generes) { Write-Host "    $(T 'inst.aucun')" -ForegroundColor DarkGray }
     foreach ($g in $generes) { Write-Host "    $($g.Name)" -ForegroundColor DarkGray }
     Write-Host ''
-    Write-Host '  Resolution de "supabase" dans CE processus :'
+    Write-Host "  $(T 'inst.resolution')"
     $resolus = @(Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue)
-    if (-not $resolus) { Write-Host '    (aucune)' -ForegroundColor Yellow }
+    if (-not $resolus) { Write-Host "    $(T 'inst.aucune')" -ForegroundColor Yellow }
     foreach ($r in $resolus) {
         $premier = Compare-CtxPathEntry (Split-Path $r.Source -Parent) $script:ShimDir
         Write-Host ('    {0} {1}' -f $(if ($premier) { '->' } else { '  ' }), $r.Source) `
@@ -368,8 +375,8 @@ if ($Verifier) {
     }
     Write-Host ''
     if ($pose -and $resolus -and -not (Compare-CtxPathEntry (Split-Path $resolus[0].Source -Parent) $script:ShimDir)) {
-        Write-Host '  Pose dans le registre, mais pas encore actif dans ce terminal.' -ForegroundColor Yellow
-        Write-Host '  Ouvrir un terminal neuf.' -ForegroundColor Yellow
+        Write-Host "  $(T 'inst.poseNonActif')" -ForegroundColor Yellow
+        Write-Host "  $(T 'inst.terminalNeuf')" -ForegroundColor Yellow
         Write-Host ''
     }
     return
@@ -377,16 +384,16 @@ if ($Verifier) {
 
 if ($Restaurer) {
     $retrait = Sync-CtxEditorEntryPoints -Noms @()
-    foreach ($r in $retrait.Retires) { Write-Host "  retire : $(Split-Path $r -Leaf)" -ForegroundColor DarkGray }
+    foreach ($r in $retrait.Retires) { Write-Host "  $(T 'inst.retire' (Split-Path $r -Leaf))" -ForegroundColor DarkGray }
 
     $nouveau = Remove-CtxPathEntry -Entry $script:ShimDir -Current $etat.Value
     if (-not $nouveau -and $nouveau -ne '') {
-        Write-Host '  Deja absent du PATH. Rien a faire.' -ForegroundColor DarkGray
+        Write-Host "  $(T 'inst.dejaAbsent')" -ForegroundColor DarkGray
         return
     }
     Set-CtxUserPath -Value $nouveau -Kind $etat.Kind
-    Write-Host '  Shim retire du PATH utilisateur.' -ForegroundColor Green
-    Write-Host '  Les terminaux deja ouverts gardent l ancien PATH.' -ForegroundColor DarkGray
+    Write-Host "  $(T 'inst.retireDuPath')" -ForegroundColor Green
+    Write-Host "  $(T 'inst.ancienPath')" -ForegroundColor DarkGray
     return
 }
 
@@ -399,22 +406,22 @@ $sync = Sync-CtxEditorEntryPoints -Noms @($editeurs | ForEach-Object Nom)
 
 Write-Host ''
 if ($editeurs) {
-    Write-Host '  Editeurs enrobes (profil par contexte) :' -ForegroundColor Green
+    Write-Host "  $(T 'inst.editeursEnrobes')" -ForegroundColor Green
     foreach ($e in $editeurs) {
-        $ext = if ($e.Extensions) { 'profil + extensions' } else { 'profil seul' }
+        $ext = if ($e.Extensions) { T 'inst.profilEtExt' } else { T 'inst.profilSeul' }
         Write-Host ('    {0,-22} {1,-20} ({2})' -f $e.Libelle, $ext, $e.Methode) -ForegroundColor DarkGray
     }
 }
 else {
-    Write-Host '  Aucun editeur enrobable trouve.' -ForegroundColor Yellow
-    Write-Host '  `ctx-editors` dit ce qui a ete detecte et pourquoi.' -ForegroundColor DarkGray
+    Write-Host "  $(T 'inst.aucunEditeur')" -ForegroundColor Yellow
+    Write-Host "  $(T 'inst.aucunEditeurFix')" -ForegroundColor DarkGray
 }
-foreach ($r in $sync.Retires) { Write-Host "    retire : $(Split-Path $r -Leaf)" -ForegroundColor DarkGray }
+foreach ($r in $sync.Retires) { Write-Host "    $(T 'inst.retire' (Split-Path $r -Leaf))" -ForegroundColor DarkGray }
 
 $nouveau = Add-CtxPathEntry -Entry $script:ShimDir -Current $etat.Value
 if (-not $nouveau) {
     Write-Host ''
-    Write-Host '  PATH deja pose. Rien a faire de ce cote.' -ForegroundColor DarkGray
+    Write-Host "  $(T 'inst.pathDejaPose')" -ForegroundColor DarkGray
     return
 }
 
@@ -425,12 +432,12 @@ Set-Content -LiteralPath $sauvegarde -Value $etat.Value -Encoding UTF8 -NoNewlin
 Set-CtxUserPath -Value $nouveau -Kind $etat.Kind
 
 Write-Host ''
-Write-Host '  Shim pose en tete du PATH utilisateur.' -ForegroundColor Green
+Write-Host "  $(T 'inst.pose')" -ForegroundColor Green
 Write-Host "    $script:ShimDir"
-Write-Host "    type registre preserve : $($etat.Kind)"
-Write-Host "  PATH d avant sauvegarde : $sauvegarde" -ForegroundColor DarkGray
+Write-Host "    $(T 'inst.typePreserve' $etat.Kind)"
+Write-Host "  $(T 'inst.sauvegarde' $sauvegarde)" -ForegroundColor DarkGray
 if ($nouveau.Length -gt 2000) {
-    Write-Warning "Le PATH utilisateur fait $($nouveau.Length) caracteres. Certains outils anciens tronquent au-dela de 2047."
+    Write-Warning (T 'inst.pathLong' $nouveau.Length)
 }
-Write-Host '  Les terminaux deja ouverts gardent l ancien PATH — en ouvrir un neuf.' -ForegroundColor Yellow
+Write-Host "  $(T 'inst.ancienPathNeuf')" -ForegroundColor Yellow
 Write-Host ''

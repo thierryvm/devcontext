@@ -80,7 +80,9 @@ function Import-CtxTextes {
     if (-not (Test-Path -LiteralPath $fichier)) { return @{} }
     try { Import-PowerShellDataFile -LiteralPath $fichier -ErrorAction Stop }
     catch {
-        Write-Warning "Textes '$Code' illisibles : $($_.Exception.Message)"
+        # En anglais, et sans passer par T : c'est la traduction elle-meme qui a
+        # echoue. Un message de panne qui depend du systeme en panne ne s'affiche pas.
+        Write-Warning "DevContext: strings for '$Code' are unreadable: $($_.Exception.Message)"
         @{}
     }
 }

@@ -1,17 +1,74 @@
-# Changelog
+## [1.3.0] - 15 August 2026
 
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-This module follows [semantic versioning](https://semver.org/).
+The release where the tool stopped speaking only its author's language.
 
-`ModuleVersion` in `DevContext.psd1` is updated **by hand**, and must always
-match the latest git tag.
+The documentation was English and the output French. A developer in Berlin read
+a README they understood, then received refusals and diagnostics in a language
+they may not speak. That is the most visible inconsistency a tool can have, and
+the one that gets it uninstalled on first run.
 
-> Entries from 1.1.0 onward are written in English, as is the rest of the
-> documentation. Earlier entries are left in French rather than retranslated:
-> rewriting history to look tidier makes it less trustworthy.
+### Added
+
+- **`DEVCTX_LANG`**, then the system culture, then English. Nothing to
+  configure to be understood; one variable to override for a shell, a test, or a
+  screenshot. `fr-BE` resolves as `fr`, because a system culture almost
+  always carries a region and demanding the short code would recognise nobody.
+- **268 keys, two tables**, in `lang/fr.psd1` and `lang/en.psd1`, loaded
+  through `Import-PowerShellDataFile` -- a data file must not be able to
+  execute code, even one we ship.
+- **`ctx-root`**, `ctx-new`, `ctx-end`, `ctx-mcp`, `ctx-shortcut`,
+  `ctx-editors`, `ctx doctor`, `work`, the production guard refusal, the
+  installers and the launchers all speak both.
+
+### Changed
+
+- **A missing key renders as `[ctx.noGo]`**, never as an empty string. An
+  empty message reads as a command that said nothing; a visible key reads as a
+  defect, and a test finds it.
+- **Substitution goes through `{0}`, `{1}` and `-f`**, never through
+  concatenation, so a translation can REORDER what it inserts. German puts its
+  verb last; a sentence assembled from fragments survives neither that nor the
+  next language.
+- **Log entries are deliberately NOT translated.** A trace that changes language
+  with the machine is a trace nobody can search: two users reporting the same
+  incident would produce two different texts.
+- **`Sujet` in `ctx doctor` stays an untranslated identifier.** It is the
+  column an agent or a CI filters `-Json` on, and a key that changes with the
+  operator's locale is no longer a key. `Detail` and `Correctif` address a
+  human and are translated.
+
+### Fixed
+
+- **Code deciding on displayed text.** Three occurrences, each invisible in the
+  language that wrote it.
+
+  `ctx doctor` compared `\.Profil -eq 'isole'` against a field that had just
+  become translated: in English EVERY editor was reported as not isolated. The
+  shortcut audit filtered on `-eq 'ne lance pas un editeur'`, which in English
+  would have flooded the report with hundreds of unrelated shortcuts.
+
+  The fix is structural. `Get-DevEditorList` carries `Isole` and
+  `ExtensionsIsolees` for the code, beside `Profil` and `Extensions` for
+  the human. `Test-CtxDoctorRaccourci` returns nothing rather than a check
+  recognisable by its wording -- absence does not translate.
+
+### Tests
+
+Five guards against the drift translation projects die of: both tables carry the
+same keys, no string is empty, the `{n}` placeholders match across languages
+(a `{1}` in one and not the other throws at runtime, for some users only),
+everything stays ASCII, and every key called in code exists in both tables.
+
+Three more against deciding on display text: the full diagnostic must return
+identical verdicts in both languages, the boolean fields must exist, and no
+source file may compare against any string present in the tables. That last one
+found the occurrence a human review had missed -- and produced a false positive
+first, reading the comment describing the bug as if it were the bug. It works on
+tokens now, which cannot mistake an explanation for a comparison.
+
+403 tests, zero analyser findings.
 
 ---
-
 ## [1.2.0] — 15 August 2026
 
 The release where isolation stopped depending on launching things our way.

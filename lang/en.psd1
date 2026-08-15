@@ -87,6 +87,179 @@
     'garde.raison.branche'    = "'{0}' towards a production project from branch '{1}' instead of '{2}'."
     'garde.introuvable'       = '{0} not found in PATH (outside the shims).'
 
+    # --- vault and manifest -----------------------------------------------------
+    'vault.absent'            = "SecretManagement module missing. Install it:`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"
+    'vault.creation'          = "Creating vault '{0}'..."
+    'manifeste.introuvable'   = "Context '{0}' not found ({1}). Run 'ctx-list' to see the existing ones."
+
+    # --- ctx-off ---------------------------------------------------------------
+    'off.aucunActif'          = 'No active context.'
+    'off.manquant1'           = "Context '{0}' does not exist. While it is missing, the personal"
+    'off.manquant2'           = 'identity falls back to the machine-wide config - that of the last'
+    'off.manquant3'           = 'account logged into. This is the one hole in the arrangement.'
+
+    # --- code-ctx --------------------------------------------------------------
+    'code.aucunActif'         = "No active context. Run 'work <context>' first, or 'code-ctx <context>'."
+    'code.editeurInconnu'     = "'{0}' not found on this machine. 'ctx-editors' lists what was detected. For VS Code: Ctrl+Shift+P > 'Shell Command: Install code command in PATH'."
+    'code.sansCli'            = "'{0}' is installed but exposes no command-line entry point. DevContext cannot launch it."
+    'code.ouverture'          = '{0} [{1}] -> {2}'
+
+    # --- web-ctx ---------------------------------------------------------------
+    'web.aucunActif'          = 'No active context.'
+    'web.sansProfil'          = "No 'chromeProfile' in context.json for '{0}'. Create the profile in Chrome, then read its folder from chrome://version (Profile Path)."
+    'web.chromeAbsent'        = 'chrome.exe not found.'
+
+    # --- wrapped binaries --------------------------------------------------------
+    'bin.vercelAbsent'        = 'vercel not found in PATH.'
+    'bin.supabaseAbsent'      = 'supabase not found in PATH (outside the shims).'
+
+    # --- sb-index ---------------------------------------------------------------
+    'index.aucunActif'        = "No active context. Run 'work <context>' first, or 'sb-index <context>'."
+    'index.ancienIllisible'   = 'Existing index unreadable; it will be rebuilt without the manual tags.'
+    'index.reponseIllisible'  = '{0}: unreadable response (token revoked or expired?). Skipped.'
+    'index.ecrit'             = 'index written: {0}'
+
+    # --- ctx-sb -----------------------------------------------------------------
+    'sb.aucunActif'           = "No active context. Run 'work <context>' first, or 'ctx-sb <context>'."
+    'sb.sansIndex'            = "No Supabase index for '{0}'. Run 'sb-index'."
+    'sb.sansIndexAvert'       = "No Supabase index for '{0}'. Run 'sb-index'."
+    'sb.projetActif'          = '[{0} -> {1}]'
+
+    # --- ctx-new ----------------------------------------------------------------
+    'new.nomInvalide'         = 'Invalid context name: lowercase letters, digits and hyphens only.'
+    'new.existeDeja'          = "Context '{0}' already exists ({1})."
+    'new.racinePrise'         = "Root '{0}' already belongs to context '{1}'."
+    'new.cleGeneration'       = 'Generating the context SSH key (a passphrase is recommended):'
+    'new.cleSansGeneration'   = 'SSH key NOT generated (-NoKey).'
+    'new.cleCommande'         = "ssh-keygen -t ed25519 -C '{0}' -f '{1}'"
+    'new.cleImpossible'       = "Cannot generate the SSH key: standard input is redirected, and ssh-keygen would wait for a passphrase forever.`n  - in an interactive terminal: run the same command again`n  - in a script or CI         : add -NoKey, and generate the key later`nContext '{0}' was created: {1}"
+    'new.jetonsIgnores'       = 'Token entry skipped (input is not interactive).'
+    'new.jetonsPlusTard'      = 'Set them later, one at a time:'
+    'new.jetonsCles'          = 'keys: {0}'
+    'new.jetonsSaisie'        = 'Context tokens (Enter to skip)'
+    'new.cree'                = "Context '{0}' created."
+    'new.resteAFaire'         = 'Left to do, once:'
+    'new.etape1'              = '1. Add the public key to the GitHub account {0}:'
+    'new.etape1Sans'          = '1. Generate the SSH key, then add it to the GitHub account {0}:'
+    'new.etape2'              = '2. work {0} ; gh auth login   (config isolated in {1})'
+    'new.etape3'              = "3. Create the dedicated Chrome profile, then set 'chromeProfile' in context.json"
+    'new.etape4'              = '4. code-ctx {0}   (a blank editor: sign in with the client account)'
+    'new.etape5a'             = "5. Set 'github.login' in context.json - without it, 'ctx' can only"
+    'new.etape5b'             = 'report the active account, never verify that it is the right one.'
+
+    # --- ctx-end ----------------------------------------------------------------
+    'end.titre'               = 'HANDOVER - {0} ({1})'
+    'end.avantPurge'          = 'To check before purging:'
+    'end.item1'               = '[ ] Mailbox 2FA moved to the client (not your phone)'
+    'end.item2'               = '[ ] Recovery number and backup email removed from the account'
+    'end.item3'               = "[ ] Payment method removed from Vercel and Supabase, replaced by the client's"
+    'end.item4'               = '[ ] Your personal SSH key absent from the deploy keys of every repository'
+    'end.item5'               = '[ ] Tokens revoked at the provider (deleting them from the vault does not revoke them):'
+    'end.item5Urls'           = 'github.com/settings/tokens  |  vercel.com/account/tokens  |  supabase.com/dashboard/account/tokens'
+    'end.item6'               = '[ ] Mailbox password changed and handed to the client'
+    'end.item7'               = '[ ] Repository backup archived on your side if the contract requires it'
+    'end.relancer'            = 'Run again with -Purge to delete the secrets and the context folder.'
+    'end.actifIci'            = "Context '{0}' is active in this terminal. Run 'ctx-off' first - purging from under yourself leaves secrets loaded in memory."
+    'end.supprime'            = 'Secrets and folder deleted.'
+
+    'off.exemple'             = 'ctx-new {0} -Label ''Personal'' -Email ''<your-email>'' '
+    'off.exempleSuite'        = "-Root '{0}' -GithubLogin '<your-login>'"
+    'new.jetonsCommande'      = 'Set-Secret -Vault DevContext -Name ''devctx/{0}/<key>'' -SecureStringSecret $s'
+    'end.sshManuel1'          = "Remove the 'Host github-{0}' block by hand from {1}"
+    'end.sshManuel2'          = 'and the matching includeIf block from {0}.'
+    'end.projetIntact'        = 'The project folder {0} was not touched.'
+    'ctx.incoherent'          = 'Inconsistent context - command interrupted.'
+
+    # --- ctx-mcp -----------------------------------------------------------------
+    'mcp.prodLectureSeule'    = 'Production project: the server stays read-only despite -Ecriture.'
+    'mcp.rienADeclarer'       = 'Nothing to declare for this folder.'
+    'mcp.ignore'              = 'skipped: {0}'
+    'mcp.aucunClient'         = 'No MCP client detected in this folder. Pass -Client to create one: {0}'
+    'mcp.illisible'           = 'existing {0} is unreadable: {1}. Fix or move it before regenerating.'
+    'mcp.fichier'             = '{0} - {1}'
+    'mcp.ajoutes'             = 'added    : {0}'
+    'mcp.remplaces'           = 'replaced : {0}'
+    'mcp.conserves'           = 'kept     : {0} (-Force to replace them)'
+    'mcp.clientInconnu'       = "Unknown MCP client: '{0}'. Known: {1}"
+
+    # --- ctx-shortcut --------------------------------------------------------------
+    'rac.dossierAbsent'       = 'Folder not found: {0}'
+    'rac.horsContexte'        = "No context owns '{0}'. A shortcut that isolates nothing is exactly the one this replaces. Run 'ctx-list' to see the contexts."
+    'rac.aucunEditeur'        = "No wrappable editor found{0}. 'ctx-editors' lists what was detected."
+    'rac.sousLeNom'           = " under the name '{0}'"
+    'rac.lanceurAbsent'       = 'Launcher missing: {0}. Incomplete repository.'
+    'rac.existeDeja'          = 'The shortcut already exists: {0}. Use -Force to overwrite it.'
+    'rac.ecrit'               = 'Shortcut written: {0}'
+    'rac.projet'              = 'project : {0}'
+    'rac.contexte'            = 'context : {0}'
+    'rac.editeur'             = 'editor  : {0} (through the shim, never by absolute path)'
+
+    # --- launcher -------------------------------------------------------------------
+    'lanceur.go'              = 'GO'
+    'lanceur.fermer'          = 'Enter to close'
+    'lanceur.moduleAbsent'    = 'DevContext module not found: {0}'
+    'lanceur.dossierAbsent'   = 'Folder not found: {0}'
+    'lanceur.horsContexte'    = "No context owns '{0}'. Run 'ctx-list' to see the contexts, or pass -Context explicitly."
+    'lanceur.noGo'            = 'NO-GO - the editor was not launched. Fix this before pushing or deploying.'
+
+    'rac.doc.isole'           = 'isolated profile ({0})'
+    'rac.doc.dansContexte'    = 'context {0}'
+    'rac.doc.profilDedie'     = 'dedicated profile'
+    'rac.doc.partage'         = "opens a project of context '{0}' on the SHARED profile: its GitHub, Copilot and marketplace sessions are common to every context"
+    'rac.doc.sansDossier'     = 'launches an editor with no folder: it will reopen whatever the shared profile had last'
+    'rac.doc.sansDossierFix'  = "target 'code' rather than the absolute path to the executable, or go through ctx-shortcut"
+    'rac.doc.regroupes'       = '{0} shortcut(s) opening an editor with no folder ({1}): they land on the shared profile'
+
+    # --- installer -------------------------------------------------------------
+    'inst.broadcast'          = 'Could not broadcast WM_SETTINGCHANGE: {0}'
+    'inst.broadcastSuite'     = 'PATH is correct in the registry. Applications already running will only see it after a restart.'
+    'inst.shimsManquants'     = 'Missing shim files: {0}. Incomplete repository, installation aborted.'
+    'inst.moduleIllisible'    = 'DevContext module unreadable, editor entry points skipped: {0}'
+    'inst.actif'              = 'SHIM ACTIVE in the user PATH'
+    'inst.absent'             = 'SHIM ABSENT from the user PATH'
+    'inst.dossier'            = 'folder  : {0}'
+    'inst.registre'           = 'registry: HKCU\Environment\Path ({0})'
+    'inst.fichiers'           = 'Shim files:'
+    'inst.pointsEntree'       = 'Generated editor entry points:'
+    'inst.aucun'              = '(none)'
+    'inst.aucune'             = '(none)'
+    'inst.resolution'         = 'Resolution of "supabase" in THIS process:'
+    'inst.poseNonActif'       = 'Written to the registry, but not active in this terminal yet.'
+    'inst.terminalNeuf'       = 'Open a fresh terminal.'
+    'inst.retire'             = 'removed: {0}'
+    'inst.dejaAbsent'         = 'Already absent from PATH. Nothing to do.'
+    'inst.retireDuPath'       = 'Shim removed from the user PATH.'
+    'inst.ancienPath'         = 'Terminals already open keep the old PATH.'
+    'inst.editeursEnrobes'    = 'Wrapped editors (profile per context):'
+    'inst.aucunEditeur'       = 'No wrappable editor found.'
+    'inst.aucunEditeurFix'    = 'ctx-editors says what was detected, and why.'
+    'inst.pathDejaPose'       = 'PATH already set. Nothing to do on that side.'
+    'inst.pose'               = 'Shim placed at the front of the user PATH.'
+    'inst.typePreserve'       = 'registry type preserved: {0}'
+    'inst.sauvegarde'         = 'previous PATH saved to: {0}'
+    'inst.pathLong'           = 'The user PATH is {0} characters long. Some older tools truncate beyond 2047.'
+    'inst.ancienPathNeuf'     = 'Terminals already open keep the old PATH - open a fresh one.'
+    'inst.profilSeul'         = 'profile only'
+    'inst.profilEtExt'        = 'profile + extensions'
+
+    # --- VS Code URI router --------------------------------------------------------
+    'uri.profilDefaut'        = 'default profile'
+    'uri.cible'               = 'target: {0}'
+    'uri.cle'                 = 'key   : {0}'
+    'uri.valeur'              = 'value : {0}'
+    'uri.actif'               = 'ROUTER ACTIVE'
+    'uri.verrouActif'         = 'LOCK ACTIVE - VS Code cannot take the key back'
+    'uri.verrouAbsent'        = 'LOCK ABSENT - the key will be overwritten the next time VS Code starts'
+    'uri.origine'             = 'original handler (bug present) - run again without -Verifier'
+    'uri.inconnue'            = 'unknown value - inspect before overwriting'
+    'uri.restaure'            = 'Lock removed, original handler restored.'
+    'uri.introuvable'         = 'Not found: {0}'
+    'uri.dejaEnPlace'         = 'Already in place and locked, nothing to do.'
+    'uri.valeurConservee'     = 'Unexpected previous value, kept in:'
+    'uri.installe'            = 'Router installed and key locked.'
+    'uri.verifier'            = 'Check with: .\installer-uri-router.ps1 -Verifier'
+    'uri.codeAbsent'          = 'Code.exe not found: {0}'
+
     # --- ctx doctor ------------------------------------------------------------
     'doc.bin.absent'          = 'not found in PATH'
     'doc.bin.shimSeul'        = 'only the DevContext shim answers: the real binary is missing'

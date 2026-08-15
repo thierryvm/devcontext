@@ -238,7 +238,7 @@ function New-DevProjectMcp {
         $estProd = $envProjet -eq 'prod'
         $nouveaux['supabase'] = New-CtxMcpServeurSupabase -Ref $ref -Ecriture:$Ecriture -Production:$estProd
         if ($estProd -and $Ecriture) {
-            Write-Warning "Projet de production : le serveur reste en lecture seule malgre -Ecriture."
+            Write-Warning (T 'mcp.prodLectureSeule')
         }
     }
 
@@ -251,21 +251,21 @@ function New-DevProjectMcp {
     }
 
     if ($nouveaux.Count -eq 0 -and -not $avecGitHub) {
-        Write-Warning "Rien a declarer pour ce dossier."
+        Write-Warning (T 'mcp.rienADeclarer')
         foreach ($i in $ignores) { Write-Host "    $i" -ForegroundColor DarkGray }
         return
     }
 
     # Avant la bifurcation ShouldProcess : ce qui a ete ECARTE est la moitie
     # utile du rapport, et -WhatIf est precisement le mode ou on veut la lire.
-    foreach ($i in $ignores) { Write-Host "  ignore : $i" -ForegroundColor DarkGray }
+    foreach ($i in $ignores) { Write-Host "  $(T 'mcp.ignore' $i)" -ForegroundColor DarkGray }
 
     # @() obligatoire : sans client detecte la fonction ne rend RIEN, et sous
     # StrictMode lire .Count sur $null leve — donc le cas « rien a faire »
     # plantait au lieu de le dire.
     $cibles = @(Resolve-CtxMcpCibles -Dossier $dossier -Client $Client)
     if ($cibles.Count -eq 0) {
-        Write-Warning "Aucun client MCP detecte dans ce dossier. Preciser -Client pour en creer un : $($script:McpClients.Keys -join ', ')"
+        Write-Warning (T 'mcp.aucunClient' ($script:McpClients.Keys -join ', '))
         return
     }
 
@@ -274,7 +274,7 @@ function New-DevProjectMcp {
         $existant = $null
         if (Test-Path -LiteralPath $c.Chemin) {
             $existant = try { Get-Content -LiteralPath $c.Chemin -Raw | ConvertFrom-Json -AsHashtable }
-            catch { throw "$($c.Chemin) existant illisible : $(Protect-CtxMessage $_.Exception.Message). Le corriger ou le deplacer avant de regenerer." }
+            catch { throw (T 'mcp.illisible' $c.Chemin (Protect-CtxMessage $_.Exception.Message)) }
         }
 
         # Copie par client : le serveur GitHub porte une syntaxe d'expansion
@@ -287,7 +287,7 @@ function New-DevProjectMcp {
         $json = $resultat.Config | ConvertTo-Json -Depth 8
 
         if (-not $PSCmdlet.ShouldProcess($c.Chemin, "ecrire la configuration MCP ($($c.Libelle))")) {
-            Write-Host "  $($c.Libelle) — $($c.Chemin)" -ForegroundColor Cyan
+            Write-Host "  $(T 'mcp.fichier' $c.Libelle $c.Chemin)" -ForegroundColor Cyan
             Write-Host $json
             Write-Host ''
             continue
@@ -296,11 +296,11 @@ function New-DevProjectMcp {
         New-Item -ItemType Directory -Path (Split-Path $c.Chemin -Parent) -Force | Out-Null
         Set-Content -LiteralPath $c.Chemin -Value $json -Encoding UTF8
 
-        Write-Host "  $($c.Libelle) — $($c.Chemin)" -ForegroundColor Green
-        if ($resultat.Ajoutes.Count)   { Write-Host "    ajoutes   : $($resultat.Ajoutes -join ', ')" -ForegroundColor Green }
-        if ($resultat.Remplaces.Count) { Write-Host "    remplaces : $($resultat.Remplaces -join ', ')" -ForegroundColor Yellow }
+        Write-Host "  $(T 'mcp.fichier' $c.Libelle $c.Chemin)" -ForegroundColor Green
+        if ($resultat.Ajoutes.Count)   { Write-Host "    $(T 'mcp.ajoutes' ($resultat.Ajoutes -join ', '))" -ForegroundColor Green }
+        if ($resultat.Remplaces.Count) { Write-Host "    $(T 'mcp.remplaces' ($resultat.Remplaces -join ', '))" -ForegroundColor Yellow }
         if ($resultat.Conserves.Count) {
-            Write-Host "    conserves : $($resultat.Conserves -join ', ') (-Force pour les remplacer)" -ForegroundColor DarkGray
+            Write-Host "    $(T 'mcp.conserves' ($resultat.Conserves -join ', '))" -ForegroundColor DarkGray
         }
     }
 
@@ -334,7 +334,7 @@ function Resolve-CtxMcpCibles {
 
     foreach ($nom in $noms) {
         $def = $script:McpClients[$nom]
-        if (-not $def) { throw "Client MCP inconnu : '$nom'. Connus : $($script:McpClients.Keys -join ', ')" }
+        if (-not $def) { throw (T 'mcp.clientInconnu' $nom ($script:McpClients.Keys -join ', ')) }
 
         $chemin = Join-Path $Dossier ($def.Fichier -replace '/', '\')
         # Sans -Client, on ne sert que les clients deja presents dans le dossier.

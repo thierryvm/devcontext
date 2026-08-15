@@ -1,4 +1,4 @@
-# Tests for the shortcut audit.
+﻿# Tests for the shortcut audit.
 #
 # Everything here runs without a shortcut on disk and without an editor
 # installed. Reading a .lnk needs a COM object and a Windows shell; DECIDING
@@ -119,10 +119,15 @@ Describe 'Test-CtxDoctorRaccourci' {
         }
     }
 
-    It 'OK : ne concerne pas un editeur' {
+    It 'ne rend RIEN quand le raccourci ne concerne pas un editeur' {
+        # Rien, et non un constat « OK, sans rapport ». L appelant reconnaissait
+        # ce cas en comparant son TEXTE, ce qui a cesse de marcher des que le
+        # texte est devenu traduisible : en anglais, le filtre ne matchait plus
+        # et deux cents raccourcis sans rapport auraient inonde le rapport.
+        # L absence de constat, elle, ne se traduit pas.
         InModuleScope DevContext -Parameters @{ e = $script:Exes } { param($e)
-            (Test-CtxDoctorRaccourci -Nom 'Firefox' -Target 'firefox.exe' -Arguments '' `
-                -Contexte '' -EditeurExecutables $e).Detail | Should -Be 'ne lance pas un editeur'
+            Test-CtxDoctorRaccourci -Nom 'Firefox' -Target 'firefox.exe' -Arguments '' `
+                -Contexte '' -EditeurExecutables $e | Should -BeNullOrEmpty
         }
     }
 
@@ -137,8 +142,8 @@ Describe 'Test-CtxDoctorRaccourci' {
         # Une machine sans editeur detecte ne doit pas produire d avis sur des
         # raccourcis dont elle ne sait rien.
         InModuleScope DevContext {
-            (Test-CtxDoctorRaccourci -Nom 'x' -Target 'C:\p\Code.exe' -Arguments 'F:\p' -Contexte 'perso').Detail |
-                Should -Be 'ne lance pas un editeur'
+            Test-CtxDoctorRaccourci -Nom 'x' -Target 'C:\p\Code.exe' -Arguments 'F:\p' -Contexte 'perso' |
+                Should -BeNullOrEmpty
         }
     }
 }

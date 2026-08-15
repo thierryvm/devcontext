@@ -41,6 +41,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Script autonome : T est interne au module, il faut sourcer la langue soi-meme.
+. (Join-Path $PSScriptRoot 'src' 'Langue.ps1')
+Set-CtxLangue | Out-Null
+
 $SousCle = 'Software\Classes\vscode\shell\open\command'
 $Key     = "HKCU:\$SousCle"
 $Routeur = Join-Path $PSScriptRoot 'vscode-uri-router.ps1'
@@ -150,28 +154,28 @@ $actuel = Get-Actuel
 if ($Verifier) {
     $verrou = if (Test-Path -LiteralPath $Key) { Test-Verrou } else { $false }
     Write-Host ""
-    Write-Host "  cle    : $Key"
-    Write-Host "  valeur : $actuel"
+    Write-Host "  $(T 'uri.cle' $Key)"
+    Write-Host "  $(T 'uri.valeur' $actuel)"
     Write-Host ""
     if ($actuel -eq $Attendu) {
-        Write-Host "  ROUTEUR ACTIF" -ForegroundColor Green
-        if ($verrou) { Write-Host "  VERROU ACTIF - VS Code ne peut pas reprendre la cle" -ForegroundColor Green }
-        else         { Write-Host "  VERROU ABSENT - la cle sera ecrasee au prochain lancement de VS Code" -ForegroundColor Yellow }
+        Write-Host "  $(T 'uri.actif')" -ForegroundColor Green
+        if ($verrou) { Write-Host "  $(T 'uri.verrouActif')" -ForegroundColor Green }
+        else         { Write-Host "  $(T 'uri.verrouAbsent')" -ForegroundColor Yellow }
     }
-    elseif ($actuel -eq $Origine) { Write-Host "  gestionnaire d'origine (bug present) - relancer sans -Verifier" -ForegroundColor Yellow }
-    else                          { Write-Host "  valeur inconnue - inspecter avant d'ecraser" -ForegroundColor Yellow }
+    elseif ($actuel -eq $Origine) { Write-Host "  $(T 'uri.origine')" -ForegroundColor Yellow }
+    else                          { Write-Host "  $(T 'uri.inconnue')" -ForegroundColor Yellow }
     exit 0
 }
 
 if ($Restaurer) {
     if (Test-Verrou) { Set-Verrou $false }
     Set-ItemProperty -LiteralPath $Key -Name '(default)' -Value $Origine
-    Write-Host "  Verrou retire, gestionnaire d'origine restaure." -ForegroundColor Green
+    Write-Host "  $(T 'uri.restaure')" -ForegroundColor Green
     exit 0
 }
 
 foreach ($f in @($PwshExe, $Routeur, $CodeExe)) {
-    if (-not (Test-Path -LiteralPath $f)) { throw "Introuvable : $f" }
+    if (-not (Test-Path -LiteralPath $f)) { throw (T 'uri.introuvable' $f) }
 }
 
 if (-not (Test-Path -LiteralPath $Key)) {
@@ -179,7 +183,7 @@ if (-not (Test-Path -LiteralPath $Key)) {
 }
 
 if ($actuel -eq $Attendu -and (Test-Verrou)) {
-    Write-Host "  Deja en place et verrouille, rien a faire." -ForegroundColor Green
+    Write-Host "  $(T 'uri.dejaEnPlace')" -ForegroundColor Green
     exit 0
 }
 
@@ -189,7 +193,7 @@ if ($actuel -and $actuel -ne $Origine -and $actuel -ne $Attendu) {
     $sauv = Join-Path $env:LOCALAPPDATA ('DevContext\vscode-handler-remplace-{0}.txt' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Force -Path (Split-Path $sauv -Parent) | Out-Null
     Set-Content -LiteralPath $sauv -Value $actuel -Encoding UTF8
-    Write-Host "  Valeur precedente inattendue, conservee dans :" -ForegroundColor Yellow
+    Write-Host "  $(T 'uri.valeurConservee')" -ForegroundColor Yellow
     Write-Host "    $sauv" -ForegroundColor Yellow
 }
 
@@ -198,5 +202,5 @@ if (Test-Verrou) { Set-Verrou $false }
 Set-ItemProperty -LiteralPath $Key -Name '(default)' -Value $Attendu
 Set-Verrou $true
 
-Write-Host "  Routeur installe et cle verrouillee." -ForegroundColor Green
-Write-Host "  Verifier : .\installer-uri-router.ps1 -Verifier"
+Write-Host "  $(T 'uri.installe')" -ForegroundColor Green
+Write-Host "  $(T 'uri.verifier')"

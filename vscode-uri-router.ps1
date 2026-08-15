@@ -47,6 +47,10 @@ param(
     [switch]$DryRun
 )
 
+# Script autonome : T est interne au module, il faut sourcer la langue soi-meme.
+. (Join-Path $PSScriptRoot 'src' 'Langue.ps1')
+Set-CtxLangue | Out-Null
+
 # JAMAIS de chemin en dur : ce fichier portait un chemin de profil, donc il ne
 # fonctionnait que sur une machine et publiait un nom d'utilisateur Windows.
 $CodeExe = @(
@@ -63,6 +67,10 @@ function Get-UriSafe {
     return '(illisible)'
 }
 
+# Le JOURNAL n'est PAS traduit, et c'est deliberé : une trace qui change de
+# langue selon le poste n'est plus recherchable. Deux utilisateurs signalant le
+# meme incident produiraient deux textes differents, et aucune recherche ne les
+# rapprocherait. Seule la ligne AFFICHEE par -DryRun passe par T.
 function Write-RouteurLog {
     param([string]$Message)
     try {
@@ -87,9 +95,9 @@ function Write-RouteurLog {
 function Send-Uri {
     param([string]$UserDataDir)
 
-    $cible = if ($UserDataDir) { $UserDataDir } else { 'profil par defaut' }
+    $cible = if ($UserDataDir) { $UserDataDir } else { T 'uri.profilDefaut' }
     if ($DryRun) {
-        Write-Host ("  cible : {0}" -f $cible) -ForegroundColor Cyan
+        Write-Host "  $(T 'uri.cible' $cible)" -ForegroundColor Cyan
         return
     }
 
@@ -101,7 +109,7 @@ function Send-Uri {
 
 try {
     if (-not (Test-Path -LiteralPath $CodeExe)) {
-        throw "Code.exe introuvable : $CodeExe"
+        throw (T 'uri.codeAbsent' $CodeExe)
     }
 
     # Instances racine uniquement. Les processus enfants d'Electron (renderer,

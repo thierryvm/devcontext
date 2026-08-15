@@ -87,6 +87,179 @@
     'garde.raison.branche'    = "'{0}' vers un projet de production depuis la branche '{1}' au lieu de '{2}'."
     'garde.introuvable'       = '{0} introuvable dans le PATH (hors shims).'
 
+    # --- coffre et manifeste ---------------------------------------------------
+    'vault.absent'            = "Module SecretManagement absent. Installer :`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"
+    'vault.creation'          = "Creation du coffre '{0}'..."
+    'manifeste.introuvable'   = "Contexte '{0}' introuvable ({1}). 'ctx-list' pour voir les contextes existants."
+
+    # --- ctx-off ---------------------------------------------------------------
+    'off.aucunActif'          = 'Aucun contexte actif.'
+    'off.manquant1'           = "Le contexte '{0}' n'existe pas. Tant qu'il manque, l'identite"
+    'off.manquant2'           = 'perso retombe sur la config GLOBALE de la machine - celle du'
+    'off.manquant3'           = "dernier compte connecte. C'est le seul trou du dispositif."
+
+    # --- code-ctx --------------------------------------------------------------
+    'code.aucunActif'         = "Aucun contexte actif. 'work <contexte>' d'abord, ou 'code-ctx <contexte>'."
+    'code.editeurInconnu'     = "'{0}' introuvable sur cette machine. 'ctx-editors' dit ce qui a ete detecte. Pour VS Code : Ctrl+Shift+P > 'Shell Command: Install code command in PATH'."
+    'code.sansCli'            = "'{0}' est installe mais n'expose aucun point d'entree en ligne de commande. Il ne peut pas etre lance par DevContext."
+    'code.ouverture'          = '{0} [{1}] -> {2}'
+
+    # --- web-ctx ---------------------------------------------------------------
+    'web.aucunActif'          = 'Aucun contexte actif.'
+    'web.sansProfil'          = "Pas de 'chromeProfile' dans context.json pour '{0}'. Creer le profil dans Chrome, puis relever son dossier via chrome://version (champ 'Chemin du profil')."
+    'web.chromeAbsent'        = 'chrome.exe introuvable.'
+
+    # --- binaires enrobes -------------------------------------------------------
+    'bin.vercelAbsent'        = 'vercel introuvable dans le PATH.'
+    'bin.supabaseAbsent'      = 'supabase introuvable dans le PATH (hors shims).'
+
+    # --- sb-index ---------------------------------------------------------------
+    'index.aucunActif'        = "Aucun contexte actif. 'work <contexte>' d'abord, ou 'sb-index <contexte>'."
+    'index.ancienIllisible'   = 'Index existant illisible, il sera reconstruit sans les marquages manuels.'
+    'index.reponseIllisible'  = '{0} : reponse illisible (jeton revoque ou expire ?). Ignore.'
+    'index.ecrit'             = 'index ecrit : {0}'
+
+    # --- ctx-sb -----------------------------------------------------------------
+    'sb.aucunActif'           = "Aucun contexte actif. 'work <contexte>' d'abord, ou 'ctx-sb <contexte>'."
+    'sb.sansIndex'            = "Aucun index Supabase pour '{0}'. Lance 'sb-index'."
+    'sb.sansIndexAvert'       = "Aucun index Supabase pour '{0}'. Lance 'sb-index'."
+    'sb.projetActif'          = '[{0} -> {1}]'
+
+    # --- ctx-new ----------------------------------------------------------------
+    'new.nomInvalide'         = 'Nom de contexte invalide : minuscules, chiffres et tirets uniquement.'
+    'new.existeDeja'          = "Le contexte '{0}' existe deja ({1})."
+    'new.racinePrise'         = "La racine '{0}' est deja celle du contexte '{1}'."
+    'new.cleGeneration'       = 'Generation de la cle SSH du contexte (passphrase recommandee) :'
+    'new.cleSansGeneration'   = 'Cle SSH NON generee (-NoKey).'
+    'new.cleCommande'         = "ssh-keygen -t ed25519 -C '{0}' -f '{1}'"
+    'new.cleImpossible'       = "Generation de cle SSH impossible : l'entree standard est redirigee, et ssh-keygen attendrait une passphrase indefiniment.`n  - dans un terminal interactif : relancer la meme commande`n  - dans un script ou une CI    : ajouter -NoKey, puis generer la cle plus tard`nLe contexte '{0}' a bien ete cree : {1}"
+    'new.jetonsIgnores'       = 'Saisie des jetons ignoree (entree non interactive).'
+    'new.jetonsPlusTard'      = 'Les poser plus tard, un par un :'
+    'new.jetonsCles'          = 'cles : {0}'
+    'new.jetonsSaisie'        = 'Tokens du contexte (Entree pour passer)'
+    'new.cree'                = "Contexte '{0}' cree."
+    'new.resteAFaire'         = 'Reste a faire, une seule fois :'
+    'new.etape1'              = '1. Ajouter la cle publique au compte GitHub {0} :'
+    'new.etape1Sans'          = "1. Generer la cle SSH, puis l ajouter au compte GitHub {0} :"
+    'new.etape2'              = '2. work {0} ; gh auth login   (config isolee dans {1})'
+    'new.etape3'              = "3. Creer le profil Chrome dedie, puis renseigner 'chromeProfile' dans context.json"
+    'new.etape4'              = '4. code-ctx {0}   (editeur vierge : connecter le compte du client)'
+    'new.etape5a'             = "5. Renseigner 'github.login' dans context.json - sans lui, 'ctx' ne peut"
+    'new.etape5b'             = "que rapporter le compte actif, jamais verifier que c'est le bon."
+
+    # --- ctx-end ----------------------------------------------------------------
+    'end.titre'               = 'TRANSFERT - {0} ({1})'
+    'end.avantPurge'          = 'A verifier avant de purger :'
+    'end.item1'               = '[ ] 2FA de la messagerie basculee sur le client (pas votre telephone)'
+    'end.item2'               = '[ ] Numero de recuperation et email de secours retires du compte'
+    'end.item3'               = '[ ] Moyen de paiement retire de Vercel et Supabase, remplace par celui du client'
+    'end.item4'               = '[ ] Votre cle SSH perso absente des Deploy keys du/des depots'
+    'end.item5'               = '[ ] Tokens revoques cote fournisseur (les supprimer du coffre ne les revoque pas) :'
+    'end.item5Urls'           = 'github.com/settings/tokens  |  vercel.com/account/tokens  |  supabase.com/dashboard/account/tokens'
+    'end.item6'               = '[ ] Mot de passe de la messagerie change et transmis au client'
+    'end.item7'               = '[ ] Sauvegarde du depot archivee de votre cote si le contrat le prevoit'
+    'end.relancer'            = 'Relancer avec -Purge pour supprimer secrets et dossier de contexte.'
+    'end.actifIci'            = "Le contexte '{0}' est actif dans ce terminal. 'ctx-off' d'abord - purger sous soi laisse des secrets charges en memoire."
+    'end.supprime'            = 'Secrets et dossier supprimes.'
+
+    'off.exemple'             = 'ctx-new {0} -Label ''Perso'' -Email ''<votre-email>'' '
+    'off.exempleSuite'        = "-Root '{0}' -GithubLogin '<votre-login>'"
+    'new.jetonsCommande'      = 'Set-Secret -Vault DevContext -Name ''devctx/{0}/<cle>'' -SecureStringSecret $s'
+    'end.sshManuel1'          = "Retirer manuellement le bloc 'Host github-{0}' de {1}"
+    'end.sshManuel2'          = 'et le bloc includeIf correspondant de {0}.'
+    'end.projetIntact'        = "Le dossier projet {0} n'a pas ete touche."
+    'ctx.incoherent'          = 'Contexte incoherent - commande interrompue.'
+
+    # --- ctx-mcp -----------------------------------------------------------------
+    'mcp.prodLectureSeule'    = 'Projet de production : le serveur reste en lecture seule malgre -Ecriture.'
+    'mcp.rienADeclarer'       = 'Rien a declarer pour ce dossier.'
+    'mcp.ignore'              = 'ignore : {0}'
+    'mcp.aucunClient'         = 'Aucun client MCP detecte dans ce dossier. Preciser -Client pour en creer un : {0}'
+    'mcp.illisible'           = '{0} existant illisible : {1}. Le corriger ou le deplacer avant de regenerer.'
+    'mcp.fichier'             = '{0} - {1}'
+    'mcp.ajoutes'             = 'ajoutes   : {0}'
+    'mcp.remplaces'           = 'remplaces : {0}'
+    'mcp.conserves'           = 'conserves : {0} (-Force pour les remplacer)'
+    'mcp.clientInconnu'       = "Client MCP inconnu : '{0}'. Connus : {1}"
+
+    # --- ctx-shortcut --------------------------------------------------------------
+    'rac.dossierAbsent'       = 'Dossier introuvable : {0}'
+    'rac.horsContexte'        = "Aucun contexte ne possede '{0}'. Un raccourci qui n isole rien est precisement celui qu on remplace ici. 'ctx-list' pour voir les contextes."
+    'rac.aucunEditeur'        = "Aucun editeur enrobable trouve{0}. 'ctx-editors' dit ce qui a ete detecte."
+    'rac.sousLeNom'           = " sous le nom '{0}'"
+    'rac.lanceurAbsent'       = 'Lanceur absent : {0}. Depot incomplet.'
+    'rac.existeDeja'          = 'Le raccourci existe deja : {0}. -Force pour le reecrire.'
+    'rac.ecrit'               = 'Raccourci ecrit : {0}'
+    'rac.projet'              = 'projet   : {0}'
+    'rac.contexte'            = 'contexte : {0}'
+    'rac.editeur'             = 'editeur  : {0} (par le shim, jamais par chemin absolu)'
+
+    # --- lanceur -------------------------------------------------------------------
+    'lanceur.go'              = 'GO'
+    'lanceur.fermer'          = 'Entree pour fermer'
+    'lanceur.moduleAbsent'    = 'Module DevContext introuvable : {0}'
+    'lanceur.dossierAbsent'   = 'Dossier introuvable : {0}'
+    'lanceur.horsContexte'    = "Aucun contexte ne possede '{0}'. 'ctx-list' pour voir les contextes, ou passer -Context explicitement."
+    'lanceur.noGo'            = "NO-GO - l'editeur n'a pas ete lance. Corriger avant de pousser ou deployer."
+
+    'rac.doc.isole'           = 'profil isole ({0})'
+    'rac.doc.dansContexte'    = 'contexte {0}'
+    'rac.doc.profilDedie'     = 'profil dedie'
+    'rac.doc.partage'         = "ouvre un projet du contexte '{0}' sur le profil PARTAGE : les sessions GitHub, Copilot et marketplace y sont communes a tous les contextes"
+    'rac.doc.sansDossier'     = 'lance un editeur sans dossier : il rouvrira ce que le profil partage avait en dernier'
+    'rac.doc.sansDossierFix'  = "viser 'code' plutot que le chemin absolu de l executable, ou passer par ctx-shortcut"
+    'rac.doc.regroupes'       = '{0} raccourci(s) ouvrant un editeur sans dossier ({1}) : ils atterrissent sur le profil partage'
+
+    # --- installateur ----------------------------------------------------------
+    'inst.broadcast'          = 'Diffusion WM_SETTINGCHANGE impossible : {0}'
+    'inst.broadcastSuite'     = "Le PATH est correct dans le registre. Les applications deja lancees ne le verront qu'apres redemarrage."
+    'inst.shimsManquants'     = 'Fichiers de shim manquants : {0}. Depot incomplet, installation interrompue.'
+    'inst.moduleIllisible'    = 'Module DevContext illisible, points d entree editeurs ignores : {0}'
+    'inst.actif'              = 'SHIM ACTIF dans le PATH utilisateur'
+    'inst.absent'             = 'SHIM ABSENT du PATH utilisateur'
+    'inst.dossier'            = 'dossier : {0}'
+    'inst.registre'           = 'registre: HKCU\Environment\Path ({0})'
+    'inst.fichiers'           = 'Fichiers de shim :'
+    'inst.pointsEntree'       = 'Points d entree editeurs generes :'
+    'inst.aucun'              = '(aucun)'
+    'inst.aucune'             = '(aucune)'
+    'inst.resolution'         = 'Resolution de "supabase" dans CE processus :'
+    'inst.poseNonActif'       = 'Pose dans le registre, mais pas encore actif dans ce terminal.'
+    'inst.terminalNeuf'       = 'Ouvrir un terminal neuf.'
+    'inst.retire'             = 'retire : {0}'
+    'inst.dejaAbsent'         = 'Deja absent du PATH. Rien a faire.'
+    'inst.retireDuPath'       = 'Shim retire du PATH utilisateur.'
+    'inst.ancienPath'         = 'Les terminaux deja ouverts gardent l ancien PATH.'
+    'inst.editeursEnrobes'    = 'Editeurs enrobes (profil par contexte) :'
+    'inst.aucunEditeur'       = 'Aucun editeur enrobable trouve.'
+    'inst.aucunEditeurFix'    = 'ctx-editors dit ce qui a ete detecte et pourquoi.'
+    'inst.pathDejaPose'       = 'PATH deja pose. Rien a faire de ce cote.'
+    'inst.pose'               = 'Shim pose en tete du PATH utilisateur.'
+    'inst.typePreserve'       = 'type registre preserve : {0}'
+    'inst.sauvegarde'         = 'PATH d avant sauvegarde : {0}'
+    'inst.pathLong'           = 'Le PATH utilisateur fait {0} caracteres. Certains outils anciens tronquent au-dela de 2047.'
+    'inst.ancienPathNeuf'     = 'Les terminaux deja ouverts gardent l ancien PATH - en ouvrir un neuf.'
+    'inst.profilSeul'         = 'profil seul'
+    'inst.profilEtExt'        = 'profil + extensions'
+
+    # --- routeur URI VS Code -----------------------------------------------------
+    'uri.profilDefaut'        = 'profil par defaut'
+    'uri.cible'               = 'cible : {0}'
+    'uri.cle'                 = 'cle    : {0}'
+    'uri.valeur'              = 'valeur : {0}'
+    'uri.actif'               = 'ROUTEUR ACTIF'
+    'uri.verrouActif'         = 'VERROU ACTIF - VS Code ne peut pas reprendre la cle'
+    'uri.verrouAbsent'        = 'VERROU ABSENT - la cle sera ecrasee au prochain lancement de VS Code'
+    'uri.origine'             = "gestionnaire d'origine (bug present) - relancer sans -Verifier"
+    'uri.inconnue'            = "valeur inconnue - inspecter avant d'ecraser"
+    'uri.restaure'            = 'Verrou retire, gestionnaire d origine restaure.'
+    'uri.introuvable'         = 'Introuvable : {0}'
+    'uri.dejaEnPlace'         = 'Deja en place et verrouille, rien a faire.'
+    'uri.valeurConservee'     = 'Valeur precedente inattendue, conservee dans :'
+    'uri.installe'            = 'Routeur installe et cle verrouillee.'
+    'uri.verifier'            = 'Verifier : .\installer-uri-router.ps1 -Verifier'
+    'uri.codeAbsent'          = 'Code.exe introuvable : {0}'
+
     # --- ctx doctor ------------------------------------------------------------
     'doc.bin.absent'          = 'introuvable dans le PATH'
     'doc.bin.shimSeul'        = 'seul le shim DevContext repond : le binaire reel est introuvable'

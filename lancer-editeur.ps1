@@ -57,6 +57,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# T n'est pas EXPORTEE par le module -- elle lui est interne. Un script qui
+# tourne a cote doit donc sourcer le fichier de langue directement, comme le
+# fait le shim. L'oublier ne casse rien de visible : chaque message devient
+# « [lanceur.go] », ce qui est precisement pourquoi une cle manquante s'affiche
+# plutot que de disparaitre.
+. (Join-Path $PSScriptRoot 'src' 'Langue.ps1')
+Set-CtxLangue | Out-Null
+
 function Stop-WithMessage {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
         Justification = 'Affiche un motif et termine le script ; ne modifie aucun etat.')]
@@ -64,7 +72,7 @@ function Stop-WithMessage {
     Write-Host ""
     Write-Host "  $Message" -ForegroundColor Red
     Write-Host ""
-    Read-Host "  Entree pour fermer"
+    Read-Host ("  " + (T 'lanceur.fermer'))
     exit 1
 }
 
@@ -73,17 +81,17 @@ function Stop-WithMessage {
 # lieu d'echouer sur un « work : terme non reconnu ».
 if (-not (Get-Command work -ErrorAction SilentlyContinue)) {
     try { Import-Module (Join-Path $PSScriptRoot 'DevContext.psd1') -ErrorAction Stop }
-    catch { Stop-WithMessage "Module DevContext introuvable : $($_.Exception.Message)" }
+    catch { Stop-WithMessage (T 'lanceur.moduleAbsent' $_.Exception.Message) }
 }
 
 if (-not (Test-Path -LiteralPath $Path)) {
-    Stop-WithMessage "Dossier introuvable : $Path"
+    Stop-WithMessage (T 'lanceur.dossierAbsent' $Path)
 }
 
 if (-not $Context) {
     $manifeste = Resolve-DevContextForPath -Path $Path
     if (-not $manifeste) {
-        Stop-WithMessage "Aucun contexte ne possede '$Path'. 'ctx-list' pour voir les contextes, ou passer -Context explicitement."
+        Stop-WithMessage (T 'lanceur.horsContexte' $Path)
     }
     $Context = $manifeste.name
 }
@@ -98,8 +106,8 @@ Set-Location -LiteralPath $Path
 
 if (-not (Test-DevContext -Quiet)) {
     Test-DevContext | Out-Null
-    Stop-WithMessage "NO-GO — l'editeur n'a pas ete lance. Corriger avant de pousser ou deployer."
+    Stop-WithMessage (T 'lanceur.noGo')
 }
 
-Write-Host "  GO" -ForegroundColor Green
+Write-Host "  $(T 'lanceur.go')" -ForegroundColor Green
 Open-DevCode -Name $Context -Path $Path -Editor $Editor

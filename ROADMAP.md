@@ -25,18 +25,21 @@ the one launcher `PATH` cannot reach. See `CHANGELOG.md`.
 
 ---
 
-## 1.3.0 — speak the user's language
+## 1.3.0 — shipped, 15 August 2026
 
-**Bilingual output through `DEVCTX_LANG`.** Command output is French today;
-documentation is English. A developer in Berlin installing this gets refusals
-and diagnostics in a language they may not read — the most visible inconsistency
-there is, and the one that gets a tool uninstalled on first run.
+Every user-facing string now goes through a key. 268 of them, in two languages,
+with five tests holding the line translation projects usually lose: matching key
+sets, no empty string, matching `{n}` placeholders, ASCII only, and every key
+called in code present in both tables.
 
-Default to the system locale, `DEVCTX_LANG=en|fr` to override. English is the
-fallback for any string not yet translated, so a missing translation degrades
-into a readable message rather than a blank.
+The migration found a class of bug worth naming — code deciding on **displayed
+text**. Three occurrences, each invisible in the language that wrote them. The
+rule that came out of it: a displayed value is never a decision value, and a
+test now scans every source file for comparisons against any string in the
+tables.
 
-Also in scope: translating `INSTALLATION.md` and `POURQUOI.md`.
+Still to translate: `INSTALLATION.md` and `POURQUOI.md`, which are prose
+rather than program output.
 
 ---
 

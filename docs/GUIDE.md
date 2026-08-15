@@ -121,6 +121,21 @@ ctx-root                 # shows the current root and where that setting came fr
 
 `DEVCTX_ROOT` overrides it for one shell — useful in a test or a CI job.
 
+### Language
+
+Commands speak your system language when it is one of the two translated
+(English, French), and English otherwise. To force it for a shell:
+
+```powershell
+$env:DEVCTX_LANG = 'en'
+```
+
+Useful for a screenshot, a bug report you want others to read, or a CI log.
+
+If you ever see a message like `[ctx.noGo]`, that is a missing translation
+showing its key rather than printing nothing — please report it. The key is
+enough for us to find the string.
+
 Contexts hold **SSH private keys**. Putting them on a removable drive or a
 network share is a real choice with real consequences; `ctx-root` lets you make
 it and deliberately moves nothing on your behalf.

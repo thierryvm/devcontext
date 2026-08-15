@@ -127,6 +127,16 @@ ctx-root D:\DevContext      # remembered for every future session
 ctx-root                    # shows the current root and where the setting came from
 ```
 
+**Language.** Commands speak your system language when it is one of the two
+translated (English, French), and English otherwise:
+
+```powershell
+$env:DEVCTX_LANG = 'en'   # or 'fr'
+```
+
+A missing translation renders its key — `[ctx.noGo]` — rather than an empty
+line, so a gap is visible instead of silent.
+
 `DEVCTX_ROOT` overrides it for a single shell, a test, or a CI job. Contexts hold
 SSH keys, so a removable drive is a real choice with real consequences — the
 command lets you make it, and does not move anything on your behalf.

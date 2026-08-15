@@ -18,6 +18,7 @@ Set-StrictMode -Version Latest
 
 $script:CtxRoot   = $env:DEVCTX_ROOT ? $env:DEVCTX_ROOT : 'F:\CTX'
 $script:VaultName = 'DevContext'
+
 $script:SshConfig = Join-Path $HOME '.ssh\config'
 $script:GitConfig = Join-Path $HOME '.gitconfig'
 
@@ -28,6 +29,20 @@ $script:SecretMap = [ordered]@{
     'supabase-token' = 'SUPABASE_ACCESS_TOKEN'
     'supabase-db'    = 'SUPABASE_DB_PASSWORD'
     'sentry-token'   = 'SENTRY_READ_TOKEN'
+}
+
+# ---------------------------------------------------------------------------
+# Modules de fonctionnalités
+# ---------------------------------------------------------------------------
+#
+# Sourcés, et non déclarés en NestedModules : ils partagent ainsi la portée du
+# module — ils voient $script:CtxRoot et les helpers internes — et un seul
+# Export-ModuleMember reste la source de vérité de ce qui sort. Le manifeste est
+# le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
+# fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
+
+foreach ($fichier in @('Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1')) {
+    . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
 # ---------------------------------------------------------------------------
@@ -52,8 +67,14 @@ function Read-CtxManifest {
 function Get-CtxProp {
     # Lecture defensive : les manifestes crees avant l'ajout d'un champ n'ont
     # pas ce champ, et Set-StrictMode transforme un acces absent en exception.
+    #
+    # [AllowNull()] parce que « defensive » doit valoir aussi pour l'objet
+    # lui-meme : un dossier hors contexte n'a pas de manifeste, et le seul
+    # appelant qui l'avait oublie faisait planter `ctx doctor -Live` par une
+    # erreur de liaison de parametre — pas par la lecture qu'il tentait.
+    # Mandatory reste : omettre l'argument est toujours une faute.
     param(
-        [Parameter(Mandatory)]$Object,
+        [Parameter(Mandatory)][AllowNull()]$Object,
         [Parameter(Mandatory)][string]$Path,
         $Default = $null
     )
@@ -446,7 +467,7 @@ function Invoke-DevVercel {
         & $exe.Source '--global-config' $env:DEVCTX_VERCEL_CONFIG @Rest
     }
     else {
-        & $exe.Source @Rest
+        & $exe @Rest
     }
 }
 
@@ -476,6 +497,32 @@ function Get-CtxSupabaseIndexPath {
     Join-Path (Get-CtxPath $Name) 'supabase-index.json'
 }
 
+# The shims live inside the repository, never copied elsewhere -- same doctrine
+# as the module itself. See the 12 Aug 2026 entry in CHANGELOG.md: two copies,
+# one of them silently ignored, and a fix that had no effect.
+$script:ShimDir = Join-Path $PSScriptRoot 'shims'
+
+function Get-CtxSupabaseExe {
+    <#
+      Resolves the REAL supabase binary, skipping our own shim directory.
+
+      Once the shim sits in the PATH, `Get-Command supabase` finds IT first.
+      Without this exclusion the shim would invoke itself forever, and the
+      module would drive the guard instead of the CLI.
+    #>
+    param([string]$ExcludeDir = $script:ShimDir)
+
+    $excluded = if ($ExcludeDir) { $ExcludeDir.TrimEnd('\', '/') } else { $null }
+
+    $candidate = Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue |
+        Where-Object {
+            -not $excluded -or (Split-Path $_.Source -Parent).TrimEnd('\', '/') -ne $excluded
+        } | Select-Object -First 1
+
+    if (-not $candidate) { throw "supabase introuvable dans le PATH (hors shims)." }
+    $candidate.Source
+}
+
 function Get-CtxSupabaseKeys {
     # Les cles 'supabase-token*' du contexte reellement presentes au coffre.
     param([Parameter(Mandatory)][string]$Name)
@@ -483,6 +530,15 @@ function Get-CtxSupabaseKeys {
         ForEach-Object { ($_.Name -split '/')[-1] } |
         Sort-Object
 }
+
+# Format reel d'un project-ref Supabase : 20 caracteres, minuscules et chiffres.
+#
+# La validation n'est pas cosmetique. Ce fichier appartient au DEPOT : son
+# contenu est choisi par qui a fabrique le depot, et il ressortait tel quel dans
+# les `args` d'un `npx` inscrit par `ctx mcp` -- une commande que l'assistant
+# relance a chaque demarrage, depuis un fichier fait pour etre commite. Releve
+# par l'audit du 15 aout 2026.
+$script:SupabaseRefMotif = '^[a-z0-9]{20}$'
 
 function Resolve-CtxSupabaseRef {
     # Remonte l'arborescence a la recherche du project-ref ecrit par `supabase link`.
@@ -493,7 +549,20 @@ function Resolve-CtxSupabaseRef {
         $file = Join-Path $dir 'supabase\.temp\project-ref'
         if (Test-Path $file) {
             $ref = Get-Content $file -Raw -ErrorAction SilentlyContinue
-            if ($ref) { return $ref.Trim() }
+            if ($ref) {
+                $ref = $ref.Trim()
+                # Un contenu qui n'a pas la forme d'un ref n'est pas un ref. On
+                # rend $null plutot que de le propager : la suite le traitera
+                # comme « ce dossier n'est lie a rien », ce qui est vrai.
+                #
+                # -cmatch et non -match : l'operateur par defaut de PowerShell
+                # IGNORE la casse, donc '^[a-z0-9]{20}$' acceptait aussi bien
+                # 'AVECDESMAJUSCULES000'. Une validation qu'on croit stricte et
+                # qui ne l'est pas est pire qu'une validation absente.
+                if ($ref -cmatch $script:SupabaseRefMotif) { return $ref }
+                Write-Verbose "project-ref ignore : format inattendu dans $file"
+                return $null
+            }
         }
         $parent = Split-Path $dir -Parent
         if (-not $parent -or $parent -eq $dir) { break }
@@ -512,16 +581,95 @@ function Set-CtxSupabaseToken {
     else { $env:SUPABASE_ACCESS_TOKEN = $Value }
 }
 
+# ---------------------------------------------------------------------------
+# Environment tagging — which project is production?
+# ---------------------------------------------------------------------------
+
+# Naming conventions, not a source of truth. sb-index proposes, the human
+# disposes: anything marked 'manual' is never recomputed.
+#
+# The word boundaries matter: without them 'reproduction-bug' would read as
+# production, and a false refusal on a command that had every right to run is
+# how a guard loses the trust that makes it useful.
+$script:EnvPatternProd = '(^|[^a-z])(prod|production)([^a-z]|$)'
+$script:EnvPatternDev  = '(^|[^a-z])(dev|develop|staging|preview|test|sandbox)([^a-z]|$)'
+
+function Get-CtxSupabaseEnvGuess {
+    param([AllowNull()][AllowEmptyString()][string]$ProjectName)
+    if (-not $ProjectName) { return $null }
+    $n = $ProjectName.ToLowerInvariant()
+    # Production wins a tie: erring towards the guarded value is the safe side.
+    if ($n -match $script:EnvPatternProd) { return 'prod' }
+    if ($n -match $script:EnvPatternDev)  { return 'dev' }
+    return $null
+}
+
+function Merge-CtxSupabaseEnv {
+    <#
+      Keeps a hand-set value, recomputes an automatic one.
+
+      An entry written before this version carries neither field. Absence of
+      'manual' is therefore read as 'auto' -- an old index gets enriched rather
+      than mistaken for a deliberate choice.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Ref,
+        [AllowNull()][AllowEmptyString()][string]$ProjectName,
+        $Previous
+    )
+    # Get-CtxProp rather than direct access: an index written before this
+    # version carries neither field, and reading an absent property throws
+    # under StrictMode. That is not hypothetical -- every existing index on
+    # disk is in exactly that state.
+    $old = if ($Previous -and $Previous[$Ref]) { $Previous[$Ref] } else { $null }
+    if ($old -and (Get-CtxProp $old 'envSource') -eq 'manual') {
+        return [pscustomobject]@{ env = (Get-CtxProp $old 'env'); envSource = 'manual' }
+    }
+    [pscustomobject]@{ env = (Get-CtxSupabaseEnvGuess $ProjectName); envSource = 'auto' }
+}
+
+function Get-CtxSupabaseEnv {
+    # Reads the tag for one project. Returns $null on anything unexpected --
+    # a missing index, a broken index, an unknown ref -- because the guard
+    # treats $null as 'do not judge'.
+    param(
+        [Parameter(Mandatory)][string]$Ref,
+        [Parameter(Mandatory)][string]$ContextName
+    )
+    $path = Get-CtxSupabaseIndexPath $ContextName
+    if (-not (Test-Path $path)) { return $null }
+    try {
+        $index = Get-Content $path -Raw | ConvertFrom-Json
+        $entry = $index.PSObject.Properties | Where-Object { $_.Name -eq $Ref } | Select-Object -First 1
+        if ($entry) { return (Get-CtxProp $entry.Value 'env') }
+    }
+    catch { return $null }
+    return $null
+}
+
 function Update-DevSupabaseIndex {
     [CmdletBinding()]
     param([string]$Name = $env:DEVCTX)
 
     if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'sb-index <contexte>'." }
-    $exe = Get-Command supabase -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $exe) { throw "supabase introuvable dans le PATH." }
+    $exe = Get-CtxSupabaseExe
 
     $keys = @(Get-CtxSupabaseKeys $Name)
     if (-not $keys) { throw "Aucun secret 'supabase-token*' au coffre pour le contexte '$Name'." }
+
+    # Read the existing index BEFORE rebuilding. This function writes a brand
+    # new object over the old file, so without this a hand-set env would not
+    # survive the first sb-index after someone set it.
+    $former = @{}
+    $formerPath = Get-CtxSupabaseIndexPath $Name
+    if (Test-Path $formerPath) {
+        try {
+            (Get-Content $formerPath -Raw | ConvertFrom-Json).PSObject.Properties |
+                ForEach-Object { $former[$_.Name] = $_.Value }
+        }
+        # Message litteral, sans donnee interpolee : rien a caviarder ici.
+        catch { Write-Warning "Index existant illisible, il sera reconstruit sans les marquages manuels." }
+    }
 
     $index    = [ordered]@{}
     $previous = $env:SUPABASE_ACCESS_TOKEN
@@ -534,7 +682,7 @@ function Update-DevSupabaseIndex {
             Set-CtxSupabaseToken $token
             # stderr ecarte : la CLI y ecrit « Cannot find project ref » des qu'on
             # n'est pas dans un projet lie, ce qui casserait le parsing JSON.
-            $raw = (& $exe.Source projects list -o json 2>$null) -join "`n"
+            $raw = (& $exe projects list -o json 2>$null) -join "`n"
 
             $start = $raw.IndexOf('[')
             if ($start -lt 0) {
@@ -544,7 +692,13 @@ function Update-DevSupabaseIndex {
 
             $count = 0
             foreach ($p in ($raw.Substring($start) | ConvertFrom-Json)) {
-                $index[$p.id] = [ordered]@{ key = $key; name = $p.name }
+                $merged = Merge-CtxSupabaseEnv -Ref $p.id -ProjectName $p.name -Previous $former
+                $index[$p.id] = [ordered]@{
+                    key       = $key
+                    name      = $p.name
+                    env       = $merged.env
+                    envSource = $merged.envSource
+                }
                 $count++
             }
             Write-Host ("  {0,-22} {1} projet(s)" -f $key, $count) -ForegroundColor DarkGray
@@ -556,6 +710,101 @@ function Update-DevSupabaseIndex {
     $index | ConvertTo-Json -Depth 4 | Set-Content $path -Encoding UTF8
     Write-Host "  index ecrit : $path" -ForegroundColor Green
 }
+
+# ---------------------------------------------------------------------------
+# ctx-sb — which project lives on which account
+# ---------------------------------------------------------------------------
+
+function Get-CtxSupabaseMapRoot {
+    # Own function so tests can point it elsewhere without a fake manifest.
+    param([Parameter(Mandatory)][string]$Name)
+    Get-CtxProp (Read-CtxManifest $Name) 'root'
+}
+
+function Get-DevSupabaseMap {
+    <#
+      .SYNOPSIS
+        Which Supabase project lives on which account, which one is production,
+        and which folders point at it.
+
+      .DESCRIPTION
+        Crosses the context index with every `supabase/.temp/project-ref` found
+        under the context root, and flags any project targeted by more than one
+        folder.
+
+        This is not a convenience. On 13 Aug 2026 the question "which account
+        is client-site on?" could only be answered by reading the index by
+        hand, though the answer had been on the machine since the beginning. A
+        guard whose data cannot be inspected is a guard that eventually gets
+        switched off.
+
+      .EXAMPLE
+        ctx-sb
+
+      .EXAMPLE
+        ctx-sb | Where-Object Partage
+        Only the projects several folders point at.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Position = 0)][string]$Name = $env:DEVCTX)
+
+    if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'ctx-sb <contexte>'." }
+
+    $indexPath = Get-CtxSupabaseIndexPath $Name
+    if (-not (Test-Path $indexPath)) { throw "Aucun index Supabase pour '$Name'. Lance 'sb-index'." }
+    $index = Get-Content $indexPath -Raw | ConvertFrom-Json
+
+    $root = Get-CtxSupabaseMapRoot $Name
+    $byRef = @{}
+
+    if ($root -and (Test-Path $root)) {
+        $rootLength = $root.TrimEnd('\', '/').Length + 1
+        Get-ChildItem $root -Recurse -Depth 4 -Filter 'project-ref' -File -ErrorAction SilentlyContinue |
+            Where-Object {
+                # Structural check rather than a wildcard: a file merely NAMED
+                # project-ref elsewhere in the tree is not a Supabase link.
+                (Split-Path $_.DirectoryName -Leaf) -eq '.temp' -and
+                (Split-Path (Split-Path $_.DirectoryName -Parent) -Leaf) -eq 'supabase'
+            } |
+            ForEach-Object {
+                $ref = (Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue)
+                if (-not $ref) { return }
+                $ref = $ref.Trim()
+
+                # project-ref -> .temp -> supabase -> the project folder
+                $projectDir = Split-Path (Split-Path (Split-Path $_.FullName -Parent) -Parent) -Parent
+                $relative = if ($projectDir.Length -gt $rootLength) {
+                    $projectDir.Substring($rootLength)
+                } else { Split-Path $projectDir -Leaf }
+
+                if (-not $byRef.ContainsKey($ref)) { $byRef[$ref] = @() }
+                $byRef[$ref] += $relative
+            }
+    }
+
+    $index.PSObject.Properties | ForEach-Object {
+        $folders = @(if ($byRef.ContainsKey($_.Name)) { $byRef[$_.Name] } else { @() })
+        $entry = [pscustomobject]@{
+            Compte   = Get-CtxProp $_.Value 'key'
+            Projet   = Get-CtxProp $_.Value 'name'
+            Env      = Get-CtxProp $_.Value 'env'
+            Partage  = ($folders.Count -gt 1)
+            Dossiers = $folders
+            Ref      = $_.Name
+            Source   = Get-CtxProp $_.Value 'envSource'
+        }
+        $entry.PSObject.TypeNames.Insert(0, 'DevContext.SupabaseMapEntry')
+        $entry
+    } | Sort-Object Compte, Projet
+}
+
+# Layout lives entirely in DevContext.format.ps1xml.
+#
+# An Update-TypeData -DefaultDisplayPropertySet used to sit here as a fallback.
+# It did the opposite of its intent: PSStandardMembers takes precedence over a
+# format file, so the table view was loaded and then ignored, and ctx-sb kept
+# printing one object per paragraph. Two mechanisms for one job, the weaker one
+# winning silently.
 
 function Resolve-CtxSupabaseKey {
     # Quelle cle de secret ce dossier attend-il ? Renvoie $null si le projet est
@@ -611,12 +860,178 @@ function Sync-CtxSupabaseEnv {
     }
 }
 
+# ---------------------------------------------------------------------------
+# Production guard — pure decision, no I/O
+# ---------------------------------------------------------------------------
+
+# Sub-commands that destroy data. No legitimate use against a production
+# project, in any scenario -- which is what makes refusing them cost nothing.
+$script:GuardDestructive = @('db reset')
+
+# Sub-commands that ARE legitimate in production, but only from the repo's
+# default branch. Pushing migrations from a side branch is how a schema goes
+# backwards: on 13 Aug 2026 a worktree carried 19 migrations against 22 on main.
+$script:GuardBranchBound = @('db push', 'migration repair', 'migration up')
+
+function Get-CtxSupabasePaires {
+    <#
+      Every pair of ADJACENT non-option words, lowercased.
+
+      The obvious implementation -- take the first two non-option words -- was
+      wrong, and an audit on 15 Aug 2026 proved it in one line:
+
+          supabase db reset --linked              refused
+          supabase --workdir . db reset --linked  went straight through
+
+      It assumed every option is a lone boolean. The Supabase CLI has six global
+      options that take a SEPARATE value (--workdir, --profile, --network-id,
+      --dns-resolver, --agent, -o/--output), and cobra accepts global flags
+      BEFORE the command. The value then became the first word and shifted the
+      window one place to the right.
+
+      Anchoring on "the first word that is a known root command" would have
+      fixed those six and broken on `--profile db db reset`, where a flag value
+      imitates a command. Looking at every adjacent pair has no such blind spot:
+      a guarded pair is present or it is not.
+
+      The trade is over-blocking -- a command carrying "db" and "reset" as
+      adjacent VALUES would be refused. That has no realistic form, and on a
+      production project a false refusal costs one override while a false pass
+      costs the database.
+    #>
+    param([string[]]$Arguments = @())
+
+    $mots = @(
+        $Arguments |
+            Where-Object { $_ -and -not "$_".StartsWith('-') } |
+            ForEach-Object { "$_".ToLowerInvariant() }
+    )
+    for ($i = 0; $i -lt $mots.Count - 1; $i++) { "$($mots[$i]) $($mots[$i + 1])" }
+}
+
+function Get-CtxArgumentValeur {
+    <#
+      Reads the value of a flag, in either spelling: `--nom valeur` and
+      `--nom=valeur`. Returns nothing when the flag is absent.
+    #>
+    param(
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory)][string]$Nom
+    )
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        $a = "$($Arguments[$i])"
+        if ($a -eq "--$Nom") {
+            if ($i + 1 -lt $Arguments.Count) { return "$($Arguments[$i + 1])" }
+            return
+        }
+        if ($a.StartsWith("--$Nom=")) { return $a.Substring($Nom.Length + 3) }
+    }
+}
+
+function Get-CtxSupabaseRefDepuisUrl {
+    <#
+      Recovers the project ref from a Postgres connection string, in the two
+      shapes Supabase issues:
+
+        direct  postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres
+        pooler  postgresql://postgres.<ref>:<pwd>@aws-0-....pooler.supabase.com:5432/postgres
+
+      Returns nothing for anything else, and "nothing" is a meaningful answer:
+      the caller then knows it cannot tell what this command is aimed at.
+    #>
+    param([AllowNull()][AllowEmptyString()][string]$Url)
+
+    if (-not $Url) { return }
+    if ($Url -match '@db\.([a-z0-9]{20})\.supabase\.') { return $Matches[1] }
+    if ($Url -match '://postgres\.([a-z0-9]{20})[:@]')  { return $Matches[1] }
+}
+
+function Test-CtxSupabaseGuard {
+    <#
+      Pure decision. No network, no vault, no filesystem, no git. Everything it
+      needs is passed in -- which is what makes it testable on its own, and what
+      lets the shim be the only place that gathers state.
+
+      Every uncertain path returns Allowed. A guard that breaks when it
+      hesitates is a guard that gets uninstalled within the week.
+    #>
+    [CmdletBinding()]
+    param(
+        [string[]]$Arguments = @(),
+        [AllowNull()][string]$Environment,
+        [AllowNull()][string]$CurrentBranch,
+        [AllowNull()][string]$DefaultBranch,
+        [switch]$Override,
+        # Vrai quand l'index du contexte contient au moins un projet marque
+        # 'prod'. Sert au seul cas ou ce garde-fou se ferme par defaut : voir
+        # plus bas, --db-url.
+        [switch]$IndexContientProd
+    )
+
+    $pass = { param($rule) [pscustomobject]@{ Allowed = $true; Rule = $rule; Reason = '' } }
+
+    $paires      = @(Get-CtxSupabasePaires $Arguments)
+    $destructive = @($paires | Where-Object { $_ -in $script:GuardDestructive })   | Select-Object -First 1
+    $branchBound = @($paires | Where-Object { $_ -in $script:GuardBranchBound })   | Select-Object -First 1
+    $sub         = if ($destructive) { $destructive } else { $branchBound }
+
+    # --- cible redirigee -----------------------------------------------------
+    #
+    # LE SEUL ENDROIT OU CE GARDE-FOU SE FERME PAR DEFAUT.
+    #
+    # Il deduit la base visee du DOSSIER. `--db-url` la redirige ailleurs, et la
+    # CLI obeit au flag. Une commande destructrice copiee d'un runbook et lancee
+    # depuis un dossier de developpement detruisait donc la production sans un
+    # mot -- exactement la classe d'erreur que ce module existe pour arreter.
+    #
+    # Quand on sait lire le ref de l'URL, on juge dessus. Quand on ne sait pas,
+    # et qu'une production existe quelque part dans l'index, on refuse : ici,
+    # « je ne sais pas » ne peut pas valoir « vas-y ».
+    if ($destructive -or $branchBound) {
+        $dbUrl = Get-CtxArgumentValeur -Arguments $Arguments -Nom 'db-url'
+        if ($dbUrl -and -not $Override) {
+            $refCible = Get-CtxSupabaseRefDepuisUrl $dbUrl
+            if (-not $refCible -and $IndexContientProd) {
+                return [pscustomobject]@{
+                    Allowed = $false
+                    Rule    = 'cible-indeterminee'
+                    Reason  = "'$sub' porte un --db-url qui vise une base impossible a identifier, et ce contexte contient un projet de production."
+                }
+            }
+        }
+    }
+
+    if ($Environment -ne 'prod') { return (& $pass 'not-production') }
+    if (-not $destructive -and -not $branchBound) { return (& $pass 'not-guarded') }
+
+    if ($Override) { return (& $pass 'override') }
+
+    if ($destructive) {
+        return [pscustomobject]@{
+            Allowed = $false
+            Rule    = 'db-reset-prod'
+            Reason  = "'$sub' detruit et recree la base. Refuse sur un projet de production."
+        }
+    }
+
+    # Branch-bound from here. Any doubt lets the command through.
+    if (-not $CurrentBranch -or -not $DefaultBranch) { return (& $pass 'branch-unknown') }
+    if ($CurrentBranch -eq $DefaultBranch)           { return (& $pass 'default-branch') }
+
+    [pscustomobject]@{
+        Allowed = $false
+        Rule    = 'branch-mismatch'
+        Reason  = "'$sub' vers un projet de production depuis la branche '$CurrentBranch' au lieu de '$DefaultBranch'."
+    }
+}
+
+# ---------------------------------------------------------------------------
+
 function Invoke-DevSupabase {
     [CmdletBinding()]
     param([Parameter(ValueFromRemainingArguments)]$Rest)
 
-    $exe = Get-Command supabase -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $exe) { throw "supabase introuvable dans le PATH." }
+    $exe = Get-CtxSupabaseExe
 
     $token = $null
     if ($env:DEVCTX) {
@@ -648,12 +1063,12 @@ function Invoke-DevSupabase {
         $previous = $env:SUPABASE_ACCESS_TOKEN
         try {
             Set-CtxSupabaseToken $token
-            & $exe.Source @Rest
+            & $exe @Rest
         }
         finally { Set-CtxSupabaseToken $previous }
     }
     else {
-        & $exe.Source @Rest
+        & $exe @Rest
     }
 }
 
@@ -1001,16 +1416,22 @@ Set-Alias -Name web-ctx   -Value Open-DevBrowser
 Set-Alias -Name vercel    -Value Invoke-DevVercel
 Set-Alias -Name supabase  -Value Invoke-DevSupabase
 Set-Alias -Name sb-index  -Value Update-DevSupabaseIndex
+Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
+Set-Alias -Name ctx-doctor -Value Get-DevContextDoctor
+Set-Alias -Name ctx-mcp    -Value New-DevProjectMcp
 
 $exportedFunctions = @(
     'Use-DevContext', 'Clear-DevContext', 'Get-DevContextList', 'New-DevContext',
     'Close-DevContext', 'Open-DevCode', 'Open-DevBrowser', 'Test-DevContext',
     'Assert-DevContext', 'Resolve-DevContextForPath', 'Invoke-DevVercel',
-    'Invoke-DevSupabase', 'Update-DevSupabaseIndex'
+    'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard',
+    'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp',
+    'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',
-    'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index'
+    'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index', 'ctx-sb',
+    'ctx-doctor', 'ctx-mcp'
 )
 
 Export-ModuleMember -Function $exportedFunctions -Alias $exportedAliases

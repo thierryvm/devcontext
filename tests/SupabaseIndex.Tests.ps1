@@ -4,13 +4,13 @@ BeforeAll {
 
 Describe 'Get-CtxSupabaseEnvGuess' {
     It 'reconnait prod dans le nom' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'ankora-prod' | Should -Be 'prod' }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'demo-app-prod' | Should -Be 'prod' }
     }
     It 'reconnait production dans le nom' {
         InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'shop production' | Should -Be 'prod' }
     }
     It 'reconnait staging comme non-production' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'ankora-staging' | Should -Be 'dev' }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'demo-app-staging' | Should -Be 'dev' }
     }
     It 'reconnait dev, preview et test' {
         InModuleScope DevContext {
@@ -20,10 +20,10 @@ Describe 'Get-CtxSupabaseEnvGuess' {
         }
     }
     It 'ignore la casse' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'Ankora-PROD' | Should -Be 'prod' }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'Demo-App-PROD' | Should -Be 'prod' }
     }
     It 'rend null sur un nom neutre' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'IronTrack' | Should -BeNullOrEmpty }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'NeutralName' | Should -BeNullOrEmpty }
     }
     It 'ne confond pas reproduction avec production' {
         # The whole point of the word boundaries. A false 'prod' would block a

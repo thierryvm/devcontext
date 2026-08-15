@@ -1,7 +1,7 @@
 # Le garde-fou vu depuis chaque shell qui peut l'appeler.
 #
 # C'est la raison d'être du shim, et donc l'endroit où une régression coûte le
-# plus cher. Le 15 août 2026, `supabase db reset --linked` contre ankora-prod est
+# plus cher. Le 15 août 2026, `supabase db reset --linked` contre demo-app-prod est
 # passé depuis git-bash : la suite était verte, parce qu'elle n'interrogeait que
 # PowerShell — le seul shell qui était déjà couvert par l'alias du module.
 #

@@ -27,7 +27,7 @@ Describe 'Resolve-DevContextForPath' {
     It 'resout un dossier vers le contexte qui le contient' {
         InModuleScope DevContext -Parameters @{ f = $script:Faux } { param($f)
             Mock Get-CtxManifests $f
-            (Resolve-DevContextForPath -Path 'F:\PROJECTS\Apps\ankora').name | Should -Be 'perso'
+            (Resolve-DevContextForPath -Path 'F:\PROJECTS\Apps\demo-app').name | Should -Be 'perso'
         }
     }
 
@@ -66,14 +66,14 @@ Describe 'Resolve-DevContextForPath' {
     It 'ignore la casse, comme le systeme de fichiers Windows' {
         InModuleScope DevContext -Parameters @{ f = $script:Faux } { param($f)
             Mock Get-CtxManifests $f
-            (Resolve-DevContextForPath -Path 'f:\projects\APPS\ankora').name | Should -Be 'perso'
+            (Resolve-DevContextForPath -Path 'f:\projects\APPS\demo-app').name | Should -Be 'perso'
         }
     }
 
     It 'tolere un antislash final' {
         InModuleScope DevContext -Parameters @{ f = $script:Faux } { param($f)
             Mock Get-CtxManifests $f
-            (Resolve-DevContextForPath -Path 'F:\PROJECTS\Apps\ankora\').name | Should -Be 'perso'
+            (Resolve-DevContextForPath -Path 'F:\PROJECTS\Apps\demo-app\').name | Should -Be 'perso'
         }
     }
 

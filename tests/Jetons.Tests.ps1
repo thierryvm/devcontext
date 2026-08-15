@@ -107,9 +107,9 @@ Describe 'Test-CtxDoctorJetonSupabase' {
         InModuleScope DevContext {
             $r = Test-CtxDoctorJetonSupabase -RefAttendu 'refdeprod' -Code 200 -Projets @(
                 [pscustomobject]@{ id = 'autre';     name = 'autre-projet' }
-                [pscustomobject]@{ id = 'refdeprod'; name = 'ankora-prod' })
+                [pscustomobject]@{ id = 'refdeprod'; name = 'demo-app-prod' })
             $r.Verdict | Should -Be 'OK'
-            $r.Detail  | Should -Match 'ankora-prod'
+            $r.Detail  | Should -Match 'demo-app-prod'
         }
     }
 

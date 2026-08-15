@@ -120,7 +120,7 @@ devenu un dépôt.
   Ces valeurs sont remplacées par des exemples génériques (`client-a`,
   `contact@exemple.com`, `login-client`), et l'historique git a été réécrit —
   le fichier était présent dès le premier commit.
-  Les projets **personnels** cités en exemple (`ankora`, `savoora`, …) sont
+  Les projets **personnels** cités en exemple (`demo-app`, `demo-api`, …) sont
   conservés : ce sont des dépôts publics, et un exemple concret se relit mieux
   qu'un `foo`.
 

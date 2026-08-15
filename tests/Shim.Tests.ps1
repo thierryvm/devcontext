@@ -201,7 +201,7 @@ exit `$LASTEXITCODE
         # existe : la ou l'alias PowerShell ne va pas.
         #
         # Verifie en vrai le 15 aout 2026 : `supabase db reset --linked` sur
-        # ankora-prod est passe depuis git-bash. Il n'a echoue que sur un
+        # demo-app-prod est passe depuis git-bash. Il n'a echoue que sur un
         # timeout reseau.
         #
         # C'est le DOSSIER qui decide, jamais la session.

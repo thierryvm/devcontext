@@ -20,10 +20,10 @@ Describe 'Get-CtxSupabaseEnvGuess' {
         }
     }
     It 'ignore la casse' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'demo-app-prod' | Should -Be 'prod' }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'Demo-App-PROD' | Should -Be 'prod' }
     }
     It 'rend null sur un nom neutre' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'IronTrack' | Should -BeNullOrEmpty }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'NeutralName' | Should -BeNullOrEmpty }
     }
     It 'ne confond pas reproduction avec production' {
         # The whole point of the word boundaries. A false 'prod' would block a

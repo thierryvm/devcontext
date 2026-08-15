@@ -53,8 +53,10 @@ jobs:
       # The Supabase CLI is what the guard delegates to, so resolving it is a
       # property worth testing rather than skipping. Without it, two tests
       # declare themselves skipped and that coverage exists nowhere.
-      # `|| true` on purpose: a registry outage must not turn the whole suite
-      # red over a dependency the tests already know how to do without.
+      #
+      # continue-on-error on purpose: an npm registry outage must not turn the
+      # whole suite red over a dependency the tests already know how to do
+      # without -- they skip, and say why.
       - name: Install the Supabase CLI (best effort)
         shell: pwsh
         continue-on-error: true

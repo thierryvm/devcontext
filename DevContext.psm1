@@ -1468,8 +1468,17 @@ Host github-$Name
     Write-Host "  Contexte '$Label' cree." -ForegroundColor Green
     Write-Host ""
     Write-Host "  Reste a faire, une seule fois :" -ForegroundColor Yellow
-    Write-Host "    1. Ajouter la cle publique au compte GitHub $Email :"
-    Write-Host "       $keyPath.pub"
+    # La liste ne doit designer que ce qui existe. Avec -NoKey elle envoyait
+    # chercher une cle publique jamais generee -- une impasse de plus, de la
+    # meme famille que celles corrigees plus haut.
+    if (Test-Path -LiteralPath "$keyPath.pub") {
+        Write-Host "    1. Ajouter la cle publique au compte GitHub $Email :"
+        Write-Host "       $keyPath.pub"
+    }
+    else {
+        Write-Host "    1. Generer la cle SSH, puis l ajouter au compte GitHub $Email :" -ForegroundColor Yellow
+        Write-Host "       ssh-keygen -t ed25519 -C '$Email' -f '$keyPath'" -ForegroundColor Yellow
+    }
     Write-Host "    2. work $Name ; gh auth login   (config isolee dans $ctx\gh)"
     Write-Host "    3. Creer le profil Chrome dedie, puis renseigner 'chromeProfile' dans context.json"
     Write-Host "    4. code-ctx $Name   (VS Code vierge : connecter le compte du client)"

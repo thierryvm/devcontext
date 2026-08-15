@@ -89,13 +89,23 @@ function New-CtxMcpServeurSupabase {
 }
 
 function New-CtxMcpServeurGitHub {
-    # ${GH_TOKEN} is expanded by Claude Code from the environment, which `work`
-    # fills from the context vault. The file itself stays free of any secret and
-    # can be committed.
+    <#
+      The token is deferred to the environment, which `work` fills from the
+      context vault, so the file itself holds no secret and can be committed.
+
+      The expansion SYNTAX differs per client, and getting it wrong is silent:
+      Claude Code reads ${VAR}, while VS Code and Cursor read ${env:VAR} and
+      would send the literal text as a bearer token. Nothing complains -- the
+      request simply comes back 401, with an error blaming the credential rather
+      than the notation. Caught by the audit of 15 Aug 2026.
+    #>
+    param([string]$Client = 'claude')
+
+    $reference = if ($Client -eq 'claude') { '${GH_TOKEN}' } else { '${env:GH_TOKEN}' }
     [ordered]@{
         type    = 'http'
         url     = 'https://api.githubcopilot.com/mcp/'
-        headers = [ordered]@{ Authorization = 'Bearer ${GH_TOKEN}' }
+        headers = [ordered]@{ Authorization = "Bearer $reference" }
     }
 }
 
@@ -229,10 +239,14 @@ function New-DevProjectMcp {
     }
 
     # --- GitHub ------------------------------------------------------------
-    if ($env:GH_TOKEN) { $nouveaux['github'] = New-CtxMcpServeurGitHub }
-    else { $ignores.Add('github : aucun GH_TOKEN charge — `work <contexte>` d abord, ou le coffre n a pas de cle github-token') }
+    # Construit par client plus bas : la syntaxe d'expansion n'est pas la meme
+    # partout. Ici on note seulement s'il y a lieu de le declarer.
+    $avecGitHub = [bool]$env:GH_TOKEN
+    if (-not $avecGitHub) {
+        $ignores.Add('github : aucun GH_TOKEN charge — `work <contexte>` d abord, ou le coffre n a pas de cle github-token')
+    }
 
-    if ($nouveaux.Count -eq 0) {
+    if ($nouveaux.Count -eq 0 -and -not $avecGitHub) {
         Write-Warning "Rien a declarer pour ce dossier."
         foreach ($i in $ignores) { Write-Host "    $i" -ForegroundColor DarkGray }
         return
@@ -256,10 +270,16 @@ function New-DevProjectMcp {
         $existant = $null
         if (Test-Path -LiteralPath $c.Chemin) {
             $existant = try { Get-Content -LiteralPath $c.Chemin -Raw | ConvertFrom-Json -AsHashtable }
-                        catch { throw "$($c.Chemin) existant illisible : $($_.Exception.Message). Le corriger ou le deplacer avant de regenerer." }
+                        catch { throw "$($c.Chemin) existant illisible : $(Protect-CtxMessage $_.Exception.Message). Le corriger ou le deplacer avant de regenerer." }
         }
 
-        $resultat = Merge-CtxMcpConfig -Existant $existant -Nouveaux $nouveaux -Cle $c.Cle -Force:$Force
+        # Copie par client : le serveur GitHub porte une syntaxe d'expansion
+        # differente selon l'assistant.
+        $pourCeClient = [ordered]@{}
+        foreach ($k in $nouveaux.Keys) { $pourCeClient[$k] = $nouveaux[$k] }
+        if ($avecGitHub) { $pourCeClient['github'] = New-CtxMcpServeurGitHub -Client $c.Nom }
+
+        $resultat = Merge-CtxMcpConfig -Existant $existant -Nouveaux $pourCeClient -Cle $c.Cle -Force:$Force
         $json = $resultat.Config | ConvertTo-Json -Depth 8
 
         if (-not $PSCmdlet.ShouldProcess($c.Chemin, "ecrire la configuration MCP ($($c.Libelle))")) {

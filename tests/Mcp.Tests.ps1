@@ -120,7 +120,7 @@ Describe 'New-DevProjectMcp' {
     BeforeAll {
         $script:projet = Join-Path $TestDrive 'appli'
         New-Item -ItemType Directory -Path (Join-Path $script:projet 'supabase\.temp') -Force | Out-Null
-        Set-Content (Join-Path $script:projet 'supabase\.temp\project-ref') 'refdutest' -NoNewline
+        Set-Content (Join-Path $script:projet 'supabase\.temp\project-ref') 'refdutest00000000000' -NoNewline
     }
 
     It 'ecrit un fichier dont le JSON est valide' {
@@ -132,7 +132,7 @@ Describe 'New-DevProjectMcp' {
 
     It 'declare supabase avec le ref lu dans le dossier' {
         $c = Get-Content (Join-Path $script:projet '.mcp.json') -Raw | ConvertFrom-Json
-        $c.mcpServers.supabase.args | Should -Contain '--project-ref=refdutest'
+        $c.mcpServers.supabase.args | Should -Contain '--project-ref=refdutest00000000000'
     }
 
     It 'ecrit VS Code sous sa propre cle racine' {
@@ -142,7 +142,7 @@ Describe 'New-DevProjectMcp' {
         New-DevProjectMcp -Path $script:projet -Client vscode -Confirm:$false | Out-Null
         $c = Get-Content (Join-Path $script:projet '.vscode\mcp.json') -Raw | ConvertFrom-Json
         $c.PSObject.Properties.Name | Should -Contain 'servers'
-        $c.servers.supabase.args    | Should -Contain '--project-ref=refdutest'
+        $c.servers.supabase.args    | Should -Contain '--project-ref=refdutest00000000000'
     }
 
     It 'sert plusieurs assistants en un appel' {
@@ -156,7 +156,7 @@ Describe 'New-DevProjectMcp' {
         # est commite, donc la salissure se propage au prochain pull.
         $vierge = Join-Path $TestDrive 'sans-client'
         New-Item -ItemType Directory -Path (Join-Path $vierge 'supabase\.temp') -Force | Out-Null
-        Set-Content (Join-Path $vierge 'supabase\.temp\project-ref') 'r' -NoNewline
+        Set-Content (Join-Path $vierge 'supabase\.temp\project-ref') 'refbidon000000000000' -NoNewline
         New-DevProjectMcp -Path $vierge -Confirm:$false -WarningAction SilentlyContinue | Out-Null
         Test-Path (Join-Path $vierge '.mcp.json')        | Should -BeFalse
         Test-Path (Join-Path $vierge '.cursor\mcp.json') | Should -BeFalse
@@ -165,12 +165,12 @@ Describe 'New-DevProjectMcp' {
     It 'sans -Client, rafraichit un assistant deja configure' {
         $existant = Join-Path $TestDrive 'deja-configure'
         New-Item -ItemType Directory -Path (Join-Path $existant 'supabase\.temp') -Force | Out-Null
-        Set-Content (Join-Path $existant 'supabase\.temp\project-ref') 'refexistant' -NoNewline
+        Set-Content (Join-Path $existant 'supabase\.temp\project-ref') 'refexistant000000000' -NoNewline
         Set-Content (Join-Path $existant '.mcp.json') '{ "mcpServers": {} }'
 
         New-DevProjectMcp -Path $existant -Confirm:$false | Out-Null
         $c = Get-Content (Join-Path $existant '.mcp.json') -Raw | ConvertFrom-Json
-        $c.mcpServers.supabase.args | Should -Contain '--project-ref=refexistant'
+        $c.mcpServers.supabase.args | Should -Contain '--project-ref=refexistant000000000'
     }
 
     It 'refuse un client inconnu plutot que d ecrire au hasard' {
@@ -186,7 +186,7 @@ Describe 'New-DevProjectMcp' {
     It 'ne touche a rien avec -WhatIf' {
         $vierge = Join-Path $TestDrive 'vierge'
         New-Item -ItemType Directory -Path (Join-Path $vierge 'supabase\.temp') -Force | Out-Null
-        Set-Content (Join-Path $vierge 'supabase\.temp\project-ref') 'r' -NoNewline
+        Set-Content (Join-Path $vierge 'supabase\.temp\project-ref') 'refbidon000000000000' -NoNewline
         New-DevProjectMcp -Path $vierge -Client claude -WhatIf | Out-Null
         Test-Path (Join-Path $vierge '.mcp.json') | Should -BeFalse
     }
@@ -196,7 +196,7 @@ Describe 'New-DevProjectMcp' {
         # configuration ecrite a la main, sans la moindre trace.
         $casse = Join-Path $TestDrive 'casse'
         New-Item -ItemType Directory -Path (Join-Path $casse 'supabase\.temp') -Force | Out-Null
-        Set-Content (Join-Path $casse 'supabase\.temp\project-ref') 'r' -NoNewline
+        Set-Content (Join-Path $casse 'supabase\.temp\project-ref') 'refbidon000000000000' -NoNewline
         Set-Content (Join-Path $casse '.mcp.json') '{ ceci nest pas du json'
         { New-DevProjectMcp -Path $casse -Client claude -Confirm:$false } | Should -Throw '*illisible*'
     }

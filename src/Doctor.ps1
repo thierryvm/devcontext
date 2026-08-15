@@ -298,7 +298,9 @@ function Get-CtxBinaireFacts {
             # it is recorded as an unknown version rather than swallowed.
             $version = try {
                 $sortie = & $c.Source @ArgsVersion 2>&1 | Select-Object -First 1
-                if ($LASTEXITCODE -eq 0 -and $sortie) { ([string]$sortie).Trim() } else { $null }
+                # Caviarde : la sortie d'un binaire arbitraire du PATH n'est
+                # pas une source de confiance, et ce Detail finit dans un rapport.
+                if ($LASTEXITCODE -eq 0 -and $sortie) { Protect-CtxMessage (([string]$sortie).Trim()) } else { $null }
             }
             catch { $null }
         }

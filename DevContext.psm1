@@ -531,6 +531,15 @@ function Get-CtxSupabaseKeys {
         Sort-Object
 }
 
+# Format reel d'un project-ref Supabase : 20 caracteres, minuscules et chiffres.
+#
+# La validation n'est pas cosmetique. Ce fichier appartient au DEPOT : son
+# contenu est choisi par qui a fabrique le depot, et il ressortait tel quel dans
+# les `args` d'un `npx` inscrit par `ctx mcp` -- une commande que l'assistant
+# relance a chaque demarrage, depuis un fichier fait pour etre commite. Releve
+# par l'audit du 15 aout 2026.
+$script:SupabaseRefMotif = '^[a-z0-9]{20}$'
+
 function Resolve-CtxSupabaseRef {
     # Remonte l'arborescence a la recherche du project-ref ecrit par `supabase link`.
     param([string]$Path = (Get-Location).Path)
@@ -540,7 +549,20 @@ function Resolve-CtxSupabaseRef {
         $file = Join-Path $dir 'supabase\.temp\project-ref'
         if (Test-Path $file) {
             $ref = Get-Content $file -Raw -ErrorAction SilentlyContinue
-            if ($ref) { return $ref.Trim() }
+            if ($ref) {
+                $ref = $ref.Trim()
+                # Un contenu qui n'a pas la forme d'un ref n'est pas un ref. On
+                # rend $null plutot que de le propager : la suite le traitera
+                # comme « ce dossier n'est lie a rien », ce qui est vrai.
+                #
+                # -cmatch et non -match : l'operateur par defaut de PowerShell
+                # IGNORE la casse, donc '^[a-z0-9]{20}$' acceptait aussi bien
+                # 'AVECDESMAJUSCULES000'. Une validation qu'on croit stricte et
+                # qui ne l'est pas est pire qu'une validation absente.
+                if ($ref -cmatch $script:SupabaseRefMotif) { return $ref }
+                Write-Verbose "project-ref ignore : format inattendu dans $file"
+                return $null
+            }
         }
         $parent = Split-Path $dir -Parent
         if (-not $parent -or $parent -eq $dir) { break }
@@ -645,6 +667,7 @@ function Update-DevSupabaseIndex {
             (Get-Content $formerPath -Raw | ConvertFrom-Json).PSObject.Properties |
                 ForEach-Object { $former[$_.Name] = $_.Value }
         }
+        # Message litteral, sans donnee interpolee : rien a caviarder ici.
         catch { Write-Warning "Index existant illisible, il sera reconstruit sans les marquages manuels." }
     }
 

@@ -43,14 +43,26 @@ function Protect-CtxMessage {
     if ([string]::IsNullOrEmpty($Message)) { return $Message }
 
     $motifs = @(
+        # --- par emetteur connu ---
         'sbp_[A-Za-z0-9_\-]+', 'sbs_[A-Za-z0-9_\-]+', 'sb_secret_[A-Za-z0-9_\-]+',
         'gh[pousr]_[A-Za-z0-9_\-]+', 'github_pat_[A-Za-z0-9_\-]+',
+        'glpat-[A-Za-z0-9_\-]+', 'sntrys_[A-Za-z0-9_\-\.]+',
         'sk-[A-Za-z0-9_\-]{16,}',
         'xox[baprs]-[A-Za-z0-9\-]+',
         'ya29\.[A-Za-z0-9_\-]+', 'AIza[A-Za-z0-9_\-]{20,}',
         '(AKIA|ASIA)[A-Z0-9]{12,}',
-        # Bearer <anything>, whatever the issuer: the shape is the tell.
-        '(?i)(bearer|token|access[_-]?token|api[_-]?key)\s*[:=]?\s*[A-Za-z0-9_\-\.]{16,}'
+
+        # --- par forme, la ou la liste d'emetteurs sera toujours en retard ---
+        #
+        # Un JWT : c'est la forme des cles anon et service_role de Supabase, et
+        # la service_role contourne toute RLS.
+        'eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]+',
+        # La portion mot de passe d'une URL de connexion. `--db-url` en porte
+        # une, et l'audit du 15 aout 2026 a montre qu'elle traversait intacte.
+        '(?i)(postgres(ql)?|mysql|mongodb(\+srv)?|redis|amqp)://[^:@/\s]+:[^@\s]+@',
+        # Mot-cle suivi d'une valeur. « password » manquait, alors que
+        # SUPABASE_DB_PASSWORD est un secret que ce module gere lui-meme.
+        '(?i)(bearer|token|access[_-]?token|api[_-]?key|password|passwd|pwd|secret)\s*[:=]?\s*[A-Za-z0-9_\-\.!@#$%^&*]{8,}'
     )
     $sortie = $Message
     foreach ($m in $motifs) { $sortie = [regex]::Replace($sortie, $m, '<REDACTED>') }

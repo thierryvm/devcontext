@@ -1,5 +1,12 @@
 # Garde-fou production — conception
 
+> **Noms de projets remplacés par des marque-places.** Ce document décrit une
+> investigation réelle ; les noms de projets, de dépôts et de bases y ont été
+> remplacés par demo-app, other-app, 	hird-app. La méthode et les
+> conclusions sont inchangées — seule la topologie réelle a été retirée, parce
+> qu'un document qui explique où se trouve une base de production et comment son
+> garde-fou fonctionne est un document de reconnaissance.
+
 *13 août 2026*
 
 Ce document décrit l'ajout d'un second garde-fou à DevContext. Il ne remplace
@@ -18,14 +25,14 @@ Relevé le 13 août 2026 sur la machine de référence :
 
 | Dossier | Nature | Branche | Migrations | Base visée |
 |---|---|---|---|---|
-| `ankora` | dépôt principal | `docs/handoff-2026-08-11-2215` | 22 | `ankora-prod` |
-| `ankora-landing` | worktree | `main` | 22 | `ankora-prod` |
-| `ankora-refonte` | worktree | `feat/pwa-start-url-cockpit` | **19** | `ankora-prod` |
+| `demo-app` | dépôt principal | `docs/handoff-2026-08-11-2215` | 22 | `demo-app-prod` |
+| `demo-app-landing` | worktree | `main` | 22 | `demo-app-prod` |
+| `demo-app-redesign` | worktree | `feat/pwa-start-url-cockpit` | **19** | `demo-app-prod` |
 
 Les trois sont le **même dépôt git** sur trois branches. Partager la même base
 est donc cohérent — ce n'est pas l'anomalie.
 
-L'anomalie est ailleurs : depuis `ankora-refonte`, un `supabase db reset`
+L'anomalie est ailleurs : depuis `demo-app-redesign`, un `supabase db reset`
 reconstruirait la production à partir de **19 migrations au lieu de 22**.
 Données perdues, schéma ramené trois crans en arrière. `ctx` répondrait **GO**,
 en toute bonne foi : le dossier est bien dans le contexte `perso`, l'identité
@@ -34,7 +41,7 @@ GitHub est la bonne. Rien de ce que le module surveille n'est en défaut.
 Deux constats aggravants :
 
 1. **Le signal existe déjà et n'est pas utilisé.** Le projet Supabase s'appelle
-   `ankora-prod`. Le mot est dans `supabase-index.json`, relu à chaque commande.
+   `demo-app-prod`. Le mot est dans `supabase-index.json`, relu à chaque commande.
 2. **L'information n'est lisible nulle part.** Aucune commande n'affiche quel
    projet vit sur quel compte. `sb-index` construit l'index ; rien ne le montre.
 
@@ -137,7 +144,7 @@ migrations en production que depuis la branche principale du dépôt.
 
 Ce critère se calcule partout, sans configuration, et exprime une bonne pratique
 universelle plutôt qu'une particularité de cette machine. Appliqué au relevé
-ci-dessus : `ankora-landing` (sur `main`) passe, `ankora-refonte` et `ankora`
+ci-dessus : `demo-app-landing` (sur `main`) passe, `demo-app-redesign` et `demo-app`
 sont refusés.
 
 **Comment la branche par défaut est déterminée**, dans cet ordre :
@@ -167,7 +174,7 @@ Champ `env` ajouté à chaque entrée de `supabase-index.json` :
 
 ```json
 {
-  "<ref>": { "key": "supabase-token-2", "name": "ankora-prod", "env": "prod" }
+  "<ref>": { "key": "supabase-token-2", "name": "demo-app-prod", "env": "prod" }
 }
 ```
 
@@ -192,16 +199,16 @@ Nouvelle commande `ctx-sb` :
 
 ```
   COMPTE            PROJET             ENV    DOSSIERS
-  supabase-token    airsoft-aywaille   -      airsoft-aywaille
-  supabase-token    IronTrack          -      IronTrack
+  supabase-token    third-app   -      third-app
+  supabase-token    other-app          -      other-app
   supabase-token    Terminal Learning  -      Terminal Learning
-  supabase-token-2  ankora-prod        PROD   ankora, ankora-landing, ankora-refonte  ⚠
+  supabase-token-2  demo-app-prod        PROD   demo-app, demo-app-landing, demo-app-redesign  ⚠
 ```
 
 Elle croise l'index avec les fichiers `supabase/.temp/project-ref` trouvés sous
 la racine du contexte, et signale tout projet visé par plus d'un dossier.
 
-Cette commande n'est pas un confort. Le 13 août 2026, la question *« airsoft
+Cette commande n'est pas un confort. Le 13 août 2026, la question *« third-app
 est sur quel compte ? »* n'a pu être tranchée qu'en lisant l'index à la main,
 alors que la réponse était sur la machine depuis le début. Un garde-fou dont on
 ne peut pas inspecter les données est un garde-fou qu'on finit par désactiver.

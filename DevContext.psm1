@@ -41,7 +41,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Doctor.ps1', 'Mcp.ps1')) {
+foreach ($fichier in @('Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -67,8 +67,14 @@ function Read-CtxManifest {
 function Get-CtxProp {
     # Lecture defensive : les manifestes crees avant l'ajout d'un champ n'ont
     # pas ce champ, et Set-StrictMode transforme un acces absent en exception.
+    #
+    # [AllowNull()] parce que « defensive » doit valoir aussi pour l'objet
+    # lui-meme : un dossier hors contexte n'a pas de manifeste, et le seul
+    # appelant qui l'avait oublie faisait planter `ctx doctor -Live` par une
+    # erreur de liaison de parametre — pas par la lecture qu'il tentait.
+    # Mandatory reste : omettre l'argument est toujours une faute.
     param(
-        [Parameter(Mandatory)]$Object,
+        [Parameter(Mandatory)][AllowNull()]$Object,
         [Parameter(Mandatory)][string]$Path,
         $Default = $null
     )

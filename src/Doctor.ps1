@@ -381,6 +381,12 @@ function Get-DevContextDoctor {
     .PARAMETER Path
         Folder to diagnose. Defaults to the current one.
 
+    .PARAMETER Live
+        Also probes each loaded token against its service, to check it is still
+        valid AND opens the account this folder expects. Read-only calls only:
+        whoami, list projects. Off by default, because a diagnostic that reaches
+        the network without being asked is one people stop running.
+
     .PARAMETER Json
         Emits JSON, for an agent or a CI job to consume.
 
@@ -388,11 +394,15 @@ function Get-DevContextDoctor {
         ctx-doctor
 
     .EXAMPLE
+        ctx-doctor -Live
+
+    .EXAMPLE
         ctx-doctor -Json | ConvertFrom-Json
     #>
     [CmdletBinding()]
     param(
         [string]$Path = (Get-Location).Path,
+        [switch]$Live,
         [switch]$Json
     )
 
@@ -540,6 +550,11 @@ function Get-DevContextDoctor {
 
     # --- path --------------------------------------------------------------
     $checks.Add((Test-CtxDoctorPathEntreeVide -Path $env:PATH))
+
+    # --- jetons, sur demande ------------------------------------------------
+    if ($Live) {
+        foreach ($c in (Get-CtxJetonChecks -Manifeste $manifeste -Ref $ref)) { $checks.Add($c) }
+    }
 
     if ($Json) { return ($checks | ConvertTo-Json -Depth 4) }
     $checks

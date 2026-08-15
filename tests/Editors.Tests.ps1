@@ -166,6 +166,47 @@ Describe 'Resolve-CtxEditorArguments' {
         }
     }
 
+    It 'construit le chemin meme quand le lecteur n existe pas' {
+        # LE piege. Join-Path est un cmdlet de FOURNISSEUR : il resout le
+        # lecteur et echoue sur « Cannot find drive » quand il n'est pas monte.
+        # Sans -ErrorAction Stop il ne leve pas — il rend une chaine VIDE, et la
+        # commande partait avec « --user-data-dir --extensions-dir . », ou le
+        # flag suivant est lu comme la valeur du precedent.
+        #
+        # Invisible ici, ou F: existe. Rouge sur l'agent de CI, ou il n'existe
+        # pas. C'est exactement la classe de defaut qui n'apparait que chez
+        # quelqu'un d'autre — et la raison d'etre de ce test : il echoue sur le
+        # code d'avant, ici comme ailleurs.
+        InModuleScope DevContext -Parameters @{ c = $script:Plein } { param($c)
+            $lecteurAbsent = 'Q:\CTX\perso'
+            Test-Path -LiteralPath 'Q:\' | Should -BeFalse -Because 'ce test suppose Q: non monte'
+
+            $r = Resolve-CtxEditorArguments -Capabilities $c -ContextDir $lecteurAbsent `
+                -ProfileName 'vscode' -Arguments @('.')
+
+            ($r -join ' ') | Should -Be `
+                '--user-data-dir Q:\CTX\perso\vscode --extensions-dir Q:\CTX\perso\vscode-ext .'
+
+            # Et la propriete qui rend le defaut dangereux, nommee explicitement :
+            # un flag ne doit jamais etre suivi d'un autre flag, car le second
+            # serait alors lu comme la valeur du premier.
+            for ($i = 0; $i -lt $r.Count - 1; $i++) {
+                if ("$($r[$i])".StartsWith('--')) {
+                    "$($r[$i + 1])" | Should -Not -BeNullOrEmpty
+                    "$($r[$i + 1])" | Should -Not -Match '^--'
+                }
+            }
+        }
+    }
+
+    It 'resout une cible relative meme sur un lecteur absent' {
+        InModuleScope DevContext {
+            $faux = { param($p) if ($p -match 'Q:') { 'directory' } else { 'absent' } }
+            Resolve-CtxEditorTargetPath -Arguments @('projet') -WorkingDirectory 'Q:\travail' -Classify $faux |
+                Should -Be 'Q:\travail\projet'
+        }
+    }
+
     It 'place les flags injectes AVANT les arguments de l appelant' {
         InModuleScope DevContext -Parameters @{ c = $script:Profil } { param($c)
             (Resolve-CtxEditorArguments -Capabilities $c -ContextDir 'F:\CTX\perso' -ProfileName 'vscode' -Arguments @('.'))[0] |

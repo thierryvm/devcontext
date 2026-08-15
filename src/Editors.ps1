@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+﻿# ---------------------------------------------------------------------------
 # Editors -- discovering them, measuring them, and isolating them
 # ---------------------------------------------------------------------------
 #
@@ -431,11 +431,22 @@ function Resolve-CtxEditorArguments {
     $injected = @()
     $already = @($Arguments | Where-Object { $_ } | ForEach-Object { "$_".Split('=')[0].ToLowerInvariant() })
 
+    # [IO.Path]::Combine et NON Join-Path.
+    #
+    # Join-Path est un cmdlet de FOURNISSEUR : il resout le lecteur, et leve
+    # « Cannot find drive » quand celui-ci n'est pas monte. Dans une fonction
+    # pure sans -ErrorAction Stop, cela ne leve pas -- cela rend une chaine
+    # VIDE, et la commande partait avec « --user-data-dir --extensions-dir . »,
+    # ou le flag suivant est lu comme la valeur du precedent. Silencieux, donc.
+    #
+    # Mesure par la CI le 15 aout 2026 : les tests passaient ici, ou F: existe,
+    # et echouaient sur un agent ou il n'existe pas. Exactement la classe de
+    # defaut qui n'apparait que chez quelqu'un d'autre.
     if ((Get-CtxProp $Capabilities 'UserDataDir') -and '--user-data-dir' -notin $already) {
-        $injected += '--user-data-dir', (Join-Path $ContextDir $ProfileName)
+        $injected += '--user-data-dir', [System.IO.Path]::Combine($ContextDir, $ProfileName)
     }
     if ((Get-CtxProp $Capabilities 'ExtensionsDir') -and '--extensions-dir' -notin $already) {
-        $injected += '--extensions-dir', (Join-Path $ContextDir ($ProfileName + '-ext'))
+        $injected += '--extensions-dir', [System.IO.Path]::Combine($ContextDir, $ProfileName + '-ext')
     }
 
     @($injected) + @($Arguments)
@@ -496,7 +507,8 @@ function Resolve-CtxEditorTargetPath {
         if (-not $candidate) { continue }
 
         if (-not [System.IO.Path]::IsPathRooted($candidate)) {
-            $candidate = Join-Path $WorkingDirectory $candidate
+            # Combine, pas Join-Path : voir Resolve-CtxEditorArguments.
+            $candidate = [System.IO.Path]::Combine($WorkingDirectory, $candidate)
         }
 
         # if/else and not switch: `continue` inside a switch continues the

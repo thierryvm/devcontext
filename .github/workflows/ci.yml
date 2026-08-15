@@ -50,6 +50,16 @@ jobs:
           Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
           Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
 
+      # The Supabase CLI is what the guard delegates to, so resolving it is a
+      # property worth testing rather than skipping. Without it, two tests
+      # declare themselves skipped and that coverage exists nowhere.
+      # `|| true` on purpose: a registry outage must not turn the whole suite
+      # red over a dependency the tests already know how to do without.
+      - name: Install the Supabase CLI (best effort)
+        shell: pwsh
+        continue-on-error: true
+        run: npm install -g supabase
+
       - name: Run the suite
         shell: pwsh
         run: pwsh -NoProfile -File ./tests/RunTests.ps1

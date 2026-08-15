@@ -58,7 +58,29 @@ Describe 'Get-CtxSupabaseExe — exclusion du dossier des shims' {
 }
 
 Describe 'Get-CtxSupabaseExe — sur la machine reelle' {
+    # Ces deux tests exigent un vrai binaire `supabase`. Sur une machine qui n'en
+    # a pas, ils echouaient — et c'est le symetrique exact du defaut que
+    # tests/README.md interdit : un test faussement VERT ment sur sa couverture,
+    # un test faussement ROUGE apprend a ignorer le rouge. Le second finit par
+    # couter le premier.
+    #
+    # Ils se declarent donc SAUTES en nommant ce qui manque, comme le font deja
+    # les tests PSScriptAnalyzer. La CI, elle, installe la CLI : le filet y est
+    # reellement tendu, plutot que d'etre un rouge permanent que plus personne ne
+    # lit. Constate le 15 aout 2026 — la CI etait rouge la-dessus depuis son
+    # introduction, sous les avis d'analyse statique.
+    BeforeAll {
+        $script:SupabaseReel = [bool](
+            Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue |
+                Where-Object { (Split-Path $_.Source -Parent) -notlike '*shims*' }
+        )
+    }
+
     It 'renvoie un chemin qui existe' {
+        if (-not $script:SupabaseReel) {
+            Set-ItResult -Skipped -Because 'aucune CLI supabase hors shims sur cette machine'
+            return
+        }
         InModuleScope DevContext {
             $exe = Get-CtxSupabaseExe
             Test-Path -LiteralPath $exe | Should -BeTrue
@@ -66,6 +88,10 @@ Describe 'Get-CtxSupabaseExe — sur la machine reelle' {
     }
 
     It 'ne renvoie jamais un chemin situe dans le dossier des shims' {
+        if (-not $script:SupabaseReel) {
+            Set-ItResult -Skipped -Because 'aucune CLI supabase hors shims sur cette machine'
+            return
+        }
         InModuleScope DevContext {
             (Split-Path (Get-CtxSupabaseExe) -Parent).TrimEnd('\', '/') |
                 Should -Not -Be $script:ShimDir.TrimEnd('\', '/')

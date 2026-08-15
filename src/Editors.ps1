@@ -87,7 +87,7 @@ function Get-CtxEditorHints {
     param([string]$ContextRoot = $script:CtxRoot)
 
     $declared = @()
-    $file = Join-Path $ContextRoot 'editors.json'
+    $file = [System.IO.Path]::Combine($ContextRoot, 'editors.json')
     if (Test-Path -LiteralPath $file) {
         try {
             $raw = Get-Content -LiteralPath $file -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
@@ -546,7 +546,7 @@ function Get-CtxNormalizedPath {
 
 function Get-CtxEditorCachePath {
     param([string]$ContextRoot = $script:CtxRoot)
-    Join-Path $ContextRoot 'editors.cache.json'
+    [System.IO.Path]::Combine($ContextRoot, 'editors.cache.json')
 }
 
 function Get-CtxEditorCacheKey {

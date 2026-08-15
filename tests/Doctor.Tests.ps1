@@ -173,7 +173,7 @@ Describe 'Test-CtxDoctorRemote' {
         # https://login@github.com/... ne matche pas la regle insteadOf, qui est
         # un prefixe de chaine. Le push part alors sur le compte gh global.
         InModuleScope DevContext {
-            $r = Test-CtxDoctorRemote -UrlPush 'https://thierryvm@github.com/org/repo.git' -AliasAttendu 'github-perso'
+            $r = Test-CtxDoctorRemote -UrlPush 'https://login@github.com/org/repo.git' -AliasAttendu 'github-perso'
             $r.Verdict   | Should -Be 'PROBLEME'
             $r.Correctif | Should -Match 'set-url'
         }

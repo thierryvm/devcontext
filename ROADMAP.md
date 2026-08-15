@@ -102,6 +102,19 @@ the gathering.
 purpose is to keep credentials apart cannot ask you to send your credential
 topology anywhere.
 
+**Every empty state names the next command.** This is not a polish item, it is
+the first screen. On 15 August 2026 a virgin machine was simulated and the CLI
+walked into five dead ends in a row: `ctx` answered a red NO-GO to someone who
+had done nothing wrong, `ctx-list` said "none" and stopped there, the onboarding
+message proposed a command that failed on a missing mandatory parameter, and two
+prompts blocked forever on redirected input. None of it was visible on the
+author's machine, which is exactly why it survived.
+
+The rule that came out of it, and which the dashboard inherits: **a screen with
+nothing on it is the most important screen in the product.** It must say what
+this thing is for, what is missing, and the one action that comes next. A UI that
+renders an empty table has failed in the same way a CLI that prints "none" has.
+
 Likely shape: a local web UI served by a `ctx dashboard` command, or Tauri if it
 needs to live in the tray. The decision waits until the CLI surface has settled
 — building a UI over an API that is still moving is how both end up bad.

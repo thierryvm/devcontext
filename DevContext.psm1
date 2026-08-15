@@ -16,8 +16,159 @@ Set-StrictMode -Version Latest
 # Configuration
 # ---------------------------------------------------------------------------
 
-$script:CtxRoot   = $env:DEVCTX_ROOT ? $env:DEVCTX_ROOT : 'F:\CTX'
+function Get-CtxConfigPath {
+    <#
+      Ou vit le reglage machine du module.
+
+      Aux emplacements que le systeme prevoit pour cela, et nulle part ailleurs :
+      pas a cote du depot, qui peut demenager, ni sur un lecteur qui peut ne pas
+      exister.
+    #>
+    if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+        [System.IO.Path]::Combine($env:LOCALAPPDATA, 'DevContext', 'config.json')
+    }
+    else {
+        [System.IO.Path]::Combine($HOME, '.config', 'devcontext', 'config.json')
+    }
+}
+
+function Get-CtxRootDefault {
+    <#
+      Ou vivent les contextes. Trois sources, dans cet ordre.
+
+      1. $env:DEVCTX_ROOT — le dernier mot, pour un shell, un test, une CI.
+      2. Le fichier de configuration — pose une fois par `ctx-root`, et c'est
+         ce que la plupart des gens utiliseront sans jamais le savoir.
+      3. Un defaut PORTABLE.
+
+      Le defaut valait 'F:\CTX'. Ce lecteur est celui de l'auteur : sur toute
+      autre machine, le module se chargeait sans erreur et ne trouvait aucun
+      contexte, `ctx-new` echouait sur un lecteur absent, et DEVCTX_ROOT
+      n'apparaissait dans aucune documentation. Autrement dit, l'outil ne
+      fonctionnait que chez une personne, en silence. Releve le 15 aout 2026.
+
+      Le defaut est desormais celui que le systeme prevoit pour des donnees
+      applicatives : %LOCALAPPDATA%\DevContext\contexts sous Windows,
+      ~/.local/share/devcontext/contexts ailleurs. Une installation existante ne
+      bouge pas — son chemin est dans le fichier de configuration, que
+      l'installateur y ecrit.
+    #>
+    if ($env:DEVCTX_ROOT) { return $env:DEVCTX_ROOT }
+
+    $config = Get-CtxConfigPath
+    if (Test-Path -LiteralPath $config) {
+        try {
+            $lu = Get-Content -LiteralPath $config -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            # PAS Get-CtxProp : cette fonction s'execute pendant le CHARGEMENT du
+            # module, avant que les helpers plus bas n'existent. L'appeler ici
+            # levait, le catch avalait l'erreur, et le reglage etait ignore en
+            # silence -- les contextes d'une installation existante se seraient
+            # volatilises sans un mot. Trouve en verifiant, pas en relisant.
+            $racine = if ($lu -and $lu.PSObject.Properties.Name -contains 'root') { [string]$lu.root }
+            if ($racine) { return $racine }
+        }
+        catch {
+            # Un reglage illisible ne doit pas empecher le module de se charger :
+            # il retombe sur le defaut, et `ctx doctor` le signale.
+            Write-Verbose "config.json illisible : $($_.Exception.Message)"
+        }
+    }
+
+    if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+        [System.IO.Path]::Combine($env:LOCALAPPDATA, 'DevContext', 'contexts')
+    }
+    else {
+        [System.IO.Path]::Combine($HOME, '.local', 'share', 'devcontext', 'contexts')
+    }
+}
+
+$script:CtxRoot   = Get-CtxRootDefault
 $script:VaultName = 'DevContext'
+
+function Set-DevContextRoot {
+    <#
+    .SYNOPSIS
+        Choisit ou vivent les contextes, une fois pour toutes.
+
+    .DESCRIPTION
+        Ecrit le chemin dans le reglage machine, lu par toute session ulterieure.
+        Sans cela, chacun devrait poser DEVCTX_ROOT dans son profil PowerShell --
+        un reglage qu'on oublie de reporter sur la machine suivante, et qui
+        s'evapore quand on lance un shell sans profil.
+
+        Les contextes contiennent des cles SSH et des configurations de compte.
+        Les poser sur un lecteur amovible ou un partage reseau, c'est accepter
+        qu'ils disparaissent au milieu d'une session -- possible, mais que ce
+        soit un choix, pas une surprise.
+
+        Ne DEPLACE rien : le contenu existant reste ou il est. La commande
+        signale ce qu'elle a trouve a l'ancien emplacement.
+
+    .PARAMETER Path
+        Dossier des contextes. Cree s'il n'existe pas.
+
+    .EXAMPLE
+        ctx-root D:\DevContext
+
+    .EXAMPLE
+        ctx-root    # affiche la racine active et d'ou elle vient
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Position = 0)][string]$Path)
+
+    if (-not $Path) {
+        $origine = if ($env:DEVCTX_ROOT) { 'variable DEVCTX_ROOT' }
+        elseif (Test-Path -LiteralPath (Get-CtxConfigPath)) { "reglage $(Get-CtxConfigPath)" }
+        else { 'defaut du systeme' }
+
+        Write-Host ''
+        Write-Host "  Racine des contextes : $script:CtxRoot" -ForegroundColor Cyan
+        Write-Host "    source   : $origine"
+        Write-Host "    existe   : $(Test-Path -LiteralPath $script:CtxRoot)"
+        Write-Host "    contextes: $(@(Get-CtxManifests).Count)"
+        Write-Host ''
+        Write-Host '  Pour la changer : ctx-root <dossier>' -ForegroundColor DarkGray
+        Write-Host ''
+        return
+    }
+
+    $cible = [System.IO.Path]::GetFullPath($Path)
+    $config = Get-CtxConfigPath
+
+    if (-not $PSCmdlet.ShouldProcess($config, "pointer la racine des contextes sur $cible")) { return }
+
+    $dossierConfig = Split-Path $config -Parent
+    if (-not (Test-Path -LiteralPath $dossierConfig)) {
+        New-Item -ItemType Directory -Path $dossierConfig -Force | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $cible)) {
+        New-Item -ItemType Directory -Path $cible -Force | Out-Null
+    }
+
+    $ancienne = $script:CtxRoot
+    @{ root = $cible } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding UTF8
+    $script:CtxRoot = $cible
+
+    Write-Host ''
+    Write-Host "  Racine des contextes : $cible" -ForegroundColor Green
+    Write-Host "    reglage ecrit dans : $config" -ForegroundColor DarkGray
+
+    if ($ancienne -and $ancienne -ne $cible -and (Test-Path -LiteralPath $ancienne)) {
+        $restes = @(Get-ChildItem -LiteralPath $ancienne -Directory -ErrorAction SilentlyContinue)
+        if ($restes) {
+            Write-Host ''
+            Write-Host "  $($restes.Count) contexte(s) restent a l'ancien emplacement :" -ForegroundColor Yellow
+            Write-Host "    $ancienne" -ForegroundColor Yellow
+            Write-Host '    Rien n a ete deplace. Ils contiennent des cles SSH ; les copier est' -ForegroundColor DarkGray
+            Write-Host '    votre decision, pas celle d une commande de configuration.' -ForegroundColor DarkGray
+        }
+    }
+    if ($env:DEVCTX_ROOT -and $env:DEVCTX_ROOT -ne $cible) {
+        Write-Host ''
+        Write-Warning "DEVCTX_ROOT est posee dans ce shell ($env:DEVCTX_ROOT) et l'emporte sur ce reglage."
+    }
+    Write-Host ''
+}
 
 $script:SshConfig = Join-Path $HOME '.ssh\config'
 $script:GitConfig = Join-Path $HOME '.gitconfig'
@@ -50,8 +201,12 @@ foreach ($fichier in @('Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Sh
 # ---------------------------------------------------------------------------
 
 function Get-CtxPath {
+    # Combine, pas Join-Path : ce dernier resout le LECTEUR et echoue sur
+    # « Cannot find drive » quand la racine vit sur un volume non monte -- une
+    # cle USB retiree, un lecteur reseau absent, ou simplement le lecteur de
+    # quelqu'un d'autre. Ici on fabrique un chemin, on ne visite pas un endroit.
     param([Parameter(Mandatory)][string]$Name)
-    Join-Path $script:CtxRoot $Name
+    [System.IO.Path]::Combine($script:CtxRoot, $Name)
 }
 
 function Read-CtxManifest {
@@ -174,12 +329,24 @@ function Get-DevContextList {
     [CmdletBinding()]
     param()
 
-    if (-not (Test-Path $script:CtxRoot)) {
-        Write-Host "Aucun contexte. Racine absente : $($script:CtxRoot)" -ForegroundColor DarkGray
+    # Une liste vide qui ne dit pas quoi faire ensuite laisse l'utilisateur a
+    # l'arret. C'est la premiere commande que beaucoup taperont ; elle doit
+    # donner la suivante.
+    $manifestes = @(Get-CtxManifests)
+    if ($manifestes.Count -eq 0) {
+        Write-Host ''
+        Write-Host '  Aucun contexte.' -ForegroundColor Yellow
+        Write-Host "  Racine : $($script:CtxRoot)$(if (-not (Test-Path -LiteralPath $script:CtxRoot)) { '  (dossier absent)' })" -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  En creer un :' -ForegroundColor Cyan
+        Write-Host '    ctx-new -Name perso -Email vous@exemple.com -Root C:\dev\perso' -ForegroundColor Cyan
+        Write-Host ''
+        Write-Host '  Changer ou ils sont ranges : ctx-root <dossier>' -ForegroundColor DarkGray
+        Write-Host ''
         return
     }
 
-    Get-CtxManifests | ForEach-Object {
+    $manifestes | ForEach-Object {
         [pscustomobject]@{
             Contexte = $_.name
             Label    = Get-CtxProp $_ 'label'
@@ -1121,27 +1288,50 @@ function New-DevContext {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory, Position = 0)][string]$Name,
-        [Parameter(Mandatory)][string]$Label,
+        # Etiquette lisible, affichee par `ctx`. Obligatoire jusqu'au 15 aout
+        # 2026, ce qui faisait echouer la commande que le message d'accueil
+        # proposait lui-meme : « missing mandatory parameters: Label ». Un
+        # premier pas qui ne marche pas est pire qu'un premier pas absent.
+        [string]$Label,
         [Parameter(Mandatory)][string]$Email,
         [string]$Root,
-        [string]$GitUserName = 'Thierry V.',
+        # Le defaut valait le nom de l'auteur du module. Tout contexte cree sur
+        # une autre machine aurait donc signe les commits de son proprietaire
+        # avec le nom de quelqu'un d'autre -- pas une preference discutable,
+        # une faute. On reprend ce que git connait deja de l'utilisateur.
+        [string]$GitUserName,
         [string]$GithubOrg,
         # Login GitHub attendu pour ce contexte. C'est lui que `ctx` compare au
         # compte reellement actif : sans valeur attendue, aucune verification
         # n'est possible, seulement un affichage.
         [string]$GithubLogin,
         [string]$VercelScope,
-        [string]$ChromeProfile
+        [string]$ChromeProfile,
+        # Cree le contexte sans generer de cle SSH. Pour un script, une CI, ou un
+        # agent -- tout appelant dont l'entree standard est redirigee et qui ne
+        # pourra donc jamais repondre a la demande de passphrase.
+        [switch]$NoKey
     )
 
     if ($Name -notmatch '^[a-z0-9][a-z0-9-]*$') {
         throw "Nom de contexte invalide : minuscules, chiffres et tirets uniquement."
     }
 
+    if (-not $Label) { $Label = $Name }
+
+    if (-not $GitUserName) {
+        $GitUserName = (git config --global user.name 2>$null)
+        if (-not $GitUserName) { $GitUserName = $Name }
+    }
+
     Test-CtxVault
     $ctx = Get-CtxPath $Name
     if (Test-Path $ctx) { throw "Le contexte '$Name' existe deja ($ctx)." }
-    if (-not $Root) { $Root = "F:\PROJECTS\Clients\$Name" }
+
+    # Le defaut visait 'F:\PROJECTS\Clients\<nom>' -- le lecteur de l'auteur. Sur
+    # toute autre machine, la creation echouait sur un volume absent, ou pire,
+    # reussissait sur un F: qui appartenait a autre chose.
+    if (-not $Root) { $Root = [System.IO.Path]::Combine($HOME, 'dev', $Name) }
 
     # Deux contextes qui se recouvrent rendent la resolution par chemin
     # ambigue — donc le garde-fou incertain, donc inutile.
@@ -1178,12 +1368,34 @@ function New-DevContext {
     $manifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $ctx 'context.json') -Encoding UTF8
 
     # --- Cle SSH dediee ---
+    #
     # Interactif volontairement : une passphrase vide sur une cle qui donne acces
     # au depot d'un client, ce n'est pas une bonne idee. Utiliser ssh-agent ensuite.
-    $keyPath = Join-Path $ctx 'ssh\id_ed25519'
-    if (-not (Test-Path $keyPath)) {
+    #
+    # Mais interactif ne doit pas vouloir dire BLOQUANT. Quand l'entree standard
+    # est redirigee -- un script, une CI, un agent IA, `pwsh -Command` --,
+    # ssh-keygen attend une passphrase que personne ne tapera jamais et la
+    # commande ne rend plus la main. Mesure le 15 aout 2026 : le parcours de
+    # premiere installation s'arretait la, sans un message, pendant cinq minutes
+    # avant qu'un delai ne l'interrompe.
+    #
+    # On refuse donc explicitement plutot que d'attendre. Une commande qui dit
+    # ce qui lui manque vaut mieux qu'une commande qui semble travailler.
+    $keyPath = [System.IO.Path]::Combine($ctx, 'ssh', 'id_ed25519')
+    if (-not (Test-Path $keyPath) -and -not $NoKey) {
+        if ([Console]::IsInputRedirected) {
+            throw ("Generation de cle SSH impossible : l'entree standard est redirigee, " +
+                "et ssh-keygen attendrait une passphrase indefiniment.`n" +
+                "  - dans un terminal interactif : relancer la meme commande`n" +
+                "  - dans un script ou une CI    : ajouter -NoKey, puis generer la cle plus tard`n" +
+                "Le contexte '$Name' a bien ete cree : $ctx")
+        }
         Write-Host "  Generation de la cle SSH du contexte (passphrase recommandee) :" -ForegroundColor Cyan
         ssh-keygen -t ed25519 -C $Email -f $keyPath
+    }
+    elseif ($NoKey -and -not (Test-Path $keyPath)) {
+        Write-Host "  Cle SSH NON generee (-NoKey)." -ForegroundColor Yellow
+        Write-Host "    ssh-keygen -t ed25519 -C '$Email' -f '$keyPath'" -ForegroundColor DarkGray
     }
 
     # --- gitconfig du contexte (inclus conditionnellement) ---
@@ -1231,11 +1443,25 @@ Host github-$Name
     }
 
     # --- Saisie des tokens ---
-    Write-Host ""
-    Write-Host "  Tokens du contexte (Entree pour passer)" -ForegroundColor Cyan
-    foreach ($key in $script:SecretMap.Keys) {
-        $secure = Read-Host "    $key" -AsSecureString
-        if ($secure.Length -gt 0) { Set-CtxSecret -Name $Name -Key $key -Value $secure }
+    #
+    # Meme regle que pour la cle SSH : demander quelque chose a une entree
+    # redirigee, c'est attendre pour toujours. On saute la saisie et on dit
+    # comment la reprendre, plutot que de bloquer un script sur un prompt que
+    # personne ne voit.
+    if ([Console]::IsInputRedirected) {
+        Write-Host ""
+        Write-Host "  Saisie des jetons ignoree (entree non interactive)." -ForegroundColor Yellow
+        Write-Host "  Les poser plus tard, un par un :" -ForegroundColor DarkGray
+        Write-Host "    Set-Secret -Vault DevContext -Name 'devctx/$Name/<cle>' -SecureStringSecret `$s" -ForegroundColor DarkGray
+        Write-Host "    cles : $($script:SecretMap.Keys -join ', ')" -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host ""
+        Write-Host "  Tokens du contexte (Entree pour passer)" -ForegroundColor Cyan
+        foreach ($key in $script:SecretMap.Keys) {
+            $secure = Read-Host "    $key" -AsSecureString
+            if ($secure.Length -gt 0) { Set-CtxSecret -Name $Name -Key $key -Value $secure }
+        }
     }
 
     Write-Host ""
@@ -1341,6 +1567,33 @@ function Test-DevContext {
     $owner    = Resolve-DevContextForPath
     $here     = (Get-Location).Path
 
+    # --- 0. L'outil est-il seulement installe ? ---
+    #
+    # Sans ce cas, la toute premiere commande d'un nouvel utilisateur repondait
+    # « NO-GO » en rouge, motif « GH_CONFIG_DIR absent » -- un verdict d'echec
+    # pour quelqu'un qui n'a encore rien fait de mal. NO-GO doit vouloir dire
+    # « desaccord d'identite », jamais « tu n'as pas encore commence ».
+    #
+    # Mesure le 15 aout 2026 en simulant une machine vierge : premier ecran,
+    # rouge, sans une seule indication de quoi faire ensuite.
+    if (@(Get-CtxManifests).Count -eq 0) {
+        if ($Quiet) { return $true }
+        Write-Host ''
+        Write-Host '  Aucun contexte sur cette machine.' -ForegroundColor Yellow
+        Write-Host "  Racine : $script:CtxRoot" -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  Un contexte = une identite complete : email git, cle SSH, compte GitHub,' -ForegroundColor DarkGray
+        Write-Host '  session Vercel, jetons Supabase. Un par vie professionnelle.' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  Pour en creer un :' -ForegroundColor Cyan
+        Write-Host '    ctx-new -Name perso -Email vous@exemple.com -Root C:\dev\perso' -ForegroundColor Cyan
+        Write-Host ''
+        Write-Host '  Pour ranger les contextes ailleurs :  ctx-root <dossier>' -ForegroundColor DarkGray
+        Write-Host '  Pour un etat des lieux de la machine : ctx-doctor' -ForegroundColor DarkGray
+        Write-Host ''
+        return
+    }
+
     if (-not $Quiet) {
         Write-Host ""
         if ($env:DEVCTX) {
@@ -1413,6 +1666,18 @@ function Test-DevContext {
         else {
             Write-Host "  NO-GO" -ForegroundColor Red
             foreach ($p in $problems) { Write-Host "    - $p" -ForegroundColor Red }
+
+            # Un verdict sans la commande qui le corrige oblige a se souvenir de
+            # la syntaxe au pire moment. Presque tous les NO-GO se reglent par un
+            # `work`, et quand le dossier designe son proprietaire, on peut meme
+            # le nommer.
+            $correctif = if ($owner) { "work $($owner.name) -NoCd" }
+            elseif ($env:DEVCTX) { "work $env:DEVCTX -NoCd" }
+            if ($correctif) {
+                Write-Host ""
+                Write-Host "  Correctif : $correctif" -ForegroundColor Yellow
+            }
+            Write-Host "  Detail complet : ctx-doctor" -ForegroundColor DarkGray
         }
         Write-Host ""
     }
@@ -1462,6 +1727,7 @@ Set-Alias -Name ctx-doctor -Value Get-DevContextDoctor
 Set-Alias -Name ctx-mcp    -Value New-DevProjectMcp
 Set-Alias -Name ctx-editors -Value Get-DevEditorList
 Set-Alias -Name ctx-shortcut -Value New-DevShortcut
+Set-Alias -Name ctx-root     -Value Set-DevContextRoot
 
 $exportedFunctions = @(
     'Use-DevContext', 'Clear-DevContext', 'Get-DevContextList', 'New-DevContext',
@@ -1470,12 +1736,12 @@ $exportedFunctions = @(
     'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard',
     'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp',
     'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl',
-    'Get-DevEditorList', 'New-DevShortcut'
+    'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',
     'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index', 'ctx-sb',
-    'ctx-doctor', 'ctx-mcp', 'ctx-editors', 'ctx-shortcut'
+    'ctx-doctor', 'ctx-mcp', 'ctx-editors', 'ctx-shortcut', 'ctx-root'
 )
 
 Export-ModuleMember -Function $exportedFunctions -Alias $exportedAliases

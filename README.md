@@ -109,6 +109,28 @@ New-Item -ItemType SymbolicLink `
 pwsh -NoProfile -File F:\PROJECTS\Apps\devcontext\installer-shims.ps1
 ```
 
+Then create your first context — `ctx` tells you this itself when there are none:
+
+```powershell
+ctx-new -Name perso -Email you@example.com -Root C:\dev\perso
+```
+
+A context is a complete identity: git email, SSH key, GitHub account, Vercel
+session, Supabase tokens. One per working life, not one per project.
+
+**Where they live.** By default `%LOCALAPPDATA%\DevContext\contexts` on Windows,
+`~/.local/share/devcontext/contexts` elsewhere. Put them wherever you like —
+another drive, an encrypted volume:
+
+```powershell
+ctx-root D:\DevContext      # remembered for every future session
+ctx-root                    # shows the current root and where the setting came from
+```
+
+`DEVCTX_ROOT` overrides it for a single shell, a test, or a CI job. Contexts hold
+SSH keys, so a removable drive is a real choice with real consequences — the
+command lets you make it, and does not move anything on your behalf.
+
 The module is **used from the repository, never copied**. A second copy is how a
 fix ends up applied to the file nobody is running — see `INSTALLATION.md`, which
 also documents the rollback for every machine-level change.
@@ -130,6 +152,8 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx-sb` | Which Supabase project lives on which account, and which folders point at it |
 | `ctx-mcp` | Write MCP configuration for this project, bound to its own credentials |
 | `ctx-list` | Every context on this machine |
+| `ctx-new` | Create a context — `-NoKey` when nothing can answer a passphrase prompt |
+| `ctx-root` | Where contexts are stored, and change it |
 | `ctx-who` | Which context owns this folder |
 | `ctx-editors` | Which editors are installed, and can each one be isolated? |
 | `ctx-shortcut` | Write a shortcut that opens a project in its own context |

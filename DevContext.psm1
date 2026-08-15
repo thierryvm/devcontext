@@ -19,13 +19,6 @@ Set-StrictMode -Version Latest
 $script:CtxRoot   = $env:DEVCTX_ROOT ? $env:DEVCTX_ROOT : 'F:\CTX'
 $script:VaultName = 'DevContext'
 
-# Sourcé, pas imbriqué en NestedModule : le fichier partage la portée du module,
-# donc ses fonctions voient $script:CtxRoot et les helpers internes, et un seul
-# Export-ModuleMember reste la source de vérité de ce qui sort. Le manifeste
-# reste le second verrou — l'export réel est l'INTERSECTION des deux listes.
-foreach ($fichier in @('Doctor.ps1')) {
-    . (Join-Path $PSScriptRoot 'src' $fichier)
-}
 $script:SshConfig = Join-Path $HOME '.ssh\config'
 $script:GitConfig = Join-Path $HOME '.gitconfig'
 
@@ -36,6 +29,20 @@ $script:SecretMap = [ordered]@{
     'supabase-token' = 'SUPABASE_ACCESS_TOKEN'
     'supabase-db'    = 'SUPABASE_DB_PASSWORD'
     'sentry-token'   = 'SENTRY_READ_TOKEN'
+}
+
+# ---------------------------------------------------------------------------
+# Modules de fonctionnalités
+# ---------------------------------------------------------------------------
+#
+# Sourcés, et non déclarés en NestedModules : ils partagent ainsi la portée du
+# module — ils voient $script:CtxRoot et les helpers internes — et un seul
+# Export-ModuleMember reste la source de vérité de ce qui sort. Le manifeste est
+# le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
+# fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
+
+foreach ($fichier in @('Doctor.ps1', 'Mcp.ps1')) {
+    . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
 # ---------------------------------------------------------------------------
@@ -1287,18 +1294,19 @@ Set-Alias -Name supabase  -Value Invoke-DevSupabase
 Set-Alias -Name sb-index  -Value Update-DevSupabaseIndex
 Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
 Set-Alias -Name ctx-doctor -Value Get-DevContextDoctor
+Set-Alias -Name ctx-mcp    -Value New-DevProjectMcp
 
 $exportedFunctions = @(
     'Use-DevContext', 'Clear-DevContext', 'Get-DevContextList', 'New-DevContext',
     'Close-DevContext', 'Open-DevCode', 'Open-DevBrowser', 'Test-DevContext',
     'Assert-DevContext', 'Resolve-DevContextForPath', 'Invoke-DevVercel',
     'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard',
-    'Get-DevSupabaseMap', 'Get-DevContextDoctor'
+    'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',
     'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index', 'ctx-sb',
-    'ctx-doctor'
+    'ctx-doctor', 'ctx-mcp'
 )
 
 Export-ModuleMember -Function $exportedFunctions -Alias $exportedAliases

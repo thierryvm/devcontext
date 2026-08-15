@@ -51,10 +51,34 @@ function Resolve-RealExe {
         Select-Object -First 1 -ExpandProperty Source
 }
 
+# La langue du shim.
+#
+# Le shim doit pouvoir REFUSER meme quand le module est absent ou casse -- c'est
+# tout son contrat. Il source donc le fichier de langue directement, sans passer
+# par le module, et se rabat sur une phrase anglaise codee en dur si meme cela
+# echoue. Un refus muet serait pire qu'un refus mal traduit.
+$Traduit = $false
+try {
+    . (Join-Path $PSScriptRoot '..' 'src' 'Langue.ps1')
+    Set-CtxLangue | Out-Null
+    $Traduit = $true
+}
+catch { $Traduit = $false }
+
+function Dire {
+    param([string]$Cle, [string]$Secours, [object[]]$Arguments)
+    if (-not $Traduit) {
+        if ($Arguments) { return ($Secours -f $Arguments) }
+        return $Secours
+    }
+    if ($Arguments) { return (T $Cle @Arguments) }
+    T $Cle
+}
+
 function Invoke-Real {
     $exe = Resolve-RealExe
     if (-not $exe) {
-        Write-Error "supabase introuvable dans le PATH (hors shims)."
+        Write-Error (Dire 'garde.introuvable' '{0} not found in PATH (outside the shims).' @('supabase'))
         exit 127
     }
     & $exe @Arguments
@@ -177,18 +201,18 @@ if (-not $verdict -or $verdict.Allowed) { Invoke-Real }
 # Nothing here prints an environment variable, a token, or the command's own
 # arguments: a refusal message is written to logs and pasted into chats.
 
-if (-not $projectName) { $projectName = '(nom inconnu)' }
+if (-not $projectName) { $projectName = Dire 'garde.nomInconnu' '(name unknown)' }
 
 Write-Host ''
-Write-Host '  REFUSE - garde-fou production DevContext' -ForegroundColor Red
+Write-Host "  $(Dire 'garde.refuse' 'REFUSED - DevContext production guard')" -ForegroundColor Red
 Write-Host ''
-Write-Host "    Base visee : $projectName" -ForegroundColor Yellow
-Write-Host "    Raison     : $($verdict.Reason)"
+Write-Host "    $(Dire 'garde.base' 'Target database : {0}' @($projectName))" -ForegroundColor Yellow
+Write-Host "    $(Dire 'garde.raison' 'Reason          : {0}' @($verdict.Reason))"
 Write-Host ''
-Write-Host '    Si cette commande est vraiment voulue, pour celle-ci seulement :' -ForegroundColor DarkGray
+Write-Host "    $(Dire 'garde.derogation' 'If you really mean this command, for this one only:')" -ForegroundColor DarkGray
 Write-Host '      $env:DEVCTX_ALLOW_PROD = 1' -ForegroundColor DarkGray
-Write-Host '    A ne jamais poser dans $PROFILE : ce serait retirer le garde-fou' -ForegroundColor DarkGray
-Write-Host '    en croyant le garder.' -ForegroundColor DarkGray
+Write-Host "    $(Dire 'garde.jamaisProfil1' 'Never put that in $PROFILE: it removes the guard while leaving')" -ForegroundColor DarkGray
+Write-Host "    $(Dire 'garde.jamaisProfil2' 'the impression of having it.')" -ForegroundColor DarkGray
 Write-Host ''
 
 exit 1

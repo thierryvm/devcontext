@@ -117,17 +117,17 @@ function Set-DevContextRoot {
     param([Parameter(Position = 0)][string]$Path)
 
     if (-not $Path) {
-        $origine = if ($env:DEVCTX_ROOT) { 'variable DEVCTX_ROOT' }
-        elseif (Test-Path -LiteralPath (Get-CtxConfigPath)) { "reglage $(Get-CtxConfigPath)" }
-        else { 'defaut du systeme' }
+        $origine = if ($env:DEVCTX_ROOT) { T 'racine.source.variable' }
+        elseif (Test-Path -LiteralPath (Get-CtxConfigPath)) { T 'racine.source.reglage' (Get-CtxConfigPath) }
+        else { T 'racine.source.defaut' }
 
         Write-Host ''
-        Write-Host "  Racine des contextes : $script:CtxRoot" -ForegroundColor Cyan
-        Write-Host "    source   : $origine"
-        Write-Host "    existe   : $(Test-Path -LiteralPath $script:CtxRoot)"
-        Write-Host "    contextes: $(@(Get-CtxManifests).Count)"
+        Write-Host "  $(T 'racine.titre' $script:CtxRoot)" -ForegroundColor Cyan
+        Write-Host "    $(T 'racine.source' $origine)"
+        Write-Host "    $(T 'racine.existe' (Test-Path -LiteralPath $script:CtxRoot))"
+        Write-Host "    $(T 'racine.contextes' @(Get-CtxManifests).Count)"
         Write-Host ''
-        Write-Host '  Pour la changer : ctx-root <dossier>' -ForegroundColor DarkGray
+        Write-Host "  $(T 'racine.changer')" -ForegroundColor DarkGray
         Write-Host ''
         return
     }
@@ -150,22 +150,22 @@ function Set-DevContextRoot {
     $script:CtxRoot = $cible
 
     Write-Host ''
-    Write-Host "  Racine des contextes : $cible" -ForegroundColor Green
-    Write-Host "    reglage ecrit dans : $config" -ForegroundColor DarkGray
+    Write-Host "  $(T 'racine.titre' $cible)" -ForegroundColor Green
+    Write-Host "    $(T 'racine.ecrit' $config)" -ForegroundColor DarkGray
 
     if ($ancienne -and $ancienne -ne $cible -and (Test-Path -LiteralPath $ancienne)) {
         $restes = @(Get-ChildItem -LiteralPath $ancienne -Directory -ErrorAction SilentlyContinue)
         if ($restes) {
             Write-Host ''
-            Write-Host "  $($restes.Count) contexte(s) restent a l'ancien emplacement :" -ForegroundColor Yellow
+            Write-Host "  $(T 'racine.restes' $restes.Count)" -ForegroundColor Yellow
             Write-Host "    $ancienne" -ForegroundColor Yellow
-            Write-Host '    Rien n a ete deplace. Ils contiennent des cles SSH ; les copier est' -ForegroundColor DarkGray
-            Write-Host '    votre decision, pas celle d une commande de configuration.' -ForegroundColor DarkGray
+            Write-Host "    $(T 'racine.restesRien')" -ForegroundColor DarkGray
+            Write-Host "    $(T 'racine.restesDecision')" -ForegroundColor DarkGray
         }
     }
     if ($env:DEVCTX_ROOT -and $env:DEVCTX_ROOT -ne $cible) {
         Write-Host ''
-        Write-Warning "DEVCTX_ROOT est posee dans ce shell ($env:DEVCTX_ROOT) et l'emporte sur ce reglage."
+        Write-Warning (T 'racine.varPrime' $env:DEVCTX_ROOT)
     }
     Write-Host ''
 }
@@ -192,9 +192,14 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1')) {
+foreach ($fichier in @('Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
+
+# La langue est resolue une fois, au chargement : DEVCTX_LANG, puis la culture
+# du systeme, puis l'anglais. Un shell qui pose la variable et reimporte le
+# module change de langue ; sinon rien a configurer.
+Set-CtxLangue | Out-Null
 
 # ---------------------------------------------------------------------------
 # Helpers internes
@@ -334,14 +339,15 @@ function Get-DevContextList {
     # donner la suivante.
     $manifestes = @(Get-CtxManifests)
     if ($manifestes.Count -eq 0) {
+        $absente = if (Test-Path -LiteralPath $script:CtxRoot) { '' } else { T 'liste.vide.racineAbsente' }
         Write-Host ''
-        Write-Host '  Aucun contexte.' -ForegroundColor Yellow
-        Write-Host "  Racine : $($script:CtxRoot)$(if (-not (Test-Path -LiteralPath $script:CtxRoot)) { '  (dossier absent)' })" -ForegroundColor DarkGray
+        Write-Host "  $(T 'liste.vide.titre')" -ForegroundColor Yellow
+        Write-Host "  $(T 'liste.vide.racine' $script:CtxRoot)$absente" -ForegroundColor DarkGray
         Write-Host ''
-        Write-Host '  En creer un :' -ForegroundColor Cyan
-        Write-Host '    ctx-new -Name perso -Email vous@exemple.com -Root C:\dev\perso' -ForegroundColor Cyan
+        Write-Host "  $(T 'liste.vide.creer')" -ForegroundColor Cyan
+        Write-Host "    $(T 'ctx.vide.exemple')" -ForegroundColor Cyan
         Write-Host ''
-        Write-Host '  Changer ou ils sont ranges : ctx-root <dossier>' -ForegroundColor DarkGray
+        Write-Host "  $(T 'liste.vide.racineAilleurs')" -ForegroundColor DarkGray
         Write-Host ''
         return
     }
@@ -1203,7 +1209,7 @@ function Test-CtxSupabaseGuard {
                 return [pscustomobject]@{
                     Allowed = $false
                     Rule    = 'cible-indeterminee'
-                    Reason  = "'$sub' porte un --db-url qui vise une base impossible a identifier, et ce contexte contient un projet de production."
+                    Reason  = (T 'garde.raison.dbUrl' $sub)
                 }
             }
         }
@@ -1218,7 +1224,7 @@ function Test-CtxSupabaseGuard {
         return [pscustomobject]@{
             Allowed = $false
             Rule    = 'db-reset-prod'
-            Reason  = "'$sub' detruit et recree la base. Refuse sur un projet de production."
+            Reason  = (T 'garde.raison.reset' $sub)
         }
     }
 
@@ -1229,7 +1235,7 @@ function Test-CtxSupabaseGuard {
     [pscustomobject]@{
         Allowed = $false
         Rule    = 'branch-mismatch'
-        Reason  = "'$sub' vers un projet de production depuis la branche '$CurrentBranch' au lieu de '$DefaultBranch'."
+        Reason  = (T 'garde.raison.branche' $sub $CurrentBranch $DefaultBranch)
     }
 }
 
@@ -1549,12 +1555,12 @@ function Get-CtxVercelState {
     # affichait « aucun token » alors que le contexte etait parfaitement isole.
     # Un indicateur qui crie au loup sur un dispositif qui marche finit par etre
     # ignore le jour ou il a raison.
-    if ($env:VERCEL_TOKEN) { return 'token charge' }
+    if ($env:VERCEL_TOKEN) { return T 'vercel.token' }
     if ($env:DEVCTX_VERCEL_CONFIG -and
         (Test-Path (Join-Path $env:DEVCTX_VERCEL_CONFIG 'auth.json'))) {
-        return 'session dediee'
+        return T 'vercel.session'
     }
-    return 'aucune session'
+    T 'vercel.aucune'
 }
 
 function Test-DevContext {
@@ -1588,17 +1594,17 @@ function Test-DevContext {
     if (@(Get-CtxManifests).Count -eq 0) {
         if ($Quiet) { return $true }
         Write-Host ''
-        Write-Host '  Aucun contexte sur cette machine.' -ForegroundColor Yellow
-        Write-Host "  Racine : $script:CtxRoot" -ForegroundColor DarkGray
+        Write-Host "  $(T 'ctx.vide.titre')" -ForegroundColor Yellow
+        Write-Host "  $(T 'ctx.vide.racine' $script:CtxRoot)" -ForegroundColor DarkGray
         Write-Host ''
-        Write-Host '  Un contexte = une identite complete : email git, cle SSH, compte GitHub,' -ForegroundColor DarkGray
-        Write-Host '  session Vercel, jetons Supabase. Un par vie professionnelle.' -ForegroundColor DarkGray
+        Write-Host "  $(T 'ctx.vide.explication1')" -ForegroundColor DarkGray
+        Write-Host "  $(T 'ctx.vide.explication2')" -ForegroundColor DarkGray
         Write-Host ''
-        Write-Host '  Pour en creer un :' -ForegroundColor Cyan
-        Write-Host '    ctx-new -Name perso -Email vous@exemple.com -Root C:\dev\perso' -ForegroundColor Cyan
+        Write-Host "  $(T 'ctx.vide.creer')" -ForegroundColor Cyan
+        Write-Host "    $(T 'ctx.vide.exemple')" -ForegroundColor Cyan
         Write-Host ''
-        Write-Host '  Pour ranger les contextes ailleurs :  ctx-root <dossier>' -ForegroundColor DarkGray
-        Write-Host '  Pour un etat des lieux de la machine : ctx-doctor' -ForegroundColor DarkGray
+        Write-Host "  $(T 'ctx.vide.racineAilleurs')" -ForegroundColor DarkGray
+        Write-Host "  $(T 'ctx.vide.doctor')" -ForegroundColor DarkGray
         Write-Host ''
         return
     }
@@ -1606,25 +1612,25 @@ function Test-DevContext {
     if (-not $Quiet) {
         Write-Host ""
         if ($env:DEVCTX) {
-            Write-Host "  Contexte actif : $env:DEVCTX_LABEL ($env:DEVCTX)" -ForegroundColor Cyan
+            Write-Host "  $(T 'ctx.actif' "$env:DEVCTX_LABEL ($env:DEVCTX)")" -ForegroundColor Cyan
         }
         else {
-            Write-Host "  Contexte actif : AUCUN" -ForegroundColor Red
+            Write-Host "  $(T 'ctx.aucun')" -ForegroundColor Red
         }
-        Write-Host "  Dossier        : $here" -ForegroundColor DarkGray
+        Write-Host "  $(T 'ctx.dossier' $here)" -ForegroundColor DarkGray
     }
 
     # --- 1. Le dossier appartient-il au contexte actif ? ---
     if ($owner) {
         if (-not $env:DEVCTX) {
-            $problems += "Ce dossier appartient au contexte '$($owner.name)', et aucun contexte n'est actif."
+            $problems += T 'ctx.pb.dossierSansActif' $owner.name
         }
         elseif ($owner.name -ne $env:DEVCTX) {
-            $problems += "Ce dossier appartient au contexte '$($owner.name)', mais '$env:DEVCTX' est actif."
+            $problems += T 'ctx.pb.dossierAutre' $owner.name $env:DEVCTX
         }
     }
     elseif ($env:DEVCTX -and $env:DEVCTX_ROOT_PATH) {
-        $problems += "Hors de la racine du contexte actif ($env:DEVCTX_ROOT_PATH)."
+        $problems += T 'ctx.pb.horsRacine' $env:DEVCTX_ROOT_PATH
     }
 
     # --- 2. Le compte GitHub actif est-il celui attendu ? ---
@@ -1634,13 +1640,13 @@ function Test-DevContext {
     }
     $expected = $env:DEVCTX_GH_LOGIN
     if ($expected -and $ghLogin -and ($ghLogin -ne $expected)) {
-        $problems += "Compte GitHub actif '$ghLogin' — le contexte attend '$expected'."
+        $problems += T 'ctx.pb.compteGitHub' $ghLogin $expected
     }
     if ($env:DEVCTX -and -not $expected) {
-        $problems += "Le contexte n'a pas de 'github.login' dans son manifeste : le compte actif ne peut pas etre verifie, seulement affiche."
+        $problems += T 'ctx.pb.sansLogin'
     }
     if (-not $env:GH_CONFIG_DIR) {
-        $problems += "GH_CONFIG_DIR absent : 'gh' utilise la config GLOBALE de la machine, donc le dernier compte connecte."
+        $problems += T 'ctx.pb.ghConfigDir'
     }
 
     # --- 3. Le jeton Supabase exporte correspond-il au projet du dossier ? ---
@@ -1649,31 +1655,31 @@ function Test-DevContext {
     if ($env:DEVCTX -and (Resolve-CtxSupabaseRef)) {
         $expectedKey = Resolve-CtxSupabaseKey
         if (-not $expectedKey) {
-            $problems += "Projet Supabase de ce dossier absent de l'index. Lance 'sb-index'."
+            $problems += T 'ctx.pb.supabaseIndex'
         }
         elseif ($env:DEVCTX_SUPABASE_KEY -ne $expectedKey) {
-            $actual = if ($env:DEVCTX_SUPABASE_KEY) { $env:DEVCTX_SUPABASE_KEY } else { 'aucune' }
-            $problems += "SUPABASE_ACCESS_TOKEN porte la cle '$actual' alors que ce projet attend '$expectedKey'. Corriger avec 'work $env:DEVCTX -NoCd'."
+            $actual = if ($env:DEVCTX_SUPABASE_KEY) { $env:DEVCTX_SUPABASE_KEY } else { T 'ctx.supabase.aucun' }
+            $problems += T 'ctx.pb.supabaseCle' $actual $expectedKey $env:DEVCTX
         }
     }
 
     if (-not $Quiet) {
-        Write-Host "  git            : $(git config user.email 2>$null)"
-        Write-Host "  gh             : $(if ($ghLogin) { $ghLogin } else { '(non authentifie)' })"
-        Write-Host "  vercel         : $(Get-CtxVercelState)"
+        Write-Host "  $(T 'ctx.git' (git config user.email 2>$null))"
+        Write-Host "  $(T 'ctx.gh' $(if ($ghLogin) { $ghLogin } else { T 'ctx.ghNonAuth' }))"
+        Write-Host "  $(T 'ctx.vercel' (Get-CtxVercelState))"
         $sbState = if ($env:SUPABASE_ACCESS_TOKEN) {
-            if ($env:DEVCTX_SUPABASE_KEY) { "token charge ($env:DEVCTX_SUPABASE_KEY)" } else { 'token charge' }
-        } else { 'aucun token' }
-        Write-Host "  supabase       : $sbState"
+            if ($env:DEVCTX_SUPABASE_KEY) { T 'ctx.supabase.chargeCle' $env:DEVCTX_SUPABASE_KEY } else { T 'ctx.supabase.charge' }
+        } else { T 'ctx.supabase.aucun' }
+        Write-Host "  $(T 'ctx.supabase' $sbState)"
         if (Test-Path .git) {
-            Write-Host "  remote (push)  : $(git remote get-url --push origin 2>$null)"
+            Write-Host "  $(T 'ctx.remote' (git remote get-url --push origin 2>$null))"
         }
         Write-Host ""
         if ($problems.Count -eq 0) {
-            Write-Host "  GO — identite, dossier et compte concordent." -ForegroundColor Green
+            Write-Host "  $(T 'ctx.go')" -ForegroundColor Green
         }
         else {
-            Write-Host "  NO-GO" -ForegroundColor Red
+            Write-Host "  $(T 'ctx.noGo')" -ForegroundColor Red
             foreach ($p in $problems) { Write-Host "    - $p" -ForegroundColor Red }
 
             # Un verdict sans la commande qui le corrige oblige a se souvenir de
@@ -1684,9 +1690,9 @@ function Test-DevContext {
             elseif ($env:DEVCTX) { "work $env:DEVCTX -NoCd" }
             if ($correctif) {
                 Write-Host ""
-                Write-Host "  Correctif : $correctif" -ForegroundColor Yellow
+                Write-Host "  $(T 'ctx.correctif' $correctif)" -ForegroundColor Yellow
             }
-            Write-Host "  Detail complet : ctx-doctor" -ForegroundColor DarkGray
+            Write-Host "  $(T 'ctx.detail')" -ForegroundColor DarkGray
         }
         Write-Host ""
     }

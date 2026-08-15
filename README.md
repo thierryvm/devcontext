@@ -13,6 +13,14 @@ cd F:\PROJECTS\Clients\acme # …and this folder belongs to a client
 ctx                         # NO-GO — and it tells you why
 ```
 
+<p align="center">
+  <img src="docs/demo/guard-refusal.svg" alt="From git-bash with no context loaded, supabase db reset --linked against a production project is refused and the real CLI is never reached" width="780">
+</p>
+
+> No context is loaded in that terminal, and the guard still holds — because it
+> decides from the folder, not from the session. That distinction is the whole
+> tool. [The story of how I learned it](docs/article/committed-under-the-wrong-identity.md).
+
 ---
 
 ## The problem
@@ -122,23 +130,21 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 ## Example — what a diagnosis looks like
 
-```
-Verdict   Domaine    Sujet          Constat
--------   -------    -----          -------
-OK        contexte   proprietaire   perso
-OK        git        identite       moi@exemple.be
-ATTENTION supabase   binaire        2 installations de versions differentes : 2.84.2 | 2.109.1
-                                      -> n'en garder qu'une — la version depend sinon du shell appelant
-ATTENTION supabase   projet         ce dossier vise un projet de PRODUCTION
-                                      -> db reset y est refuse, db push hors branche par defaut aussi
-OK        garde-fou  portee         actif dans tous les shells
-OK        gh         jeton          valide — moncompte (portees : gist, read:org, repo, workflow)
-OK        supabase   jeton          valide — acces confirme a mon-projet-prod
-```
+<p align="center">
+  <img src="docs/demo/ctx-doctor.svg" alt="ctx-doctor -Live reporting context, git identity, duplicate supabase installs, a production target, guard coverage, and token validity per account" width="820">
+</p>
+
+The last two lines are the ones that matter. Not *is this token valid* — that is
+easy and nearly worthless — but **is it valid on the account this folder
+expects**, and does it actually reach this folder's project. A perfectly good
+token on the wrong account is the failure that costs you an afternoon, and a
+naive check blesses it.
+
+No token value is ever printed. Only the name of the key holding it.
 
 > **Language.** Command output currently ships in French; documentation is in
 > English. Making the output bilingual through `DEVCTX_LANG` is planned — see
-> `CHANGELOG.md`.
+> [`ROADMAP.md`](ROADMAP.md).
 
 ---
 

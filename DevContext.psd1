@@ -92,8 +92,20 @@
 
     PrivateData = @{
         PSData = @{
-            Tags       = @('DevContext', 'Identity', 'Git', 'SSH', 'Windows', 'Isolation')
-            ProjectUri = 'https://github.com/thierryvm/devcontext'
+            # Les tags sont le SEUL moyen d'etre trouve sur PowerShell Gallery :
+            # sa recherche les interroge avant la description. Ceux qui comptent
+            # sont ceux qu'on tape quand on a le probleme sans connaitre l'outil.
+            Tags         = @(
+                'DevContext', 'Identity', 'Isolation', 'Windows', 'PowerShell7',
+                'Git', 'SSH', 'GitHub', 'Multi-Account', 'Credentials',
+                'Supabase', 'Vercel', 'MCP', 'AI', 'DevTools', 'VSCode'
+            )
+            ProjectUri   = 'https://github.com/thierryvm/devcontext'
+            # LicenseUri manquait. La Gallery affiche alors « licence non
+            # declaree », ce qui, pour un outil qui manipule des identifiants,
+            # est exactement le detail qui fait refermer la page.
+            LicenseUri   = 'https://github.com/thierryvm/devcontext/blob/main/LICENSE'
+            ReleaseNotes = 'https://github.com/thierryvm/devcontext/blob/main/CHANGELOG.md'
         }
     }
 }

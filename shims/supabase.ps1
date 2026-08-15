@@ -69,12 +69,29 @@ $projectName = $null
 try {
     $module = Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force -PassThru -ErrorAction Stop
 
-    if (-not $env:DEVCTX) { Invoke-Real }
+    # LE DOSSIER DECIDE, JAMAIS LA SESSION.
+    #
+    # Ce shim commencait par `if (-not $env:DEVCTX) { Invoke-Real }`, et
+    # s'effacait donc des que la variable de session manquait : git-bash, script
+    # npm, execFileSync depuis Node, shell d'un agent. C'est-a-dire partout ou
+    # l'alias PowerShell ne va deja pas -- toute la raison d'etre du shim.
+    #
+    # Mesure le 15 aout 2026 : `supabase db reset --linked` sur demo-app-prod est
+    # passe depuis git-bash, arrete seulement par un timeout reseau.
+    #
+    # `work` reste utile (il charge le bon jeton) ; il n'est simplement plus ce
+    # qui ARME la protection.
+    $contexte = $env:DEVCTX
+    if (-not $contexte) {
+        $manifeste = & $module { param($p) Resolve-DevContextForPath -Path $p } $PWD.Path
+        if ($manifeste) { $contexte = & $module { param($m) Get-CtxProp $m 'name' } $manifeste }
+    }
+    if (-not $contexte) { Invoke-Real }
 
     $ref = & $module { Resolve-CtxSupabaseRef }
     if (-not $ref) { Invoke-Real }
 
-    $environment = & $module { param($r, $c) Get-CtxSupabaseEnv -Ref $r -ContextName $c } $ref $env:DEVCTX
+    $environment = & $module { param($r, $c) Get-CtxSupabaseEnv -Ref $r -ContextName $c } $ref $contexte
     if ($environment -ne 'prod') { Invoke-Real }
 
     # Current branch. Absent outside a git repository, which is a pass.
@@ -108,7 +125,7 @@ try {
             $e = $i.PSObject.Properties | Where-Object { $_.Name -eq $r } | Select-Object -First 1
             if ($e) { Get-CtxProp $e.Value 'name' }
         }
-    } $ref $env:DEVCTX
+    } $ref $contexte
 }
 catch {
     Invoke-Real

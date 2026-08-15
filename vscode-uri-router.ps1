@@ -31,7 +31,7 @@
     Affiche la cible retenue sans rien lancer. Pour tester le routage.
 
 .EXAMPLE
-    .\vscode-uri-router.ps1 -Uri 'vscode://file/F:/PROJECTS/Apps/ankora/README.md' -DryRun
+    .\vscode-uri-router.ps1 -Uri 'vscode://file/F:/PROJECTS/Apps/demo-app/README.md' -DryRun
 
 .NOTES
     Créé le 9 août 2026. Installé dans

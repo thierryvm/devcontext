@@ -1,5 +1,12 @@
 # Garde-fou production — plan d'implémentation
 
+> **Noms de projets remplacés par des marque-places.** Ce document décrit une
+> investigation réelle ; les noms de projets, de dépôts et de bases y ont été
+> remplacés par demo-app, other-app, 	hird-app. La méthode et les
+> conclusions sont inchangées — seule la topologie réelle a été retirée, parce
+> qu'un document qui explique où se trouve une base de production et comment son
+> garde-fou fonctionne est un document de reconnaissance.
+
 > **Pour les agents :** SOUS-COMPÉTENCE REQUISE — utiliser
 > `superpowers:subagent-driven-development` (recommandé) ou
 > `superpowers:executing-plans` pour dérouler ce plan tâche par tâche. Les
@@ -316,9 +323,17 @@ function Test-CtxSupabaseGuard {
 
 - [ ] **Étape 5 : exporter la fonction**
 
-Dans `DevContext.psm1`, ajouter `'Test-CtxSupabaseGuard'` à `$exportedFunctions`
-(ligne 1005). `Get-CtxSupabaseSubcommand` reste interne — les tests y accèdent
-par `InModuleScope`.
+**Deux endroits, pas un.** Le `psm1` et le manifeste filtrent tous les deux, et
+l'export réel est leur intersection. Ajouter la fonction au seul `psm1` la rend
+invisible de l'extérieur, sans le moindre message d'erreur.
+
+1. Dans `DevContext.psm1`, ajouter `'Test-CtxSupabaseGuard'` à
+   `$exportedFunctions` (ligne 1005).
+2. Dans `DevContext.psd1`, ajouter `'Test-CtxSupabaseGuard'` à
+   `FunctionsToExport`, avant `'Test-DevContext'` — la liste est triée.
+
+`Get-CtxSupabaseSubcommand` reste interne : les tests y accèdent par
+`InModuleScope`.
 
 - [ ] **Étape 6 : lancer les tests pour vérifier qu'ils passent**
 
@@ -499,13 +514,13 @@ BeforeAll {
 
 Describe 'Get-CtxSupabaseEnvGuess' {
     It 'reconnait prod dans le nom' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'ankora-prod' | Should -Be 'prod' }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'demo-app-prod' | Should -Be 'prod' }
     }
     It 'reconnait production dans le nom' {
         InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'shop production' | Should -Be 'prod' }
     }
     It 'reconnait staging comme non-production' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'ankora-staging' | Should -Be 'dev' }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'demo-app-staging' | Should -Be 'dev' }
     }
     It 'reconnait dev, preview et test' {
         InModuleScope DevContext {
@@ -515,10 +530,10 @@ Describe 'Get-CtxSupabaseEnvGuess' {
         }
     }
     It 'ignore la casse' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'Ankora-PROD' | Should -Be 'prod' }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'demo-app-prod' | Should -Be 'prod' }
     }
     It 'rend null sur un nom neutre' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'IronTrack' | Should -BeNullOrEmpty }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'other-app' | Should -BeNullOrEmpty }
     }
     It 'ne confond pas reproduction avec production' {
         InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'reproduction-bug' | Should -BeNullOrEmpty }
@@ -703,7 +718,7 @@ Get-Content F:\CTX\perso\supabase-index.json | ConvertFrom-Json |
     ForEach-Object { '{0,-20} {1,-6} {2}' -f $_.Value.name, $_.Value.env, $_.Value.envSource }
 ```
 
-Attendu : `ankora-prod` porte `prod` / `auto`. Les trois autres portent une
+Attendu : `demo-app-prod` porte `prod` / `auto`. Les trois autres portent une
 valeur vide et `auto`. Toujours 4 entrées, aucune perte.
 
 - [ ] **Étape 7 : commit**
@@ -835,15 +850,10 @@ Créer `shims/supabase.cmd` :
 
 ```bat
 @echo off
-rem Coarse filter first: only pay the pwsh startup cost when an argument could
-rem possibly match the blacklist. Every other supabase call stays as fast as
-rem before.
-echo %* | findstr /i /r "\<reset\> \<push\> \<repair\> \<up\>" >nul
-if errorlevel 1 (
-    for /f "delims=" %%i in ('pwsh -NoLogo -NoProfile -Command "(Get-Command supabase -CommandType Application -All | Where-Object { (Split-Path $_.Source -Parent) -ne '%~dp0'.TrimEnd('\') } | Select-Object -First 1).Source"') do set "REAL=%%i"
-    "%REAL%" %*
-    exit /b %ERRORLEVEL%
-)
+rem Always delegate. An earlier draft filtered arguments in batch first, to
+rem skip the pwsh startup on harmless calls -- but that put the most fragile
+rem quoting in the codebase on the guard's only entry point, to save a few
+rem hundred milliseconds on a command that takes seconds. Not worth it.
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0supabase.ps1" %*
 exit /b %ERRORLEVEL%
 ```
@@ -907,11 +917,11 @@ l'appellent par son chemin.
 
 ```powershell
 work perso -NoCd
-Set-Location F:\PROJECTS\Apps\ankora-refonte
+Set-Location F:\PROJECTS\Apps\demo-app-redesign
 pwsh -NoProfile -File F:\PROJECTS\Apps\devcontext\shims\supabase.ps1 db reset --dry-run
 ```
 
-Attendu : bloc **REFUSE**, base visée `ankora-prod`, code de sortie 1. Le
+Attendu : bloc **REFUSE**, base visée `demo-app-prod`, code de sortie 1. Le
 binaire réel n'est jamais appelé — `--dry-run` n'est ici qu'une ceinture de
 sécurité supplémentaire.
 
@@ -1033,7 +1043,7 @@ function Get-DevSupabaseMap {
       folders point at it.
 
       Not a convenience. On 13 Aug 2026 the question "which account is
-      airsoft-aywaille on?" could only be answered by reading the index by
+      third-app on?" could only be answered by reading the index by
       hand, though the answer had been on the machine all along. A guard whose
       data cannot be inspected is a guard that eventually gets switched off.
     #>
@@ -1081,8 +1091,14 @@ Dans `DevContext.psm1` :
 Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
 ```
 
-Ajouter `'Get-DevSupabaseMap'` à `$exportedFunctions` et `'ctx-sb'` à
-`$exportedAliases`.
+Puis, dans **les deux** fichiers d'export — l'export réel est leur intersection,
+et n'en modifier qu'un ne produit aucune erreur, juste une commande introuvable :
+
+1. `DevContext.psm1` : `'Get-DevSupabaseMap'` dans `$exportedFunctions`,
+   `'ctx-sb'` dans `$exportedAliases`.
+2. `DevContext.psd1` : `'Get-DevSupabaseMap'` dans `FunctionsToExport`
+   (après `'Get-DevContextList'`), `'ctx-sb'` dans `AliasesToExport`
+   (après `'ctx-off'`) — les deux listes sont triées.
 
 - [ ] **Étape 5 : lancer les tests**
 
@@ -1098,7 +1114,7 @@ Attendu : tous verts.
 work perso -NoCd; ctx-sb | Format-Table Compte, Projet, Env, Partage, @{n='Dossiers';e={$_.Dossiers -join ', '}} -AutoSize
 ```
 
-Attendu : `ankora-prod` en `prod`, `Partage` à `$true`, trois dossiers listés.
+Attendu : `demo-app-prod` en `prod`, `Partage` à `$true`, trois dossiers listés.
 Les trois autres projets avec un seul dossier chacun.
 
 - [ ] **Étape 7 : commit**
@@ -1307,7 +1323,7 @@ Puis, dans un **terminal neuf** :
 
 ```powershell
 work perso -NoCd
-Set-Location F:\PROJECTS\Apps\ankora-refonte
+Set-Location F:\PROJECTS\Apps\demo-app-redesign
 supabase --version          # doit repondre normalement
 ```
 
@@ -1326,7 +1342,7 @@ C'est la vérification qui justifie tout le chantier : le shell qu'un agent
 utilise.
 
 ```bash
-cd /f/PROJECTS/Apps/ankora-refonte
+cd /f/PROJECTS/Apps/demo-app-redesign
 supabase db reset --dry-run
 echo "code de sortie : $?"
 ```
@@ -1553,8 +1569,8 @@ Puis insérer cette section après le garde-fou nº 3 :
 
 `ctx` juge **qui tu es**. Il ne jugeait pas **ce que tu vas toucher**.
 
-Le 13 août 2026, trois dossiers — `ankora`, `ankora-landing`, `ankora-refonte` —
-visaient la même base `ankora-prod`. Ce sont trois *worktrees* du même dépôt,
+Le 13 août 2026, trois dossiers — `demo-app`, `demo-app-landing`, `demo-app-redesign` —
+visaient la même base `demo-app-prod`. Ce sont trois *worktrees* du même dépôt,
 donc partager la base est cohérent. Mais l'un portait 19 migrations contre 22
 sur `main` : un `supabase db reset` depuis ce dossier aurait reconstruit la
 production trois crans en arrière. `ctx` répondait GO, en toute bonne foi.
@@ -1690,10 +1706,10 @@ l'implémentation a lieu un autre jour) :
 
 ### Sécurité
 
-Le 13 août 2026, `ankora`, `ankora-landing` et `ankora-refonte` — trois
-*worktrees* du même dépôt — visaient tous `ankora-prod`. Partager la base est
+Le 13 août 2026, `demo-app`, `demo-app-landing` et `demo-app-redesign` — trois
+*worktrees* du même dépôt — visaient tous `demo-app-prod`. Partager la base est
 cohérent puisque c'est la même application ; ce ne l'était pas que
-`ankora-refonte` porte **19 migrations contre 22** sur `main`. Un
+`demo-app-redesign` porte **19 migrations contre 22** sur `main`. Un
 `supabase db reset` depuis ce dossier aurait reconstruit la production trois
 crans en arrière, données comprises, avec `ctx` répondant GO.
 

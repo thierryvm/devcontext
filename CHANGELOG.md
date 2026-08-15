@@ -1,10 +1,91 @@
-# Journal des versions
+# Changelog
 
-Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
-Ce module suit le [versionnement sémantique](https://semver.org/lang/fr/).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This module follows [semantic versioning](https://semver.org/).
 
-`ModuleVersion` dans `DevContext.psd1` se met à jour **à la main**, et doit
-toujours correspondre au dernier tag git.
+`ModuleVersion` in `DevContext.psd1` is updated **by hand**, and must always
+match the latest git tag.
+
+> Entries from 1.1.0 onward are written in English, as is the rest of the
+> documentation. Earlier entries are left in French rather than retranslated:
+> rewriting history to look tidier makes it less trustworthy.
+
+---
+
+## [1.1.0] — 15 August 2026
+
+The release where the guard started covering the shells it was built for, and
+where the module started answering *what can I do here* rather than only *who
+am I*.
+
+### Added
+
+- **Production guard.** `supabase db reset` is refused against a project tagged
+  `prod`; `db push`, `migration repair` and `migration up` are refused from any
+  branch other than the repository's default. Everything else passes through.
+- **`shims/` in `PATH`**, via a reversible `installer-shims.ps1`. A PowerShell
+  alias covers PowerShell; only a `PATH` entry covers git-bash, npm scripts,
+  `execFileSync` from Node, and an AI agent's shell.
+- **`ctx doctor`** — for the current folder: which tools are installed, which
+  account each will actually reach, which project it is aimed at, and where a
+  credential sits in clear text. `-Json` for agents and CI.
+- **`ctx doctor -Live`** — probes each loaded token against its service. The
+  interesting verdict is not *is it valid* but *is it valid on the wrong
+  account*, which a naive check would bless.
+- **`ctx mcp`** — writes project-scoped MCP configuration for Claude Code,
+  VS Code and Cursor, taking credentials from the environment. No secret in the
+  file, so it can be committed. Read-only by default, and read-only without
+  appeal on a production project.
+- **`ctx-sb`** — which Supabase project lives on which account, and which
+  folders point at each.
+- **Environment tagging** in the Supabase index, inferred from project names and
+  never overwriting a manual choice.
+- **WSL is reported.** A distribution has its own `PATH` and filesystem view, so
+  the Windows shim is not on it. The gap cannot be closed here; it can be made
+  visible.
+- `LICENSE` (MIT), `SECURITY.md`, `docs/ARCHITECTURE.md`, `AGENTS.md`,
+  `tests/README.md`, CI on Windows, and agent definitions under `.claude/agents/`
+  with their model pinned by alias.
+
+### Fixed
+
+- **The guard only protected the shells that were already protected.** It opened
+  with `if (-not $env:DEVCTX) { Invoke-Real }`, so it stepped aside whenever the
+  session variable was missing — which is always the case in git-bash, npm
+  scripts and agent shells. Measured on 15 August 2026: `supabase db reset
+  --linked` against a production project went through from git-bash, stopped
+  only by a network timeout. `Resolve-DevContextForPath` now arms the guard from
+  the **folder**.
+- `Get-CtxProp` accepts a null object. It is documented as a defensive read, and
+  refusing null contradicted that: a folder outside any context has no manifest,
+  so `-Live` died on parameter binding rather than on the lookup it attempted.
+- The Supabase index no longer crashes on entries written before the `env`
+  fields existed.
+- `shims/supabase.cmd` is CRLF, as `.gitattributes` has always declared. The
+  file predated the declaration and had never been re-checked-out.
+
+### Security
+
+- **No credential is ever printed.** Diagnostics report the *name* of a key,
+  never its value, and every surfaced message passes through
+  `Protect-CtxMessage`, which redacts by issuer prefix and by the shape of a
+  bearer header.
+- **The user `PATH` is written through the registry**, preserving the value
+  kind. `[Environment]::SetEnvironmentVariable` returns the *expanded* value;
+  writing it back bakes `%USERPROFILE%` in as a literal path and downgrades
+  `REG_EXPAND_SZ` to `REG_SZ`, permanently and silently.
+- **`tests/Securite.Tests.ps1`** scans every tracked file for credential
+  patterns and, when a context is loaded, runs the full diagnostic with the
+  machine's real tokens then asserts that none appear in the output. CI scans
+  the entire git history, since a secret removed later is still published.
+- What is **not** guarded — WSL, absolute-path invocation, fail-open by design,
+  `npx` fetching at run time — is set out in `SECURITY.md`.
+
+### Known limitations
+
+- Command output is French; documentation is English. A bilingual `DEVCTX_LANG`
+  is planned for 1.2.0.
+- `POURQUOI.md` and `INSTALLATION.md` are not yet translated.
 
 ---
 
@@ -39,7 +120,7 @@ devenu un dépôt.
   Ces valeurs sont remplacées par des exemples génériques (`client-a`,
   `contact@exemple.com`, `login-client`), et l'historique git a été réécrit —
   le fichier était présent dès le premier commit.
-  Les projets **personnels** cités en exemple (`ankora`, `savoora`, …) sont
+  Les projets **personnels** cités en exemple (`demo-app`, `demo-api`, …) sont
   conservés : ce sont des dépôts publics, et un exemple concret se relit mieux
   qu'un `foo`.
 

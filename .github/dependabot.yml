@@ -1,0 +1,14 @@
+# Le module n'a pas de dépendances npm ni NuGet : la seule surface qui vieillit
+# est celle des actions GitHub. Une action épinglée sur une version majeure
+# obsolète est un vecteur d'exécution dans la CI, pas un détail cosmétique.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+      include: scope
+    labels:
+      - dependencies

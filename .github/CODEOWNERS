@@ -1,0 +1,7 @@
+# Toute modification est relue par le mainteneur. Les chemins ci-dessous sont
+# listés séparément parce qu'ils touchent la sécurité : shims, PATH, jetons.
+*                       @thierryvm
+/shims/                 @thierryvm
+/src/Jetons.ps1         @thierryvm
+/installer-shims.ps1    @thierryvm
+/SECURITY.md            @thierryvm

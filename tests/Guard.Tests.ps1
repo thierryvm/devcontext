@@ -1,31 +1,162 @@
+# Les tests ci-dessous, ajoutes le 15 aout 2026 apres un audit de securite,
+# couvrent une faille que la suite d'origine ne pouvait pas voir : elle
+# n'eprouvait que des flags BOOLEENS. Or la CLI Supabase a six options globales
+# qui prennent une VALEUR en argument separe, et cobra les accepte AVANT la
+# commande. La valeur devenait alors le premier mot, decalait la fenetre de
+# detection, et le garde-fou se taisait.
+#
+#   supabase db reset --linked                 -> refuse
+#   supabase --workdir . db reset --linked      -> PASSAIT
+#
+Describe 'contournement par un flag global a valeur' {
+    BeforeAll { Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force }
+
+    # Les branches sont fournies parce que `db push`, `migration up` et
+    # `migration repair` sont lies a la branche : sans elles, le garde-fou passe
+    # DELIBEREMENT, et le test mesurerait ce comportement-la plutot que le
+    # contournement qu'il vise.
+    It 'refuse "<_>" en production' -ForEach @(
+        '--workdir . db reset --linked'
+        '-o json db push'
+        '--profile monprofil db reset'
+        '--dns-resolver native db reset'
+        '--network-id reseau migration up'
+        '--agent no db reset --linked'
+        '--output json migration repair'
+        # Forme --flag=valeur : la valeur ne devient pas un mot separe, mais on
+        # verifie que la detection ne s'y perd pas non plus.
+        '--workdir=. db reset'
+        # Deux flags a valeur enchaines.
+        '--workdir . --profile x db reset'
+    ) {
+        InModuleScope DevContext -Parameters @{ a = ($_ -split ' ') } { param($a)
+            (Test-CtxSupabaseGuard -Arguments $a -Environment 'prod' `
+                -CurrentBranch 'feat/chantier' -DefaultBranch 'main').Allowed | Should -BeFalse
+        }
+    }
+
+    It 'laisse toujours passer une commande inoffensive avec les memes flags' {
+        # La correction ne doit pas transformer « je ne comprends pas » en refus
+        # general : ce serait rendre l outil insupportable.
+        InModuleScope DevContext {
+            (Test-CtxSupabaseGuard -Arguments ('--workdir . db pull' -split ' ') -Environment 'prod').Allowed |
+                Should -BeTrue
+            (Test-CtxSupabaseGuard -Arguments ('-o json projects list' -split ' ') -Environment 'prod').Allowed |
+                Should -BeTrue
+        }
+    }
+
+    It 'refuse meme si la valeur d un flag imite une commande racine' {
+        # `--profile db db reset` : le mot « db » apparait deux fois, une fois
+        # comme valeur de flag. Une detection ancree sur le premier mot connu
+        # lirait « db db » et laisserait passer.
+        InModuleScope DevContext {
+            (Test-CtxSupabaseGuard -Arguments ('--profile db db reset' -split ' ') -Environment 'prod').Allowed |
+                Should -BeFalse
+        }
+    }
+}
+
+Describe 'contournement par reciblage de la commande' {
+    BeforeAll { Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force }
+
+    It 'refuse db reset porteur d un --db-url, meme hors projet de production' {
+        # Le garde-fou deduit la base du DOSSIER ; la CLI, elle, obeit a ses
+        # flags. Une commande copiee d un runbook et lancee depuis le mauvais
+        # dossier detruisait la prod sans un mot. C est le seul endroit ou le
+        # fail-open coute trop cher : ici on refuse a defaut de savoir.
+        InModuleScope DevContext {
+            $r = Test-CtxSupabaseGuard -Arguments @('db', 'reset', '--db-url', 'postgresql://postgres.abc:pwd@x.pooler.supabase.com:5432/postgres') `
+                -Environment 'dev' -IndexContientProd
+            $r.Allowed | Should -BeFalse
+            $r.Rule    | Should -Be 'cible-indeterminee'
+        }
+    }
+
+    It 'ne refuse pas un --db-url quand l index ne contient aucune production' {
+        InModuleScope DevContext {
+            (Test-CtxSupabaseGuard -Arguments @('db', 'reset', '--db-url', 'postgresql://x') -Environment 'dev').Allowed |
+                Should -BeTrue
+        }
+    }
+
+    It 'ne refuse pas un --db-url sur une sous-commande non gardee' {
+        InModuleScope DevContext {
+            (Test-CtxSupabaseGuard -Arguments @('db', 'pull', '--db-url', 'postgresql://x') -Environment 'dev' -IndexContientProd).Allowed |
+                Should -BeTrue
+        }
+    }
+}
+
+Describe 'Get-CtxSupabaseCible' {
+    BeforeAll { Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force }
+
+    It 'extrait le project-ref d une URL de connexion directe' {
+        InModuleScope DevContext {
+            Get-CtxSupabaseRefDepuisUrl 'postgresql://postgres:pwd@db.abcdefghijklmnopqrst.supabase.co:5432/postgres' |
+                Should -Be 'abcdefghijklmnopqrst'
+        }
+    }
+
+    It 'extrait le project-ref d une URL de pooler' {
+        InModuleScope DevContext {
+            Get-CtxSupabaseRefDepuisUrl 'postgresql://postgres.abcdefghijklmnopqrst:pwd@aws-0-eu-central-1.pooler.supabase.com:5432/postgres' |
+                Should -Be 'abcdefghijklmnopqrst'
+        }
+    }
+
+    It 'rend null sur une URL dont on ne sait rien' {
+        InModuleScope DevContext {
+            Get-CtxSupabaseRefDepuisUrl 'postgresql://user:pwd@interne.exemple.local:5432/base' |
+                Should -BeNullOrEmpty
+        }
+    }
+
+    It 'lit la valeur d un --workdir sous ses deux formes' {
+        InModuleScope DevContext {
+            Get-CtxArgumentValeur @('--workdir', 'C:\projet', 'db', 'reset') 'workdir' | Should -Be 'C:\projet'
+            Get-CtxArgumentValeur @('--workdir=C:\projet', 'db', 'reset') 'workdir'   | Should -Be 'C:\projet'
+            Get-CtxArgumentValeur @('db', 'reset') 'workdir'                          | Should -BeNullOrEmpty
+        }
+    }
+}
+
 BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force
 }
 
-Describe 'Get-CtxSupabaseSubcommand' {
-    It 'joint les deux premiers arguments non-option' {
+Describe 'Get-CtxSupabasePaires' {
+    # Remplace Get-CtxSupabaseSubcommand, qui ne gardait que les DEUX premiers
+    # mots non-option. Cette hypothese — « toute option est un booleen isole » —
+    # etait fausse et exploitable ; voir le Describe en tete de fichier.
+    It 'rend la paire d une commande simple' {
         InModuleScope DevContext {
-            Get-CtxSupabaseSubcommand @('db', 'reset') | Should -Be 'db reset'
+            Get-CtxSupabasePaires @('db', 'reset') | Should -Be 'db reset'
         }
     }
-    It 'ignore les options placees avant la sous-commande' {
+    It 'ignore les options, ou qu elles soient' {
         InModuleScope DevContext {
-            Get-CtxSupabaseSubcommand @('--debug', 'db', 'reset') | Should -Be 'db reset'
-        }
-    }
-    It 'ignore les options placees apres la sous-commande' {
-        InModuleScope DevContext {
-            Get-CtxSupabaseSubcommand @('db', 'reset', '--linked') | Should -Be 'db reset'
+            Get-CtxSupabasePaires @('--debug', 'db', 'reset', '--linked') | Should -Be 'db reset'
         }
     }
     It 'normalise la casse' {
         InModuleScope DevContext {
-            Get-CtxSupabaseSubcommand @('DB', 'Reset') | Should -Be 'db reset'
+            Get-CtxSupabasePaires @('DB', 'Reset') | Should -Be 'db reset'
         }
     }
-    It 'rend une chaine vide sans argument' {
+    It 'rend toutes les paires adjacentes, pas seulement la premiere' {
+        # C est la propriete qui ferme le contournement : la valeur d un flag
+        # decale les mots, mais la paire gardee reste presente quelque part.
         InModuleScope DevContext {
-            Get-CtxSupabaseSubcommand @() | Should -Be ''
+            $p = @(Get-CtxSupabasePaires @('--workdir', '.', 'db', 'reset'))
+            $p | Should -Contain 'db reset'
+            $p.Count | Should -Be 2
+        }
+    }
+    It 'ne rend rien sans argument, ni avec un seul mot' {
+        InModuleScope DevContext {
+            @(Get-CtxSupabasePaires @()).Count        | Should -Be 0
+            @(Get-CtxSupabasePaires @('db')).Count    | Should -Be 0
         }
     }
 }

@@ -850,13 +850,77 @@ $script:GuardDestructive = @('db reset')
 # backwards: on 13 Aug 2026 a worktree carried 19 migrations against 22 on main.
 $script:GuardBranchBound = @('db push', 'migration repair', 'migration up')
 
-function Get-CtxSupabaseSubcommand {
-    # First two non-option arguments, lowercased. Options may appear anywhere,
-    # so they are filtered rather than skipped by position.
+function Get-CtxSupabasePaires {
+    <#
+      Every pair of ADJACENT non-option words, lowercased.
+
+      The obvious implementation -- take the first two non-option words -- was
+      wrong, and an audit on 15 Aug 2026 proved it in one line:
+
+          supabase db reset --linked              refused
+          supabase --workdir . db reset --linked  went straight through
+
+      It assumed every option is a lone boolean. The Supabase CLI has six global
+      options that take a SEPARATE value (--workdir, --profile, --network-id,
+      --dns-resolver, --agent, -o/--output), and cobra accepts global flags
+      BEFORE the command. The value then became the first word and shifted the
+      window one place to the right.
+
+      Anchoring on "the first word that is a known root command" would have
+      fixed those six and broken on `--profile db db reset`, where a flag value
+      imitates a command. Looking at every adjacent pair has no such blind spot:
+      a guarded pair is present or it is not.
+
+      The trade is over-blocking -- a command carrying "db" and "reset" as
+      adjacent VALUES would be refused. That has no realistic form, and on a
+      production project a false refusal costs one override while a false pass
+      costs the database.
+    #>
     param([string[]]$Arguments = @())
-    $words = @($Arguments | Where-Object { $_ -and -not $_.StartsWith('-') })
-    if ($words.Count -eq 0) { return '' }
-    (($words | Select-Object -First 2) -join ' ').ToLowerInvariant()
+
+    $mots = @(
+        $Arguments |
+            Where-Object { $_ -and -not "$_".StartsWith('-') } |
+            ForEach-Object { "$_".ToLowerInvariant() }
+    )
+    for ($i = 0; $i -lt $mots.Count - 1; $i++) { "$($mots[$i]) $($mots[$i + 1])" }
+}
+
+function Get-CtxArgumentValeur {
+    <#
+      Reads the value of a flag, in either spelling: `--nom valeur` and
+      `--nom=valeur`. Returns nothing when the flag is absent.
+    #>
+    param(
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory)][string]$Nom
+    )
+    for ($i = 0; $i -lt $Arguments.Count; $i++) {
+        $a = "$($Arguments[$i])"
+        if ($a -eq "--$Nom") {
+            if ($i + 1 -lt $Arguments.Count) { return "$($Arguments[$i + 1])" }
+            return
+        }
+        if ($a.StartsWith("--$Nom=")) { return $a.Substring($Nom.Length + 3) }
+    }
+}
+
+function Get-CtxSupabaseRefDepuisUrl {
+    <#
+      Recovers the project ref from a Postgres connection string, in the two
+      shapes Supabase issues:
+
+        direct  postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres
+        pooler  postgresql://postgres.<ref>:<pwd>@aws-0-....pooler.supabase.com:5432/postgres
+
+      Returns nothing for anything else, and "nothing" is a meaningful answer:
+      the caller then knows it cannot tell what this command is aimed at.
+    #>
+    param([AllowNull()][AllowEmptyString()][string]$Url)
+
+    if (-not $Url) { return }
+    if ($Url -match '@db\.([a-z0-9]{20})\.supabase\.') { return $Matches[1] }
+    if ($Url -match '://postgres\.([a-z0-9]{20})[:@]')  { return $Matches[1] }
 }
 
 function Test-CtxSupabaseGuard {
@@ -874,16 +938,47 @@ function Test-CtxSupabaseGuard {
         [AllowNull()][string]$Environment,
         [AllowNull()][string]$CurrentBranch,
         [AllowNull()][string]$DefaultBranch,
-        [switch]$Override
+        [switch]$Override,
+        # Vrai quand l'index du contexte contient au moins un projet marque
+        # 'prod'. Sert au seul cas ou ce garde-fou se ferme par defaut : voir
+        # plus bas, --db-url.
+        [switch]$IndexContientProd
     )
 
     $pass = { param($rule) [pscustomobject]@{ Allowed = $true; Rule = $rule; Reason = '' } }
 
-    if ($Environment -ne 'prod') { return (& $pass 'not-production') }
+    $paires      = @(Get-CtxSupabasePaires $Arguments)
+    $destructive = @($paires | Where-Object { $_ -in $script:GuardDestructive })   | Select-Object -First 1
+    $branchBound = @($paires | Where-Object { $_ -in $script:GuardBranchBound })   | Select-Object -First 1
+    $sub         = if ($destructive) { $destructive } else { $branchBound }
 
-    $sub = Get-CtxSupabaseSubcommand $Arguments
-    $destructive = $sub -in $script:GuardDestructive
-    $branchBound = $sub -in $script:GuardBranchBound
+    # --- cible redirigee -----------------------------------------------------
+    #
+    # LE SEUL ENDROIT OU CE GARDE-FOU SE FERME PAR DEFAUT.
+    #
+    # Il deduit la base visee du DOSSIER. `--db-url` la redirige ailleurs, et la
+    # CLI obeit au flag. Une commande destructrice copiee d'un runbook et lancee
+    # depuis un dossier de developpement detruisait donc la production sans un
+    # mot -- exactement la classe d'erreur que ce module existe pour arreter.
+    #
+    # Quand on sait lire le ref de l'URL, on juge dessus. Quand on ne sait pas,
+    # et qu'une production existe quelque part dans l'index, on refuse : ici,
+    # « je ne sais pas » ne peut pas valoir « vas-y ».
+    if ($destructive -or $branchBound) {
+        $dbUrl = Get-CtxArgumentValeur -Arguments $Arguments -Nom 'db-url'
+        if ($dbUrl -and -not $Override) {
+            $refCible = Get-CtxSupabaseRefDepuisUrl $dbUrl
+            if (-not $refCible -and $IndexContientProd) {
+                return [pscustomobject]@{
+                    Allowed = $false
+                    Rule    = 'cible-indeterminee'
+                    Reason  = "'$sub' porte un --db-url qui vise une base impossible a identifier, et ce contexte contient un projet de production."
+                }
+            }
+        }
+    }
+
+    if ($Environment -ne 'prod') { return (& $pass 'not-production') }
     if (-not $destructive -and -not $branchBound) { return (& $pass 'not-guarded') }
 
     if ($Override) { return (& $pass 'override') }
@@ -1307,7 +1402,8 @@ $exportedFunctions = @(
     'Close-DevContext', 'Open-DevCode', 'Open-DevBrowser', 'Test-DevContext',
     'Assert-DevContext', 'Resolve-DevContextForPath', 'Invoke-DevVercel',
     'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard',
-    'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp'
+    'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp',
+    'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',

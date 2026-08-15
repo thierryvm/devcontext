@@ -523,6 +523,9 @@ function Get-DevContextDoctor {
 
     # --- garde-fou ---------------------------------------------------------
     $checks.Add((Test-CtxDoctorGardeFou))
+    # Rend $null quand aucune distribution WSL n'est installee : rien a signaler.
+    $wsl = Test-CtxDoctorWsl
+    if ($wsl) { $checks.Add($wsl) }
 
     # --- vercel ------------------------------------------------------------
     $vercelProjet = Join-Path $dossier '.vercel\project.json'
@@ -583,4 +586,36 @@ function Test-CtxDoctorGardeFou {
             -Correctif 'Remove-Item Env:DEVCTX_ALLOW_PROD'
     }
     New-CtxCheck -Domaine 'garde-fou' -Sujet 'portee' -Verdict 'OK' -Detail 'actif dans tous les shells'
+}
+
+function Test-CtxDoctorWsl {
+    <#
+      WSL is a hole, and saying so is the only honest thing to do about it.
+
+      A Linux distribution carries its own PATH and its own filesystem view --
+      /mnt/c, not /c -- so the Windows shim is simply not on it. Anything run
+      from a WSL shell reaches the real CLI directly, with no guard in the way.
+
+      Nothing here can close that; the fix belongs on the Linux side. What this
+      does is make a known limitation visible, because the dangerous version of
+      this gap is the one nobody has been told about. Returns nothing at all
+      when no distribution is installed: a warning about software you do not
+      have is noise, and noise is how a report stops being read.
+    #>
+    $cle = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
+    if (-not (Test-Path -LiteralPath $cle)) { return }
+
+    $distros = @(Get-ChildItem -LiteralPath $cle -ErrorAction SilentlyContinue |
+                 Where-Object { $_.PSChildName -match '^\{' })
+    if ($distros.Count -eq 0) { return }
+
+    $noms = @($distros | ForEach-Object {
+        (Get-ItemProperty -LiteralPath $_.PSPath -Name 'DistributionName' -ErrorAction SilentlyContinue).DistributionName
+    } | Where-Object { $_ })
+
+    New-CtxCheck -Domaine 'garde-fou' -Sujet 'WSL' -Verdict 'ATTENTION' `
+        -Detail ("$($distros.Count) distribution(s) installee(s)" +
+                 $(if ($noms) { " ($($noms -join ', '))" } else { '' }) +
+                 ' : le shim Windows n y est pas, le garde-fou ne couvre pas ces shells') `
+        -Correctif 'y installer la CLI Supabase separement, ou ne pas viser un projet de production depuis WSL'
 }

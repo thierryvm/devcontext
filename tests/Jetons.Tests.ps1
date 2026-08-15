@@ -18,6 +18,30 @@ Describe 'Protect-CtxMessage' {
         }
     }
 
+    It 'caviarde une forme trouvee par l audit : <_>' -ForEach @(
+        # L audit du 15 aout 2026 a mesure ces formes : toutes passaient intactes.
+        # Les deux dernieres sont les plus graves — SUPABASE_DB_PASSWORD et
+        # SENTRY_READ_TOKEN sont des secrets que ce module gere lui-meme.
+        'postgresql://postgres.abcdefghijklmnopqrst:Sup3rS3cret!@aws-0.pooler.supabase.com:5432/postgres'
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.signaturedelaclef'
+        'SUPABASE_DB_PASSWORD=Sup3rS3cret-2026'
+        'password: MonMotDePasse123'
+        'glpat-abcdefghijklmnopqrst'
+        'sntrys_abcdefghijklmnopqrstuvwx'
+    ) {
+        InModuleScope DevContext -Parameters @{ s = $_ } { param($s)
+            $m = Protect-CtxMessage "echec : $s"
+            $m | Should -Match 'REDACTED'
+            # La partie sensible doit avoir disparu, pas seulement etre annotee.
+            foreach ($morceau in @('Sup3rS3cret', 'MonMotDePasse123', 'signaturedelaclef',
+                                   'abcdefghijklmnopqrst', 'abcdefghijklmnopqrstuvwx')) {
+                if ($s -match [regex]::Escape($morceau)) {
+                    $m | Should -Not -Match ([regex]::Escape($morceau))
+                }
+            }
+        }
+    }
+
     It 'caviarde un en-tete Bearer quel que soit l emetteur' {
         # La liste de prefixes aura toujours un emetteur de retard ; la FORME
         # « Bearer <quelque chose de long> », elle, ne change pas.
@@ -105,9 +129,9 @@ Describe 'Test-CtxDoctorJetonSupabase' {
 
     It 'rend OK quand le projet du dossier est visible' {
         InModuleScope DevContext {
-            $r = Test-CtxDoctorJetonSupabase -RefAttendu 'refdeprod' -Code 200 -Projets @(
+            $r = Test-CtxDoctorJetonSupabase -RefAttendu 'refdeprod00000000000' -Code 200 -Projets @(
                 [pscustomobject]@{ id = 'autre';     name = 'autre-projet' }
-                [pscustomobject]@{ id = 'refdeprod'; name = 'demo-app-prod' })
+                [pscustomobject]@{ id = 'refdeprod00000000000'; name = 'demo-app-prod' })
             $r.Verdict | Should -Be 'OK'
             $r.Detail  | Should -Match 'demo-app-prod'
         }
@@ -118,7 +142,7 @@ Describe 'Test-CtxDoctorJetonSupabase' {
         # sur le projet de ce dossier. La commande partirait sur un compte reel
         # avec un message d'erreur qui ne dit pas pourquoi.
         InModuleScope DevContext {
-            $r = Test-CtxDoctorJetonSupabase -RefAttendu 'refdeprod' -Code 200 -Projets @(
+            $r = Test-CtxDoctorJetonSupabase -RefAttendu 'refdeprod00000000000' -Code 200 -Projets @(
                 [pscustomobject]@{ id = 'autre'; name = 'autre-projet' })
             $r.Verdict   | Should -Be 'PROBLEME'
             $r.Correctif | Should -Match 'sb-index'

@@ -93,14 +93,14 @@ Describe 'shim — refus de bout en bout' {
         } | ConvertTo-Json | Set-Content (Join-Path $ctxDir 'context.json') -Encoding UTF8
 
         @{
-            'refdeprod' = @{ key = 'supabase-token'; name = 'demo-prod'; env = 'prod'; envSource = 'auto' }
-            'refdedev'  = @{ key = 'supabase-token'; name = 'demo-dev';  env = 'dev';  envSource = 'auto' }
+            'refdeprod00000000000' = @{ key = 'supabase-token'; name = 'demo-prod'; env = 'prod'; envSource = 'auto' }
+            'refdedev000000000000'  = @{ key = 'supabase-token'; name = 'demo-dev';  env = 'dev';  envSource = 'auto' }
         } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $ctxDir 'supabase-index.json') -Encoding UTF8
 
         # Project linked to the production ref, on a branch that is not default
         $script:proj = Join-Path $script:projRoot 'appli'
         New-Item -ItemType Directory -Path (Join-Path $script:proj 'supabase' '.temp') -Force | Out-Null
-        Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdeprod' -NoNewline
+        Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdeprod00000000000' -NoNewline
 
         Push-Location $script:proj
         try {
@@ -181,14 +181,14 @@ exit `$LASTEXITCODE
     }
 
     It 'laisse passer db reset sur un projet qui n est pas marque prod' {
-        Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdedev' -NoNewline
+        Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdedev000000000000' -NoNewline
         try {
             $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy 'db reset' ''
             $r.Output | Should -Match 'LEURRE-APPELE'
             $r.Code   | Should -Be 42
         }
         finally {
-            Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdeprod' -NoNewline
+            Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdeprod00000000000' -NoNewline
         }
     }
 

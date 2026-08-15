@@ -22,12 +22,12 @@ BeforeAll {
     @{ name = 'demo'; label = 'Demo'; email = 'demo@exemple.com'; root = $script:projRoot } |
         ConvertTo-Json | Set-Content (Join-Path $ctxDir 'context.json') -Encoding UTF8
 
-    @{ 'refdeprod' = @{ key = 'supabase-token'; name = 'demo-prod'; env = 'prod'; envSource = 'auto' } } |
+    @{ 'refdeprod00000000000' = @{ key = 'supabase-token'; name = 'demo-prod'; env = 'prod'; envSource = 'auto' } } |
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $ctxDir 'supabase-index.json') -Encoding UTF8
 
     $script:proj = Join-Path $script:projRoot 'appli'
     New-Item -ItemType Directory -Path (Join-Path $script:proj 'supabase' '.temp') -Force | Out-Null
-    Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdeprod' -NoNewline
+    Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdeprod00000000000' -NoNewline
 
     Push-Location $script:proj
     try {

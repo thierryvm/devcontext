@@ -122,20 +122,20 @@ Describe 'Resolve-CtxSupabaseRef' {
     BeforeAll {
         $script:racine = Join-Path $TestDrive 'projet'
         New-Item -ItemType Directory -Path (Join-Path $script:racine 'supabase\.temp') -Force | Out-Null
-        Set-Content (Join-Path $script:racine 'supabase\.temp\project-ref') "  refavecespaces `n" -NoNewline
+        Set-Content (Join-Path $script:racine 'supabase\.temp\project-ref') "  refavecespaces000000 `n" -NoNewline
         New-Item -ItemType Directory -Path (Join-Path $script:racine 'apps\web\src') -Force | Out-Null
     }
 
     It 'trouve le ref a la racine du projet' {
         InModuleScope DevContext -Parameters @{ r = $script:racine } { param($r)
-            Resolve-CtxSupabaseRef -Path $r | Should -Be 'refavecespaces'
+            Resolve-CtxSupabaseRef -Path $r | Should -Be 'refavecespaces000000'
         }
     }
 
     It 'remonte l arborescence depuis un sous-dossier profond' {
         # Indispensable : on travaille depuis apps/web, pas depuis la racine.
         InModuleScope DevContext -Parameters @{ r = $script:racine } { param($r)
-            Resolve-CtxSupabaseRef -Path (Join-Path $r 'apps\web\src') | Should -Be 'refavecespaces'
+            Resolve-CtxSupabaseRef -Path (Join-Path $r 'apps\web\src') | Should -Be 'refavecespaces000000'
         }
     }
 
@@ -148,6 +148,36 @@ Describe 'Resolve-CtxSupabaseRef' {
     It 'rend null sur un chemin inexistant, sans boucler' {
         InModuleScope DevContext {
             Resolve-CtxSupabaseRef -Path 'Z:\nexiste\pas' | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'rejette un contenu qui n a pas la forme d un project-ref : <_>' -ForEach @(
+        'abcdefghijklmnopqrst" & calc.exe & "'
+        'trop-court'
+        'AVECDESMAJUSCULES000'
+        'abcdefghijklmnopqrstu'
+        '../../autre-projet'
+        '$(Get-Secret)'
+    ) {
+        # supabase/.temp/project-ref appartient au DEPOT : son contenu est choisi
+        # par qui a fabrique le depot. Il ressortait tel quel dans les `args`
+        # d un `npx` inscrit par `ctx mcp` — une commande que l assistant relance
+        # a chaque demarrage, depuis un fichier fait pour etre commite.
+        # Releve par l audit de securite du 15 aout 2026.
+        InModuleScope DevContext -Parameters @{ v = $_; t = $TestDrive } { param($v, $t)
+            $d = Join-Path $t ('hostile-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+            New-Item -ItemType Directory -Path (Join-Path $d 'supabase\.temp') -Force | Out-Null
+            Set-Content (Join-Path $d 'supabase\.temp\project-ref') $v -NoNewline
+            Resolve-CtxSupabaseRef -Path $d | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'accepte un project-ref au format reel' {
+        InModuleScope DevContext -Parameters @{ t = $TestDrive } { param($t)
+            $d = Join-Path $t 'projet-valide'
+            New-Item -ItemType Directory -Path (Join-Path $d 'supabase\.temp') -Force | Out-Null
+            Set-Content (Join-Path $d 'supabase\.temp\project-ref') 'fkscabcdefghijklmnop' -NoNewline
+            Resolve-CtxSupabaseRef -Path $d | Should -Be 'fkscabcdefghijklmnop'
         }
     }
 }

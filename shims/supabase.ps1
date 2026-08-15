@@ -81,18 +81,52 @@ try {
     #
     # `work` reste utile (il charge le bon jeton) ; il n'est simplement plus ce
     # qui ARME la protection.
-    $contexte = $env:DEVCTX
-    if (-not $contexte) {
-        $manifeste = & $module { param($p) Resolve-DevContextForPath -Path $p } $PWD.Path
-        if ($manifeste) { $contexte = & $module { param($m) Get-CtxProp $m 'name' } $manifeste }
-    }
-    if (-not $contexte) { Invoke-Real }
+    # --workdir redirige la CLI vers un AUTRE projet. Le garde-fou doit juger la
+    # cible reelle, pas le dossier depuis lequel on tape :
+    #   supabase --workdir F:\...\projet-de-prod db push
+    # partait de n'importe ou et travaillait sur la production.
+    $dossier = & $module { param($a) Get-CtxArgumentValeur -Arguments $a -Nom 'workdir' } $Arguments
+    if (-not $dossier) { $dossier = $PWD.Path }
 
-    $ref = & $module { Resolve-CtxSupabaseRef }
+    # LE DOSSIER D'ABORD, la session seulement en secours.
+    #
+    # La version precedente lisait $env:DEVCTX en priorite et ne retombait sur le
+    # dossier que si la variable etait vide. Quand session et dossier divergent
+    # -- l'etat que `ctx` qualifie precisement de NO-GO -- elle interrogeait donc
+    # l'index du MAUVAIS contexte, n'y trouvait pas le projet, et concluait
+    # « pas de production ». Le commentaire disait « le dossier decide » ; le
+    # code disait l'inverse. Releve par l'audit du 15 aout 2026.
+    $contextes = @()
+    $manifeste = & $module { param($p) Resolve-DevContextForPath -Path $p } $dossier
+    if ($manifeste) { $contextes += & $module { param($m) Get-CtxProp $m 'name' } $manifeste }
+    if ($env:DEVCTX -and $env:DEVCTX -notin $contextes) { $contextes += $env:DEVCTX }
+    if ($contextes.Count -eq 0) { Invoke-Real }
+
+    $ref = & $module { param($p) Resolve-CtxSupabaseRef -Path $p } $dossier
     if (-not $ref) { Invoke-Real }
 
-    $environment = & $module { param($r, $c) Get-CtxSupabaseEnv -Ref $r -ContextName $c } $ref $contexte
-    if ($environment -ne 'prod') { Invoke-Real }
+    # Le verdict le plus restrictif l'emporte : si l'un des deux index connait ce
+    # projet comme une production, c'en est une.
+    $environment = $null
+    $contexte    = $contextes[0]
+    foreach ($c in $contextes) {
+        $e = & $module { param($r, $n) Get-CtxSupabaseEnv -Ref $r -ContextName $n } $ref $c
+        if ($e -eq 'prod') { $environment = 'prod'; $contexte = $c; break }
+        if ($e -and -not $environment) { $environment = $e; $contexte = $c }
+    }
+
+    # L'index contient-il une production, quelque part ? Sert au seul cas ou le
+    # garde-fou se ferme par defaut : un --db-url dont on ne sait pas lire la cible.
+    $indexProd = $false
+    foreach ($c in $contextes) {
+        $p = & $module { param($n) Get-CtxSupabaseIndexPath $n } $c
+        if ($p -and (Test-Path $p)) {
+            $brut = Get-Content $p -Raw -ErrorAction SilentlyContinue
+            if ($brut -match '"env"\s*:\s*"prod"') { $indexProd = $true; break }
+        }
+    }
+
+    if ($environment -ne 'prod' -and -not $indexProd) { Invoke-Real }
 
     # Current branch. Absent outside a git repository, which is a pass.
     $currentBranch = git rev-parse --abbrev-ref HEAD 2>$null
@@ -102,7 +136,12 @@ try {
     # nothing -- and nothing means pass. We never block on a guess.
     $defaultBranch = git symbolic-ref --short refs/remotes/origin/HEAD 2>$null
     if ($LASTEXITCODE -eq 0 -and $defaultBranch) {
-        $defaultBranch = ($defaultBranch -split '/')[-1]
+        # Retirer le prefixe du remote, et LUI SEUL. Un `-split '/'` suivi de
+        # [-1] tronquait une branche hierarchique : avec
+        # origin/HEAD -> origin/release/main, la branche par defaut devenait
+        # 'main', et un developpeur sur une branche locale nommee 'main' voyait
+        # son `db push` vers la production accepte.
+        $defaultBranch = $defaultBranch -replace '^origin/', ''
     }
     else {
         $defaultBranch = $null
@@ -113,10 +152,10 @@ try {
     }
 
     $verdict = & $module {
-        param($a, $e, $c, $d, $o)
+        param($a, $e, $c, $d, $o, $p)
         Test-CtxSupabaseGuard -Arguments $a -Environment $e `
-            -CurrentBranch $c -DefaultBranch $d -Override:$o
-    } $Arguments $environment $currentBranch $defaultBranch ($env:DEVCTX_ALLOW_PROD -eq '1')
+            -CurrentBranch $c -DefaultBranch $d -Override:$o -IndexContientProd:$p
+    } $Arguments $environment $currentBranch $defaultBranch ($env:DEVCTX_ALLOW_PROD -eq '1') $indexProd
 
     $projectName = & $module { param($r, $c)
         $p = Get-CtxSupabaseIndexPath $c

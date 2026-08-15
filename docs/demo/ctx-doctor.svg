@@ -1,0 +1,57 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='820' height='360' viewBox='0 0 820 360' role='img' aria-label='pwsh  -  ctx-doctor -Live'>
+  <style>
+    .m { font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace; font-size: 13.5px; white-space: pre; }
+    @keyframes a0 { 0%,4.188% { opacity:0 } 4.588%,100% { opacity:1 } }
+    .l0 { opacity:0; animation: a0 9.55s linear infinite; }
+    @keyframes a1 { 0%,17.801% { opacity:0 } 18.201%,100% { opacity:1 } }
+    .l1 { opacity:0; animation: a1 9.55s linear infinite; }
+    @keyframes a2 { 0%,18.848% { opacity:0 } 19.248%,100% { opacity:1 } }
+    .l2 { opacity:0; animation: a2 9.55s linear infinite; }
+    @keyframes a3 { 0%,21.99% { opacity:0 } 22.39%,100% { opacity:1 } }
+    .l3 { opacity:0; animation: a3 9.55s linear infinite; }
+    @keyframes a4 { 0%,25.131% { opacity:0 } 25.531%,100% { opacity:1 } }
+    .l4 { opacity:0; animation: a4 9.55s linear infinite; }
+    @keyframes a5 { 0%,28.796% { opacity:0 } 29.196%,100% { opacity:1 } }
+    .l5 { opacity:0; animation: a5 9.55s linear infinite; }
+    @keyframes a6 { 0%,32.461% { opacity:0 } 32.861%,100% { opacity:1 } }
+    .l6 { opacity:0; animation: a6 9.55s linear infinite; }
+    @keyframes a7 { 0%,36.126% { opacity:0 } 36.526%,100% { opacity:1 } }
+    .l7 { opacity:0; animation: a7 9.55s linear infinite; }
+    @keyframes a8 { 0%,41.361% { opacity:0 } 41.761%,100% { opacity:1 } }
+    .l8 { opacity:0; animation: a8 9.55s linear infinite; }
+    @keyframes a9 { 0%,46.597% { opacity:0 } 46.997%,100% { opacity:1 } }
+    .l9 { opacity:0; animation: a9 9.55s linear infinite; }
+    @keyframes a10 { 0%,50.262% { opacity:0 } 50.662%,100% { opacity:1 } }
+    .l10 { opacity:0; animation: a10 9.55s linear infinite; }
+    @keyframes a11 { 0%,53.927% { opacity:0 } 54.327%,100% { opacity:1 } }
+    .l11 { opacity:0; animation: a11 9.55s linear infinite; }
+    @keyframes a12 { 0%,66.492% { opacity:0 } 66.892%,100% { opacity:1 } }
+    .l12 { opacity:0; animation: a12 9.55s linear infinite; }
+    @keyframes a13 { 0%,67.539% { opacity:0 } 67.939%,100% { opacity:1 } }
+    .l13 { opacity:0; animation: a13 9.55s linear infinite; }
+    @keyframes blink { 0%,49% { opacity:1 } 50%,100% { opacity:0 } }
+    .cur { animation: blink 1s step-end infinite; }
+  </style>
+  <rect x='0' y='0' width='820' height='360' rx='10' fill='#12141a' stroke='#262a33'/>
+  <path d='M0 10 a10 10 0 0 1 10 -10 h800 a10 10 0 0 1 10 10 v20 h-820 z' fill='#1b1e26'/>
+  <circle cx='20' cy='15' r='5' fill='#ff5f57'/>
+  <circle cx='38' cy='15' r='5' fill='#febc2e'/>
+  <circle cx='56' cy='15' r='5' fill='#28c840'/>
+  <text class='m' x='78' y='20' fill='#6b7280' font-size='12'>pwsh  -  ctx-doctor -Live</text>
+  <text class='m l0' x='18' y='52' fill='#d7dae0'>$ ctx-doctor -Live</text>
+  <text class='m l1' x='18' y='73' fill='#6b7280'></text>
+  <text class='m l2' x='18' y='94' fill='#6b7280'>Verdict   Domain     Subject      Finding</text>
+  <text class='m l3' x='18' y='115' fill='#6b7280'>-------   ------     -------      -------</text>
+  <text class='m l4' x='18' y='136' fill='#4ade80'>OK        context    owner        perso</text>
+  <text class='m l5' x='18' y='157' fill='#4ade80'>OK        git        identity     me@example.com</text>
+  <text class='m l6' x='18' y='178' fill='#fbbf24'>WARN      supabase   binary       2 installs, different versions</text>
+  <text class='m l7' x='18' y='199' fill='#67e8f9'>                                    -&gt; the version depends on the shell</text>
+  <text class='m l8' x='18' y='220' fill='#fbbf24'>WARN      supabase   project      this folder targets PRODUCTION</text>
+  <text class='m l9' x='18' y='241' fill='#4ade80'>OK        guard      coverage     active in every shell</text>
+  <text class='m l10' x='18' y='262' fill='#4ade80'>OK        gh         token        valid - myaccount (repo, workflow)</text>
+  <text class='m l11' x='18' y='283' fill='#4ade80'>OK        supabase   token        valid - reaches demo-app-prod</text>
+  <text class='m l12' x='18' y='304' fill='#6b7280'></text>
+  <text class='m l13' x='18' y='325' fill='#6b7280'># No token value is ever printed. Only the key holding it.</text>
+  <rect class='cur l13' x='18' y='333' width='8' height='15' fill='#5eead4'/>
+</svg>
+

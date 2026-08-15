@@ -1,0 +1,60 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='780' height='381' viewBox='0 0 780 381' role='img' aria-label='git-bash  -  no context loaded'>
+  <style>
+    .m { font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace; font-size: 13.5px; white-space: pre; }
+    @keyframes a0 { 0%,3.54% { opacity:0 } 3.94%,100% { opacity:1 } }
+    .l0 { opacity:0; animation: a0 11.3s linear infinite; }
+    @keyframes a1 { 0%,9.735% { opacity:0 } 10.135%,100% { opacity:1 } }
+    .l1 { opacity:0; animation: a1 11.3s linear infinite; }
+    @keyframes a2 { 0%,17.699% { opacity:0 } 18.099%,100% { opacity:1 } }
+    .l2 { opacity:0; animation: a2 11.3s linear infinite; }
+    @keyframes a3 { 0%,22.124% { opacity:0 } 22.524%,100% { opacity:1 } }
+    .l3 { opacity:0; animation: a3 11.3s linear infinite; }
+    @keyframes a4 { 0%,34.513% { opacity:0 } 34.913%,100% { opacity:1 } }
+    .l4 { opacity:0; animation: a4 11.3s linear infinite; }
+    @keyframes a5 { 0%,35.398% { opacity:0 } 35.798%,100% { opacity:1 } }
+    .l5 { opacity:0; animation: a5 11.3s linear infinite; }
+    @keyframes a6 { 0%,39.823% { opacity:0 } 40.223%,100% { opacity:1 } }
+    .l6 { opacity:0; animation: a6 11.3s linear infinite; }
+    @keyframes a7 { 0%,40.708% { opacity:0 } 41.108%,100% { opacity:1 } }
+    .l7 { opacity:0; animation: a7 11.3s linear infinite; }
+    @keyframes a8 { 0%,44.248% { opacity:0 } 44.648%,100% { opacity:1 } }
+    .l8 { opacity:0; animation: a8 11.3s linear infinite; }
+    @keyframes a9 { 0%,46.903% { opacity:0 } 47.303%,100% { opacity:1 } }
+    .l9 { opacity:0; animation: a9 11.3s linear infinite; }
+    @keyframes a10 { 0%,55.752% { opacity:0 } 56.152%,100% { opacity:1 } }
+    .l10 { opacity:0; animation: a10 11.3s linear infinite; }
+    @keyframes a11 { 0%,56.637% { opacity:0 } 57.037%,100% { opacity:1 } }
+    .l11 { opacity:0; animation: a11 11.3s linear infinite; }
+    @keyframes a12 { 0%,61.062% { opacity:0 } 61.462%,100% { opacity:1 } }
+    .l12 { opacity:0; animation: a12 11.3s linear infinite; }
+    @keyframes a13 { 0%,71.681% { opacity:0 } 72.081%,100% { opacity:1 } }
+    .l13 { opacity:0; animation: a13 11.3s linear infinite; }
+    @keyframes a14 { 0%,72.566% { opacity:0 } 72.966%,100% { opacity:1 } }
+    .l14 { opacity:0; animation: a14 11.3s linear infinite; }
+    @keyframes blink { 0%,49% { opacity:1 } 50%,100% { opacity:0 } }
+    .cur { animation: blink 1s step-end infinite; }
+  </style>
+  <rect x='0' y='0' width='780' height='381' rx='10' fill='#12141a' stroke='#262a33'/>
+  <path d='M0 10 a10 10 0 0 1 10 -10 h760 a10 10 0 0 1 10 10 v20 h-780 z' fill='#1b1e26'/>
+  <circle cx='20' cy='15' r='5' fill='#ff5f57'/>
+  <circle cx='38' cy='15' r='5' fill='#febc2e'/>
+  <circle cx='56' cy='15' r='5' fill='#28c840'/>
+  <text class='m' x='78' y='20' fill='#6b7280' font-size='12'>git-bash  -  no context loaded</text>
+  <text class='m l0' x='18' y='52' fill='#d7dae0'>$ cd ~/projects/demo-app</text>
+  <text class='m l1' x='18' y='73' fill='#d7dae0'>$ echo $DEVCTX          # no context loaded at all</text>
+  <text class='m l2' x='18' y='94' fill='#6b7280'></text>
+  <text class='m l3' x='18' y='115' fill='#d7dae0'>$ supabase db reset --linked</text>
+  <text class='m l4' x='18' y='136' fill='#6b7280'></text>
+  <text class='m l5' x='18' y='157' fill='#f87171'>  REFUSED - DevContext production guard</text>
+  <text class='m l6' x='18' y='178' fill='#6b7280'></text>
+  <text class='m l7' x='18' y='199' fill='#fbbf24'>    Target : demo-app-prod</text>
+  <text class='m l8' x='18' y='220' fill='#d7dae0'>    Reason : 'db reset' drops and recreates the</text>
+  <text class='m l9' x='18' y='241' fill='#d7dae0'>             database. Refused on production.</text>
+  <text class='m l10' x='18' y='262' fill='#6b7280'></text>
+  <text class='m l11' x='18' y='283' fill='#d7dae0'>$ echo $?</text>
+  <text class='m l12' x='18' y='304' fill='#d7dae0'>1</text>
+  <text class='m l13' x='18' y='325' fill='#6b7280'></text>
+  <text class='m l14' x='18' y='346' fill='#6b7280'># The real CLI was never reached.</text>
+  <rect class='cur l14' x='18' y='354' width='8' height='15' fill='#5eead4'/>
+</svg>
+

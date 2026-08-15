@@ -638,13 +638,40 @@ function Test-CtxDoctorWsl {
             Where-Object { $_.PSChildName -match '^\{' })
     if ($distros.Count -eq 0) { return }
 
-    $noms = @($distros | ForEach-Object {
+    $tous = @($distros | ForEach-Object {
             (Get-ItemProperty -LiteralPath $_.PSPath -Name 'DistributionName' -ErrorAction SilentlyContinue).DistributionName
         } | Where-Object { $_ })
 
+    $noms = @($tous | Where-Object { -not (Test-CtxDistroTechnique $_) })
+    if ($noms.Count -eq 0) { return }
+
     New-CtxCheck -Domaine 'garde-fou' -Sujet 'WSL' -Verdict 'ATTENTION' `
-        -Detail ("$($distros.Count) distribution(s) installee(s)" +
-        $(if ($noms) { " ($($noms -join ', '))" } else { '' }) +
+        -Detail ("$($noms.Count) distribution(s) installee(s) ($($noms -join ', '))" +
         ' : le shim Windows n y est pas, le garde-fou ne couvre pas ces shells') `
         -Correctif 'y installer la CLI Supabase separement, ou ne pas viser un projet de production depuis WSL'
+}
+
+function Test-CtxDistroTechnique {
+    <#
+      PURE. Cette distribution WSL est-elle une machinerie interne, ou un shell
+      dans lequel quelqu'un tape des commandes ?
+
+      Docker Desktop installe docker-desktop et docker-desktop-data. Personne n y
+      ouvre un terminal pour lancer `supabase db reset`, et les compter revenait
+      a dire « 2 distributions » a quelqu'un qui n en a installe qu'une. Un
+      diagnostic qui gonfle ses chiffres perd la confiance qui le rend utile --
+      la meme raison qui fait regrouper les raccourcis des editeurs.
+
+      La liste est courte et nommee : mieux vaut laisser passer une distribution
+      technique inconnue -- l'avertissement reste vrai, juste trop prudent -- que
+      d'ecarter par heuristique le shell Ubuntu de quelqu'un.
+    #>
+    param([AllowNull()][AllowEmptyString()][string]$Nom)
+
+    if (-not $Nom) { return $true }
+    $Nom.ToLowerInvariant() -in @(
+        'docker-desktop', 'docker-desktop-data',
+        'rancher-desktop', 'rancher-desktop-data',
+        'podman-machine-default'
+    )
 }

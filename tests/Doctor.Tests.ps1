@@ -143,6 +143,31 @@ Describe 'Test-CtxDoctorIdentiteGit' {
     }
 }
 
+Describe 'Test-CtxDistroTechnique' {
+    It 'ecarte <_>, qui est de la machinerie et pas un shell' -ForEach @(
+        'docker-desktop', 'docker-desktop-data', 'Docker-Desktop', 'rancher-desktop'
+    ) {
+        InModuleScope DevContext -Parameters @{ n = $_ } { param($n)
+            Test-CtxDistroTechnique $n | Should -BeTrue
+        }
+    }
+
+    It 'garde <_>, ou quelqu un tape reellement des commandes' -ForEach @(
+        'Ubuntu', 'Ubuntu-22.04', 'Debian', 'kali-linux', 'Arch'
+    ) {
+        InModuleScope DevContext -Parameters @{ n = $_ } { param($n)
+            Test-CtxDistroTechnique $n | Should -BeFalse
+        }
+    }
+
+    It 'ne prend pas un nom vide pour une vraie distribution' {
+        InModuleScope DevContext {
+            Test-CtxDistroTechnique '' | Should -BeTrue
+            Test-CtxDistroTechnique $null | Should -BeTrue
+        }
+    }
+}
+
 Describe 'Test-CtxDoctorRemote' {
     It 'rend PROBLEME sur une URL qui porte un login' {
         # https://login@github.com/... ne matche pas la regle insteadOf, qui est

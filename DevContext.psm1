@@ -192,7 +192,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -711,21 +711,45 @@ function Get-CtxSupabaseIndexPath {
 # one of them silently ignored, and a fix that had no effect.
 $script:ShimDir = Join-Path $PSScriptRoot 'shims'
 
+function Get-CtxShimDirs {
+    <#
+      TOUS les dossiers susceptibles de contenir nos shims, jamais un seul.
+
+      C'est une correction de fond, pas une commodite. `Get-CtxSupabaseExe`
+      comparait le dossier resolu a UN chemin -- celui du module. Des lors que
+      PATH designe la jonction, `Get-Command supabase` rend
+      ...\DevContext\current\shims\supabase.cmd, une chaine differente de
+      ...\Modules\DevContext\1.3.0\shims. L'exclusion echouait, le shim se
+      resolvait lui-meme, et s'appelait indefiniment.
+
+      Comparer des chemins qui designent le meme dossier par des noms differents
+      est la meme faute que decider sur du texte affiche : la valeur comparee
+      n'est pas celle qui porte le sens.
+    #>
+    @(
+        $script:ShimDir
+        Get-CtxShimStable
+    ) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\', '/') } | Sort-Object -Unique
+}
+
 function Get-CtxSupabaseExe {
     <#
-      Resolves the REAL supabase binary, skipping our own shim directory.
+      Resolves the REAL supabase binary, skipping every directory of ours.
 
-      Once the shim sits in the PATH, `Get-Command supabase` finds IT first.
+      Once a shim sits in the PATH, `Get-Command supabase` finds IT first.
       Without this exclusion the shim would invoke itself forever, and the
       module would drive the guard instead of the CLI.
-    #>
-    param([string]$ExcludeDir = $script:ShimDir)
 
-    $excluded = if ($ExcludeDir) { $ExcludeDir.TrimEnd('\', '/') } else { $null }
+      -ExcludeDir garde sa forme d'origine (un chemin unique) pour les tests et
+      les appelants existants ; sans lui, l'ensemble complet est exclu.
+    #>
+    param([string[]]$ExcludeDir = (Get-CtxShimDirs))
+
+    $exclus = @($ExcludeDir | Where-Object { $_ })
 
     $candidate = Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue |
         Where-Object {
-            -not $excluded -or (Split-Path $_.Source -Parent).TrimEnd('\', '/') -ne $excluded
+            -not (Test-CtxDossierEstShim -Dossier (Split-Path $_.Source -Parent) -Dossiers $exclus)
         } | Select-Object -First 1
 
     if (-not $candidate) { throw (T 'bin.supabaseAbsent') }

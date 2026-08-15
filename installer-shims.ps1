@@ -45,7 +45,18 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'src' 'Langue.ps1')
 Set-CtxLangue | Out-Null
 
+# Meme fichier que celui charge par le module : les regles de chemin ne doivent
+# exister qu'une fois. Deux exemplaires d'une meme regle, c'est l'incident du
+# 12 aout 2026 -- une correction appliquee a la copie qui n'etait pas executee.
+. (Join-Path $PSScriptRoot 'src' 'Chemins.ps1')
+
+# Le dossier REEL, celui ou vivent et s'ecrivent les fichiers.
 $script:ShimDir  = Join-Path $PSScriptRoot 'shims'
+
+# Le chemin pose dans PATH : une jonction, sans numero de version. Voir
+# src/Chemins.ps1 pour ce que cette distinction repare.
+$script:Jonction     = Get-CtxShimLien
+$script:CheminStable = Get-CtxShimStable
 $script:ShimFichiers = @('supabase.ps1', 'supabase.cmd', 'supabase', 'editor.ps1')
 
 # Written into every generated entry point, and the ONLY thing that authorises
@@ -343,14 +354,38 @@ if ($AsLibrary) { return }
 # ---------------------------------------------------------------------------
 
 $etat  = Get-CtxUserPath
-$pose  = -not (Add-CtxPathEntry -Entry $script:ShimDir -Current $etat.Value)
+$pose  = -not (Add-CtxPathEntry -Entry $script:CheminStable -Current $etat.Value)
+
+# L'ancienne forme : le dossier du module directement dans PATH. Presente sur
+# toute machine installee avant le 15 aout 2026. On la detecte pour la retirer,
+# et non pour la tolerer : deux de nos dossiers dans PATH, c'est la boucle que
+# les shims interrompent desormais par compteur.
+$ancienPose = -not (Add-CtxPathEntry -Entry $script:ShimDir -Current $etat.Value)
 
 if ($Verifier) {
     Write-Host ''
     if ($pose) { Write-Host "  $(T 'inst.actif')" -ForegroundColor Green }
     else       { Write-Host "  $(T 'inst.absent')" -ForegroundColor Yellow }
-    Write-Host "    $(T 'inst.dossier' $script:ShimDir)"
+    Write-Host "    $(T 'inst.dossier' $script:CheminStable)"
     Write-Host "    $(T 'inst.registre' $etat.Kind)"
+    Write-Host ''
+
+    $cible = Get-CtxJonctionCible -Chemin $script:Jonction
+    Write-Host "  $(T 'inst.jonction')"
+    if (-not $cible) {
+        Write-Host "    $(T 'inst.jonctionAbsente')" -ForegroundColor Yellow
+    }
+    elseif (Test-CtxJonctionSaine -Cible $cible -ModuleAttendu $PSScriptRoot) {
+        Write-Host "    $cible" -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host "    $cible" -ForegroundColor Yellow
+        Write-Host "    $(T 'inst.jonctionAilleurs' $PSScriptRoot)" -ForegroundColor Yellow
+    }
+    if ($ancienPose) {
+        Write-Host ''
+        Write-Host "  $(T 'inst.ancienneEntree' $script:ShimDir)" -ForegroundColor Yellow
+    }
     Write-Host ''
     Write-Host "  $(T 'inst.fichiers')"
     foreach ($f in $script:ShimFichiers) {
@@ -368,13 +403,20 @@ if ($Verifier) {
     Write-Host "  $(T 'inst.resolution')"
     $resolus = @(Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue)
     if (-not $resolus) { Write-Host "    $(T 'inst.aucune')" -ForegroundColor Yellow }
+    $nosDossiers = @($script:CheminStable, $script:ShimDir)
     foreach ($r in $resolus) {
-        $premier = Compare-CtxPathEntry (Split-Path $r.Source -Parent) $script:ShimDir
-        Write-Host ('    {0} {1}' -f $(if ($premier) { '->' } else { '  ' }), $r.Source) `
-            -ForegroundColor $(if ($premier) { 'Green' } else { 'DarkGray' })
+        $premier = Test-CtxDossierEstShim -Dossier (Split-Path $r.Source -Parent) -Dossiers $nosDossiers
+        $marque = if ($premier) { '->' } else { '  ' }
+        $couleur = if ($premier) { 'Green' } else { 'DarkGray' }
+        Write-Host ('    {0} {1}' -f $marque, $r.Source) -ForegroundColor $couleur
     }
     Write-Host ''
-    if ($pose -and $resolus -and -not (Compare-CtxPathEntry (Split-Path $resolus[0].Source -Parent) $script:ShimDir)) {
+    $premierEstNotre = $false
+    if ($resolus) {
+        $premierDossier = Split-Path $resolus[0].Source -Parent
+        $premierEstNotre = Test-CtxDossierEstShim -Dossier $premierDossier -Dossiers $nosDossiers
+    }
+    if ($pose -and $resolus -and -not $premierEstNotre) {
         Write-Host "  $(T 'inst.poseNonActif')" -ForegroundColor Yellow
         Write-Host "  $(T 'inst.terminalNeuf')" -ForegroundColor Yellow
         Write-Host ''
@@ -386,12 +428,23 @@ if ($Restaurer) {
     $retrait = Sync-CtxEditorEntryPoints -Noms @()
     foreach ($r in $retrait.Retires) { Write-Host "  $(T 'inst.retire' (Split-Path $r -Leaf))" -ForegroundColor DarkGray }
 
-    $nouveau = Remove-CtxPathEntry -Entry $script:ShimDir -Current $etat.Value
-    if (-not $nouveau -and $nouveau -ne '') {
+    # Les DEUX formes, la stable et l'ancienne. Ne retirer que celle qu'on pose
+    # aujourd'hui laisserait derriere elle l'entree des installations d'avant le
+    # 15 aout 2026 : une desinstallation qui ne desinstalle pas tout.
+    $courant = $etat.Value
+    foreach ($entree in @($script:CheminStable, $script:ShimDir)) {
+        $reduit = Remove-CtxPathEntry -Entry $entree -Current $courant
+        if ($null -ne $reduit) { $courant = $reduit }
+    }
+
+    $jonctionRetiree = Remove-CtxJonction -Chemin $script:Jonction
+    if ($jonctionRetiree) { Write-Host "  $(T 'inst.jonctionRetiree')" -ForegroundColor DarkGray }
+
+    if ($courant -eq $etat.Value) {
         Write-Host "  $(T 'inst.dejaAbsent')" -ForegroundColor DarkGray
         return
     }
-    Set-CtxUserPath -Value $nouveau -Kind $etat.Kind
+    Set-CtxUserPath -Value $courant -Kind $etat.Kind
     Write-Host "  $(T 'inst.retireDuPath')" -ForegroundColor Green
     Write-Host "  $(T 'inst.ancienPath')" -ForegroundColor DarkGray
     return
@@ -418,8 +471,30 @@ else {
 }
 foreach ($r in $sync.Retires) { Write-Host "    $(T 'inst.retire' (Split-Path $r -Leaf))" -ForegroundColor DarkGray }
 
-$nouveau = Add-CtxPathEntry -Entry $script:ShimDir -Current $etat.Value
-if (-not $nouveau) {
+# La jonction AVANT le PATH. Poser dans PATH un chemin qui ne mene encore nulle
+# part donnerait un `supabase` introuvable jusqu'au prochain terminal -- une
+# fenetre pendant laquelle le garde-fou est annonce sans etre la.
+Set-CtxJonction -Chemin $script:Jonction -Cible $PSScriptRoot | Out-Null
+Write-Host ''
+Write-Host "  $(T 'inst.jonctionPosee')" -ForegroundColor Green
+Write-Host "    $script:Jonction"
+Write-Host "    -> $PSScriptRoot" -ForegroundColor DarkGray
+
+$courant = $etat.Value
+
+# Migration : retirer l'ancienne entree, celle qui portait le dossier du module.
+# Sur une installation Gallery elle porte un numero de version et se perime a la
+# mise a jour suivante ; sur toute installation elle ferait un second dossier de
+# shims dans PATH, donc une boucle potentielle.
+$sansAncien = Remove-CtxPathEntry -Entry $script:ShimDir -Current $courant
+if ($null -ne $sansAncien) {
+    $courant = $sansAncien
+    Write-Host "  $(T 'inst.ancienneRetiree' $script:ShimDir)" -ForegroundColor DarkGray
+}
+
+$nouveau = Add-CtxPathEntry -Entry $script:CheminStable -Current $courant
+if (-not $nouveau) { $nouveau = $courant }
+if ($nouveau -eq $etat.Value) {
     Write-Host ''
     Write-Host "  $(T 'inst.pathDejaPose')" -ForegroundColor DarkGray
     return
@@ -433,7 +508,7 @@ Set-CtxUserPath -Value $nouveau -Kind $etat.Kind
 
 Write-Host ''
 Write-Host "  $(T 'inst.pose')" -ForegroundColor Green
-Write-Host "    $script:ShimDir"
+Write-Host "    $script:CheminStable"
 Write-Host "    $(T 'inst.typePreserve' $etat.Kind)"
 Write-Host "  $(T 'inst.sauvegarde' $sauvegarde)" -ForegroundColor DarkGray
 if ($nouveau.Length -gt 2000) {

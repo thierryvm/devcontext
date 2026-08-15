@@ -285,15 +285,18 @@ function Get-CtxBinaireFacts {
         [string[]]$ArgsVersion = @('--version')
     )
 
-    $shimDir = (Join-Path $PSScriptRoot '..' 'shims')
-    $shimDir = try { (Resolve-Path -LiteralPath $shimDir -ErrorAction Stop).Path.TrimEnd('\') } catch { $shimDir }
+    # TOUS nos dossiers, pas un seul. Depuis que PATH designe une jonction, le
+    # meme dossier porte deux noms ; n'en reconnaitre qu'un ferait passer notre
+    # propre shim pour une installation concurrente de la CLI -- et le rapport
+    # annoncerait un conflit qui n'existe pas, en tentant de l'interroger.
+    $shimDirs = @(Get-CtxShimDirs)
 
     $vus = @{}
     foreach ($c in @(Get-Command $Nom -CommandType Application -All -ErrorAction SilentlyContinue)) {
         $dossier = (Split-Path $c.Source -Parent).TrimEnd('\')
         if ($vus.ContainsKey($dossier.ToLowerInvariant())) { continue }
 
-        $estShim = $dossier.ToLowerInvariant() -eq $shimDir.ToLowerInvariant()
+        $estShim = Test-CtxDossierEstShim -Dossier $dossier -Dossiers $shimDirs
         $version = $null
         if (-not $estShim) {
             # A version probe must never hang a diagnostic. Failure is data, so
@@ -605,7 +608,34 @@ function Test-CtxDoctorGardeFou {
     catch { return (New-CtxCheck -Domaine 'garde-fou' -Sujet 'shims' -Verdict 'ABSENT' -Detail (T 'doc.garde.sansDossier')) }
 
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $pose = @($userPath -split ';' | Where-Object { $_ -and $_.TrimEnd('\').ToLowerInvariant() -eq $shimDir.ToLowerInvariant() }).Count -gt 0
+    $entrees  = @($userPath -split ';' | Where-Object { $_ })
+    $stable   = Get-CtxShimStable
+    $pose     = @($entrees | Where-Object { Test-CtxDossierEstShim -Dossier $_ -Dossiers @($stable, $shimDir) }).Count -gt 0
+
+    # LA JONCTION POINTE-T-ELLE SUR LA VERSION CHARGEE ?
+    #
+    # C'est la question que la publication du 15 aout 2026 a rendue necessaire.
+    # Installe depuis la Gallery, le module vit sous un chemin qui porte son
+    # NUMERO DE VERSION. Installer la version suivante cree un dossier voisin ;
+    # la jonction, elle, continue de designer l'ancienne. Le garde-fou tourne
+    # alors sur une logique perimee, puis disparait le jour ou l'ancienne version
+    # est desinstallee.
+    #
+    # Rien ne peut se reparer tout seul ici -- l'installateur doit etre relance.
+    # Ce que le diagnostic peut faire, c'est empecher que la panne soit
+    # silencieuse ; c'est la doctrine de tout ce fichier.
+    $moduleBase = Split-Path $PSScriptRoot -Parent
+    $cible = Get-CtxJonctionCible -Chemin (Get-CtxShimLien)
+    if ($pose -and -not (Test-CtxJonctionSaine -Cible $cible -ModuleAttendu $moduleBase)) {
+        if (-not $cible) {
+            return New-CtxCheck -Domaine 'garde-fou' -Sujet 'jonction' -Verdict 'PROBLEME' `
+                -Detail (T 'doc.garde.jonctionAbsente') `
+                -Correctif (T 'doc.garde.jonctionFix')
+        }
+        return New-CtxCheck -Domaine 'garde-fou' -Sujet 'jonction' -Verdict 'PROBLEME' `
+            -Detail (T 'doc.garde.jonctionPerimee' $cible $moduleBase) `
+            -Correctif (T 'doc.garde.jonctionFix')
+    }
 
     if (-not $pose) {
         return New-CtxCheck -Domaine 'garde-fou' -Sujet 'portee' -Verdict 'PROBLEME' `

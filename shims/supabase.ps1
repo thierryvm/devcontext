@@ -39,6 +39,44 @@ $ErrorActionPreference = 'Stop'
 $ShimDir = $PSScriptRoot
 $Arguments = @($args)
 
+# GARDE-FOU CONTRE L'AUTO-APPEL, ET POURQUOI IL NE COMPARE PAS DES CHEMINS.
+#
+# Resolve-RealExe s'ecarte lui-meme en comparant le dossier resolu a
+# $PSScriptRoot. Cela suffit tant qu'un seul de nos dossiers figure dans PATH.
+# Depuis le 15 aout 2026, PATH designe une JONCTION vers le module : le meme
+# dossier porte alors deux noms, et si les deux se retrouvent dans PATH -- une
+# migration interrompue, une installation manuelle, un PATH bricole -- chaque
+# shim ecarte le sien, trouve l'autre, et l'appelle. Indefiniment.
+#
+# Un compteur ne ment pas, la ou un chemin ment volontiers : jonctions, casse,
+# noms 8.3, lecteurs `subst`, chemins UNC.
+#
+# IL INTERROMPT LA BOUCLE, IL NE SAUTE JAMAIS LE CONTROLE. Une premiere version
+# deleguait au binaire reel des la deuxieme entree -- ce qui donnait un
+# contournement complet du garde-fou a qui posait DEVCTX_SHIM_DEPTH=1 avant sa
+# commande. Une variable d'environnement qui desarme une protection doit etre
+# documentee et volontaire (DEVCTX_ALLOW_PROD), jamais un effet de bord d'un
+# mecanisme interne.
+#
+# Ici le garde-fou s'execute a chaque niveau ; le compteur ne fait qu'echouer
+# franchement au lieu de tourner sans fin. Poser la variable a la main ne peut
+# donc qu'interrompre plus tot : un refus, jamais un passe-droit.
+#
+# Message en anglais et code en dur : c'est un diagnostic de defaut
+# d'installation, pas une sortie normale, et il doit s'afficher meme si le
+# fichier de langue est ce qui manque.
+$Profondeur = 0
+if ($env:DEVCTX_SHIM_DEPTH) { $Profondeur = [int]$env:DEVCTX_SHIM_DEPTH }
+if ($Profondeur -ge 3) {
+    [Console]::Error.WriteLine('')
+    [Console]::Error.WriteLine('  DevContext: shim loop detected -- a shim resolved to another shim.')
+    [Console]::Error.WriteLine('  Two DevContext shim directories are probably both in PATH.')
+    [Console]::Error.WriteLine('  Fix: pwsh -File installer-shims.ps1 -Verifier')
+    [Console]::Error.WriteLine('')
+    exit 1
+}
+$env:DEVCTX_SHIM_DEPTH = $Profondeur + 1
+
 # --- delegation -------------------------------------------------------------
 
 function Resolve-RealExe {

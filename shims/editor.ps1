@@ -55,6 +55,26 @@ $Arguments = @($args)
 $EditorName = $env:DEVCTX_SHIM_EDITOR
 if (-not $EditorName) { $EditorName = 'code' }
 
+# Meme garde-fou anti-boucle que shims/supabase.ps1, et meme raison : depuis que
+# PATH designe une jonction vers le module, un meme dossier porte deux noms. Si
+# les deux se retrouvent dans PATH, chaque shim ecarte le sien, trouve l'autre,
+# et l'appelle sans fin.
+#
+# Le cas est plus visible ici que pour supabase : un editeur qui ne s'ouvre pas
+# ne donne aucun message, et l'utilisateur reclique. Une erreur qui nomme la
+# cause vaut mieux qu'une fenetre qui n'arrive jamais.
+$Profondeur = 0
+if ($env:DEVCTX_SHIM_DEPTH) { $Profondeur = [int]$env:DEVCTX_SHIM_DEPTH }
+if ($Profondeur -ge 3) {
+    [Console]::Error.WriteLine('')
+    [Console]::Error.WriteLine("  DevContext: shim loop detected for '$EditorName'.")
+    [Console]::Error.WriteLine('  Two DevContext shim directories are probably both in PATH.')
+    [Console]::Error.WriteLine('  Fix: pwsh -File installer-shims.ps1 -Verifier')
+    [Console]::Error.WriteLine('')
+    exit 1
+}
+$env:DEVCTX_SHIM_DEPTH = $Profondeur + 1
+
 # --- delegation -------------------------------------------------------------
 
 function Resolve-RealExe {

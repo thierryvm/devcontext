@@ -1,3 +1,60 @@
+## [1.3.1] - 15 August 2026
+
+The release that repairs what publishing revealed. Nothing here was visible
+before 1.3.0 reached the Gallery, and that is the whole point of it.
+
+### Fixed
+
+- **The guard would have silently stopped guarding on the first update.** The
+  installer put the module's own `shims` folder in `PATH`. On the author's
+  machine the module is a symlink to a repository, so that path never moves.
+  Installed from the Gallery, the module lives under
+  `...\Modules\DevContext\1.3.0\` — **the version number is in the path**.
+  Installing 1.4.0 creates a sibling folder; `PATH` keeps pointing at 1.3.0, so
+  the guard runs stale logic, and then disappears entirely the day the old
+  version is removed. Without a message.
+
+  That is precisely the failure this tool exists to prevent, and no machine
+  could have shown it before publication — the same shape as the five dead ends
+  a virgin machine walked into, and as code deciding on translated text: what
+  breaks is what the author is not positioned to see.
+
+  `PATH` now receives `%LOCALAPPDATA%\DevContext\current\shims`, where `current`
+  is a **junction** to the installed module. A junction and not a copy: the shims
+  resolve the module by relative path (`..\DevContext.psd1`), and that path stays
+  valid THROUGH a junction. Copying would break the resolution, the shim would
+  fall into its `catch`, and it would delegate — silently, always. A junction and
+  not a symlink: symlinks need administrator rights or developer mode on Windows,
+  and an installer that demands elevation for a per-user tool does not get
+  installed. Existing installs are migrated: the old entry is removed as the new
+  one is added.
+
+- **A shim could have called itself forever.** `Get-CtxSupabaseExe` skipped our
+  own directory by comparing against ONE path. Once `PATH` names a junction the
+  same folder answers to two names, the comparison failed, and the shim resolved
+  to itself. Fixed by excluding the whole set — and, in the shims themselves, by
+  a depth counter rather than a path comparison, because paths lie readily:
+  junctions, casing, 8.3 names, `subst` drives, UNC.
+
+  The counter **breaks the loop, it never skips the check**. A first version
+  delegated to the real binary on the second entry, which handed a complete
+  bypass to anyone setting `DEVCTX_SHIM_DEPTH=1` before their command. An
+  environment variable that disarms a protection must be deliberate and
+  documented (`DEVCTX_ALLOW_PROD`), never a side effect of an internal mechanism.
+
+### Added
+
+- **`ctx doctor` reports a stale junction** — one pointing at a version other
+  than the loaded module, or missing while `PATH` still names it. Nothing can
+  repair itself here; the installer has to be run again after a module update.
+  What the diagnostic can do is stop the failure from being silent, which is the
+  doctrine of that whole file.
+- **`src/Chemins.ps1`**, sourced by both the module and the installer. The path
+  rules exist once: two copies of one rule is the 12 Aug 2026 incident, where a
+  fix landed on the copy that was not the one being executed.
+
+---
+
 ## [1.3.0] - 15 August 2026
 
 The release where the tool stopped speaking only its author's language.

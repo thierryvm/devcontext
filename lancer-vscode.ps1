@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Ouvre VS Code dans un contexte DevContext, identité chargée.
 
@@ -41,6 +41,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function Stop-WithMessage {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Affiche un motif et termine le script ; ne modifie aucun etat.')]
     param([string]$Message)
     Write-Host ""
     Write-Host "  $Message" -ForegroundColor Red
@@ -62,7 +64,7 @@ if (-not (Test-Path -LiteralPath $Path)) {
 }
 
 # -NoCd : on se place ensuite sur le PROJET, pas sur la racine du contexte.
-work $Context -NoCd
+Use-DevContext -Name $Context -NoCd
 
 # Le changement de dossier déclenche le hook qui aligne SUPABASE_ACCESS_TOKEN
 # sur le project-ref trouvé dans le dossier — indispensable quand un contexte

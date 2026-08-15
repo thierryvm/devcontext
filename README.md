@@ -77,10 +77,19 @@ through it.
 to set, no state to keep in your head. A fresh terminal with no context active
 is still protected, because the answer is derived from where you are standing.
 
+**Your editor gets its own sign-ins, whatever the editor.** VS Code, Cursor,
+Windsurf, Trae and their relatives store account sessions per profile directory,
+so one directory per context means independent GitHub, Copilot and marketplace
+sessions — live at the same time, instead of signing out of one to sign into
+another. DevContext does not ship a list of editors: it **finds** the ones on
+your machine and **measures** what each supports, because a hardcoded table is
+wrong on the second machine it meets.
+
 **It tells you what is wrong before you find out the hard way.** `ctx doctor`
 answers, for the current folder: which tools are installed, which account each
-one will actually reach, whether the tokens are still valid, and where a
-credential is sitting in clear text in a config file.
+one will actually reach, whether the tokens are still valid, where a credential
+is sitting in clear text in a config file, and which of your shortcuts will
+quietly open a client project on your personal profile.
 
 ---
 
@@ -122,9 +131,68 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx-mcp` | Write MCP configuration for this project, bound to its own credentials |
 | `ctx-list` | Every context on this machine |
 | `ctx-who` | Which context owns this folder |
-| `code-ctx` | Open VS Code with this context's profile and environment |
+| `ctx-editors` | Which editors are installed, and can each one be isolated? |
+| `ctx-shortcut` | Write a shortcut that opens a project in its own context |
+| `code-ctx` | Open an editor with this context's profile and environment |
 
 `ctx-doctor -Json` emits machine-readable output, for CI or for an AI agent.
+
+---
+
+## Editors
+
+An editor keeps its GitHub, Copilot and marketplace sessions inside its profile
+directory, encrypted per user. Give each context its own directory and the
+sessions stop colliding — that is the whole mechanism, and every editor in the
+VS Code family exposes it as `--user-data-dir`.
+
+The difficulty is that nothing else in your day passes that flag. A shortcut you
+made, `code .` in a terminal, "Open with" from the file explorer, an npm script,
+an agent — all of them open the shared profile. So DevContext puts an entry
+point for each editor in `PATH`, ahead of the real one:
+
+```
+$ cd F:\PROJECTS\Clients\acme\site
+$ code .          # opens on acme's profile, with acme's gh, acme's tokens
+
+$ cd F:\PROJECTS\Apps\my-thing
+$ code .          # opens on your own profile — both windows at once
+```
+
+Set `DEVCTX_SHIM_TRACE=1` and it says, on stderr, which context it picked and
+why. "My editor opened on the wrong account" has no answer otherwise.
+
+**Discovered, not declared.** `ctx-editors` looks for editors and probes what
+each one supports:
+
+```
+Editeur             Commande      Profil  Extensions   Methode
+Visual Studio Code  code          isole   isolees      measured
+Cursor              cursor        isole   isolees      measured
+Windsurf            windsurf      isole   isolees      measured
+Antigravity         antigravity   isole   partagees    declared
+```
+
+`measured` means the flag was tried and the directory it named appeared.
+`declared` means the editor exposes no command line to try, so the flag was read
+from the application's own files — weaker evidence, reported as such rather than
+rounded up. Antigravity is the case that settles the argument for measuring:
+it accepts `--user-data-dir` and has no `--extensions-dir` at all, which no
+amount of "it is a VS Code fork" would have told you.
+
+Add an editor DevContext does not know by dropping an `editors.json` next to
+your contexts:
+
+```json
+[{ "name": "myeditor", "label": "My Editor", "profile": "myeditor",
+   "command": "D:\\tools\\myeditor\\bin\\myeditor.cmd" }]
+```
+
+**Shortcuts.** A shortcut whose target is `C:\...\Code.exe` bypasses `PATH`
+entirely — nothing can fix that from the outside, which is what an absolute path
+means. `ctx doctor` therefore reads the shortcuts on your desktop, start menu and
+taskbar and reports which ones will open a context project on the shared profile.
+`ctx-shortcut -Path <project>` writes a correct one.
 
 ---
 

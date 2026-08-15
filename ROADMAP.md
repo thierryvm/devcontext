@@ -17,7 +17,15 @@ do here* rather than only *who am I*. See `CHANGELOG.md`.
 
 ---
 
-## 1.2.0 — speak the user's language
+## 1.2.0 — shipped, 15 August 2026
+
+Editor isolation reaching every launcher, not only the one we wrote. Editors are
+discovered and probed rather than listed; shortcuts are audited because they are
+the one launcher `PATH` cannot reach. See `CHANGELOG.md`.
+
+---
+
+## 1.3.0 — speak the user's language
 
 **Bilingual output through `DEVCTX_LANG`.** Command output is French today;
 documentation is English. A developer in Berlin installing this gets refusals
@@ -32,7 +40,7 @@ Also in scope: translating `INSTALLATION.md` and `POURQUOI.md`.
 
 ---
 
-## 1.3.0 — guard more than Supabase
+## 1.4.0 — guard more than Supabase
 
 The shim pattern generalises. Each new tool is a folder in `shims/`, three entry
 points, and one pure `Test-Ctx<Tool>Guard`.
@@ -41,14 +49,13 @@ points, and one pure `Test-Ctx<Tool>Guard`.
   and refuse `env rm` against production.
 - **`gh`** — refuse a push or a PR when `GH_CONFIG_DIR` does not match the
   folder's context. This is the failure that started the whole project.
-- **`code`** — a bare `code .` inside a context folder should open the context's
-  VS Code profile, not the default one. Four profiles means four GitHub
-  sign-ins, and after a reboot Windows relaunches VS Code without its original
-  arguments, landing you in the one where you are signed into nothing.
+
+`code` was on this list and shipped early, in 1.2.0 — it turned out to be the
+most-felt problem, not the least.
 
 ---
 
-## 1.4.0 — make it easy to start
+## 1.5.0 — make it easy to start
 
 Adoption dies at the first step. Today a new user must clone, symlink, run an
 installer, then create contexts by hand.
@@ -74,6 +81,22 @@ Two constraints decided in advance, because they are the ones that get lost:
 **The CLI stays the source of truth.** The dashboard reads what `ctx doctor
 -Json` and `ctx-sb` already produce. It adds no logic of its own — otherwise
 the two drift, and the one people trust is whichever they happened to open.
+
+The seams are already in place, and they were built as seams on purpose. Every
+screen the dashboard needs corresponds to a function that exists and is tested:
+
+| Screen | Reads | Acts through |
+|---|---|---|
+| Contexts and accounts | `ctx-list`, `ctx doctor -Json` | `Use-DevContext` |
+| Editors, and which are isolable | `Get-DevEditorList` | — |
+| Shortcuts, and which are broken | `Get-CtxRaccourciChecks` | `New-DevShortcut -Force` |
+| Projects per Supabase account | `Get-DevSupabaseMap` | `Update-DevSupabaseIndex` |
+| MCP servers per project | `Get-CtxMcpFacts` | `New-DevProjectMcp` |
+
+A "repair this shortcut" button is therefore one call to a function the test
+suite already covers, never a second implementation of the same rules living in
+a UI. That is the whole reason the decisions were kept pure and separate from
+the gathering.
 
 **It stays local.** No account, no cloud, no telemetry. A tool whose whole
 purpose is to keep credentials apart cannot ask you to send your credential

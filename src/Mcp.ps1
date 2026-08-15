@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+﻿# ---------------------------------------------------------------------------
 # ctx mcp -- give a project its own MCP servers, bound to the folder's account
 # ---------------------------------------------------------------------------
 #
@@ -78,6 +78,8 @@ function New-CtxMcpServeurSupabase {
       can write to production is a bad afternoon waiting for its turn, and here
       the cost of the restriction is close to nothing.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Fonction pure : construit une table de declaration, ne l ecrit pas.')]
     param(
         [Parameter(Mandatory)][string]$Ref,
         [switch]$Ecriture,
@@ -99,6 +101,8 @@ function New-CtxMcpServeurGitHub {
       request simply comes back 401, with an error blaming the credential rather
       than the notation. Caught by the audit of 15 Aug 2026.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Fonction pure : construit une table de declaration, ne l ecrit pas.')]
     param([string]$Client = 'claude')
 
     $reference = if ($Client -eq 'claude') { '${GH_TOKEN}' } else { '${env:GH_TOKEN}' }
@@ -270,7 +274,7 @@ function New-DevProjectMcp {
         $existant = $null
         if (Test-Path -LiteralPath $c.Chemin) {
             $existant = try { Get-Content -LiteralPath $c.Chemin -Raw | ConvertFrom-Json -AsHashtable }
-                        catch { throw "$($c.Chemin) existant illisible : $(Protect-CtxMessage $_.Exception.Message). Le corriger ou le deplacer avant de regenerer." }
+            catch { throw "$($c.Chemin) existant illisible : $(Protect-CtxMessage $_.Exception.Message). Le corriger ou le deplacer avant de regenerer." }
         }
 
         # Copie par client : le serveur GitHub porte une syntaxe d'expansion

@@ -1,4 +1,4 @@
-# Analyse statique et conformité de l'API publique.
+﻿# Analyse statique et conformité de l'API publique.
 #
 # PSScriptAnalyzer n'est pas une dépendance d'exécution du module : ces tests se
 # déclarent SAUTÉS quand il est absent, plutôt que verts. Un test qui passe
@@ -13,11 +13,40 @@ BeforeAll {
     Import-Module (Join-Path $script:Racine 'DevContext.psd1') -Force
 }
 
+# La liste des fichiers analyses est DERIVEE du depot, jamais ecrite a la main.
+#
+# Elle etait en dur, et src\Editors.ps1 comme src\Shortcuts.ps1 y ont echappe
+# des leur creation : la suite restait verte en ayant analyse six fichiers sur
+# huit, sans rien dire. C'est le meme defaut que la table d'editeurs qui a
+# precede la decouverte — une liste qu'un humain doit penser a completer est une
+# liste qui sera incomplete.
+#
+# Seuls les fichiers SUIVIS PAR GIT sont pris : un brouillon local n'a pas a
+# faire echouer la suite, et un fichier livre n'a pas le droit d'y echapper.
+$script:FichiersAnalysables = @(
+    & git -C (Split-Path $PSScriptRoot -Parent) ls-files '*.ps1' '*.psm1' 2>$null
+) | Where-Object { $_ -and $_ -notlike 'tests/*' }
+
 Describe 'PSScriptAnalyzer' {
-    It 'ne signale ni erreur ni avertissement dans <_>' -ForEach @(
-        'DevContext.psm1', 'src\Doctor.ps1', 'src\Jetons.ps1', 'src\Mcp.ps1',
-        'shims\supabase.ps1', 'installer-shims.ps1'
-    ) {
+    # -ForEach avec une table de hachage : c'est le mecanisme par lequel Pester
+    # fait passer une donnee de la phase de DECOUVERTE a la phase d'EXECUTION.
+    # Les deux phases ont des portees distinctes, et lire $script:… directement
+    # dans le corps d'un It rend une variable vide -- ce test affirmait donc
+    # « 0 fichier » pendant que les tests suivants en analysaient onze. Vert ou
+    # rouge, un test qui mesure autre chose que ce qu'il annonce est le meme
+    # defaut, vu de deux cotes.
+    It 'couvre tous les fichiers livres, sans liste ecrite a la main' `
+        -ForEach @(@{ Decouverts = $script:FichiersAnalysables }) {
+        # Le garde-fou du garde-fou. Si ce compte tombe, la derivation a cesse
+        # de fonctionner et les tests suivants n'examinent plus rien -- en
+        # silence, puisqu'une liste vide ne genere aucun test.
+        $Decouverts.Count | Should -BeGreaterThan 5
+        $Decouverts | Should -Contain 'src/Editors.ps1'
+        $Decouverts | Should -Contain 'shims/editor.ps1'
+        $Decouverts | Should -Not -Contain 'tests/Analyse.Tests.ps1'
+    }
+
+    It 'ne signale ni erreur ni avertissement dans <_>' -ForEach $script:FichiersAnalysables {
         if (-not $script:Analyseur) {
             Set-ItResult -Skipped -Because 'PSScriptAnalyzer absent de cette machine (la CI l installe)'
             return

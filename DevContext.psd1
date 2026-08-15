@@ -1,4 +1,4 @@
-# Manifeste du module DevContext.
+﻿# Manifeste du module DevContext.
 #
 # POURQUOI IL EXISTE. Sans lui, `Get-Module DevContext` annonce « 0.0 » — donc
 # rien. Sur un outil qui décide de l'identité sous laquelle partent les commits
@@ -11,7 +11,7 @@
 
 @{
     RootModule        = 'DevContext.psm1'
-    ModuleVersion     = '1.1.0'
+    ModuleVersion     = '1.2.0'
     GUID              = 'b4f2c8a1-7e35-4d69-9a02-3c8d1e5f7b04'
     Author            = 'Thierry V.'
     # En anglais : c'est le texte affiché sur PowerShell Gallery, donc la
@@ -43,6 +43,7 @@
         'Close-DevContext'
         'Get-DevContextDoctor'
         'Get-DevContextList'
+        'Get-DevEditorList'
         'Get-CtxArgumentValeur'
         'Get-CtxSupabasePaires'
         'Get-CtxSupabaseRefDepuisUrl'
@@ -50,6 +51,7 @@
         'Invoke-DevSupabase'
         'Invoke-DevVercel'
         'New-DevContext'
+        'New-DevShortcut'
         'New-DevProjectMcp'
         'Open-DevBrowser'
         'Open-DevCode'
@@ -67,12 +69,14 @@
         'ctx'
         'ctx-check'
         'ctx-doctor'
+        'ctx-editors'
         'ctx-end'
         'ctx-list'
         'ctx-mcp'
         'ctx-new'
         'ctx-off'
         'ctx-sb'
+        'ctx-shortcut'
         'ctx-who'
         'sb-index'
         'supabase'

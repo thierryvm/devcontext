@@ -1,4 +1,4 @@
-#Requires -Version 7
+﻿#Requires -Version 7
 <#
 .SYNOPSIS
     Serves the repository over http://127.0.0.1 so a browser can render it.
@@ -39,7 +39,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue |
-          Select-Object -First 1
+    Select-Object -First 1
 if (-not $python) {
     throw "python introuvable dans le PATH. Installer Python, ou servir le dossier autrement."
 }

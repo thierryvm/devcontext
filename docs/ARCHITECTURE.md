@@ -36,11 +36,16 @@ src/
   Doctor.ps1                 ctx doctor — what works here, and on which account
   Jetons.ps1                 ctx doctor -Live — do the tokens work, on the right account
   Mcp.ps1                    ctx mcp — project-scoped MCP, any assistant
+  Editors.ps1                ctx editors — find editors, measure what they support
+  Shortcuts.ps1              ctx doctor / ctx shortcut — the launcher PATH cannot reach
 shims/
   supabase.ps1               The guard. Decides, then delegates or refuses.
   supabase.cmd               Entry point for cmd.exe, PowerShell, npm  (CRLF)
   supabase                   Entry point for POSIX shells               (LF)
-installer-shims.ps1          Puts shims/ first in PATH. Reversible.
+  editor.ps1                 Editor isolation, shared by every editor
+  <editor>.cmd / <editor>    GENERATED per machine, from the editors found there
+lancer-editeur.ps1           Detached launch for shortcuts. Deduces the context.
+installer-shims.ps1          Puts shims/ first in PATH, writes the entry points.
 tests/                       See tests/README.md
 ```
 
@@ -133,6 +138,51 @@ Line endings are load-bearing and pinned in `.gitattributes`: the POSIX file
 `supabase.ps1` deliberately has **no `param()` block**. `[CmdletBinding()]` would
 capture `-debug` and `-verbose` as its own parameters instead of forwarding them;
 `$args` forwards everything verbatim.
+
+---
+
+## Two shims, opposite timing
+
+The supabase guard and the editor shim sit side by side and behave in opposite
+ways, on purpose.
+
+The guard **refuses or delegates**, and every uncertain path delegates: no
+context, no linked project, an unreadable index, an unexpected error. A guard
+that breaks when it hesitates is uninstalled within the week.
+
+The editor shim **adds flags and never removes any**, and it is likewise silent
+when unsure. Its failure mode is therefore "isolation you did not get", not
+"editor that will not start" — the right way round for something standing
+between a developer and their editor.
+
+They also differ on blocking. The editor shim runs the editor **synchronously**:
+code --wait COMMIT_EDITMSG is git's editor, and returning early there commits
+an empty message. A shortcut needs the reverse — lancer-editeur.ps1 detaches
+through start, or the launching process survives the whole working session.
+Two needs, two paths, the same context decision behind both.
+
+The editor's name reaches ditor.ps1 through DEVCTX_SHIM_EDITOR, set by the
+entry point, never as a parameter: the argument stream belongs to the caller and
+must arrive untouched.
+
+---
+
+## Discovered, not declared
+
+Editors.ps1 ships names as **search hints** and derives everything else by
+looking. The rule it enforces: a flag counts as supported only when the
+directory it names actually appeared on disk. Exit code alone proves nothing —
+every editor in this family accepts an unknown flag and exits 0.
+
+Where no command-line entry point exists, the application's argument surface is
+read from its bundle instead, and the capability is labelled declared rather
+than measured. Weaker evidence, reported as weaker. **A GUI is never launched
+to answer the question**; doing so once left an editor crashing in a loop on the
+user's screen.
+
+Results are cached under the context root, keyed on the executable's path *and*
+its last-write time, so an editor that gains a flag by updating is re-probed and
+one that has not changed costs nothing.
 
 ---
 

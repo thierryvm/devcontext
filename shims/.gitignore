@@ -1,0 +1,15 @@
+# Entry points are GENERATED per machine by installer-shims.ps1, from the
+# editors actually installed there. Committing one for every editor we can
+# think of would shadow commands that are not installed: typing `cursor` on a
+# machine without Cursor would answer with a DevContext error instead of
+# "command not found".
+#
+# Hence an allowlist rather than a pattern: everything here is generated unless
+# it is named below. A file that appears in `git status` is a file somebody
+# added by hand and needs to decide about.
+*
+!.gitignore
+!supabase
+!supabase.cmd
+!supabase.ps1
+!editor.ps1

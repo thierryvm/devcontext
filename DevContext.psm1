@@ -1,4 +1,4 @@
-# DevContext.psm1 — isolation de contextes de travail (Windows / PowerShell 7+)
+﻿# DevContext.psm1 — isolation de contextes de travail (Windows / PowerShell 7+)
 #
 # Principe : un contexte = un dossier + un jeu de variables d'environnement.
 # On ne se deconnecte jamais de rien. Chaque terminal porte une identite.
@@ -41,7 +41,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1')) {
+foreach ($fichier in @('Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -114,6 +114,8 @@ function Get-CtxSecret {
 }
 
 function Set-CtxSecret {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Aide privee, non exportee : -WhatIf ne peut pas lui parvenir. La commande publique qui l appelle porte la confirmation.')]
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string]$Key,
@@ -278,13 +280,24 @@ if ($existingHook -and $existingHook.ToString() -notmatch 'DEVCTX_LOCATION_HOOK'
     $script:PreviousLocationChangedAction = $existingHook
 }
 $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
-    param($EventSender, $EventArgs)
+    # PAS $EventArgs : c'est une variable automatique de PowerShell, et la
+    # nommer en parametre la masque en silence. Exactement le piege que
+    # AGENTS.md documente pour $Args -- qui avait rendu le shim aveugle en aout
+    # 2026 -- cache ici depuis le debut, dans le module lui-meme. Releve par
+    # PSScriptAnalyzer le 15 aout 2026.
+    param($Source, $Emplacement)
     # DEVCTX_LOCATION_HOOK
     if ($script:PreviousLocationChangedAction) {
-        try { & $script:PreviousLocationChangedAction $EventSender $EventArgs } catch { }
+        # Ce handler appartient a quelqu'un d'autre -- oh-my-posh, un autre
+        # module. S'il leve, ce n'est pas a nous de le faire remonter : ce code
+        # s'execute a CHAQUE `cd`, et une exception ici casse la session
+        # entiere. On note et on continue.
+        try { & $script:PreviousLocationChangedAction $Source $Emplacement }
+        catch { Write-Verbose "handler LocationChanged tiers en echec : $($_.Exception.Message)" }
     }
-    # Jamais bloquant : une exception ici casserait chaque `cd` de la session.
-    try { Sync-CtxSupabaseEnv } catch { }
+    # Meme raison : jamais bloquant.
+    try { Sync-CtxSupabaseEnv }
+    catch { Write-Verbose "Sync-CtxSupabaseEnv en echec : $($_.Exception.Message)" }
 }
 
 # ---------------------------------------------------------------------------
@@ -319,8 +332,8 @@ function Clear-DevContext {
         Remove-Item -Path "Env:$envVar" -ErrorAction SilentlyContinue
     }
     foreach ($v in 'DEVCTX', 'DEVCTX_LABEL', 'DEVCTX_DIR', 'DEVCTX_ROOT_PATH',
-                   'DEVCTX_GH_LOGIN', 'GH_CONFIG_DIR', 'DEVCTX_VERCEL_CONFIG',
-                   'DEVCTX_VERCEL_SCOPE', 'VERCEL_ORG_ID', 'DEVCTX_SUPABASE_KEY') {
+        'DEVCTX_GH_LOGIN', 'GH_CONFIG_DIR', 'DEVCTX_VERCEL_CONFIG',
+        'DEVCTX_VERCEL_SCOPE', 'VERCEL_ORG_ID', 'DEVCTX_SUPABASE_KEY') {
         Remove-Item -Path "Env:$v" -ErrorAction SilentlyContinue
     }
 
@@ -343,10 +356,24 @@ function Clear-DevContext {
 # ---------------------------------------------------------------------------
 
 function Open-DevCode {
+    <#
+      Ouvre un editeur, detache, sur le profil du contexte.
+
+      -Editor generalise ce qui etait cable sur VS Code. Les flags ne sont plus
+      ecrits en dur : ils viennent de Resolve-CtxEditorArguments, donc d'une
+      capacite MESUREE. Passer --extensions-dir a un editeur qui l'ignore se lit
+      comme de l'isolation dans le raccourci alors que les extensions restent
+      partagees — Antigravity est exactement ce cas.
+
+      Le dossier de profil reste 'vscode' pour VS Code : de vraies sessions y
+      vivent depuis aout 2026, et le renommer pour faire propre deconnecterait
+      tout le monde de tous ses contextes d'un coup.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)][string]$Name = $env:DEVCTX,
-        [Parameter(Position = 1)][string]$Path
+        [Parameter(Position = 1)][string]$Path,
+        [string]$Editor = 'code'
     )
 
     if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'code-ctx <contexte>'." }
@@ -355,21 +382,28 @@ function Open-DevCode {
     $ctx = Get-CtxPath $Name
     if (-not $Path) { $Path = Get-CtxProp $m 'root' }
 
-    # L'isolation reelle : VS Code chiffre ses sessions d'auth (DPAPI sous Windows)
-    # dans le state.vscdb du user-data-dir. Un user-data-dir par contexte =
-    # des comptes GitHub/Copilot independants, en simultane.
-    $codeArgs = @(
-        '--user-data-dir', (Join-Path $ctx 'vscode')
-        '--extensions-dir', (Join-Path $ctx 'vscode-ext')
-        $Path
-    )
-
-    $codeCmd = Get-Command code -ErrorAction SilentlyContinue
-    if (-not $codeCmd) {
-        throw "'code' introuvable dans le PATH. Dans VS Code : Ctrl+Shift+P > 'Shell Command: Install code command in PATH'."
+    $editeur = Get-CtxEditorFacts | Where-Object Name -eq $Editor | Select-Object -First 1
+    if (-not $editeur) {
+        throw "'$Editor' introuvable sur cette machine. 'ctx-editors' dit ce qui a ete detecte. Pour VS Code : Ctrl+Shift+P > 'Shell Command: Install code command in PATH'."
     }
 
-    Write-Host "  VS Code [$(Get-CtxProp $m 'label' $Name)] -> $Path" -ForegroundColor Cyan
+    # L'isolation reelle : ces editeurs chiffrent leurs sessions d'auth (DPAPI
+    # sous Windows) dans le state.vscdb du user-data-dir. Un user-data-dir par
+    # contexte = des comptes GitHub/Copilot independants, en simultane.
+    $capacites = Get-CtxEditorCapabilitiesCached -Editor $editeur
+    $codeArgs = Resolve-CtxEditorArguments -Capabilities $capacites -ContextDir $ctx `
+        -ProfileName $editeur.Profile -Arguments @($Path)
+
+    if (-not $capacites.UserDataDir) {
+        Write-Warning "$($editeur.Label) n'expose pas --user-data-dir : ses sessions restent communes a tous les contextes."
+    }
+
+    $codeCmd = if ($editeur.Cli) { [pscustomobject]@{ Source = $editeur.Cli } }
+    if (-not $codeCmd) {
+        throw "'$Editor' est installe mais n'expose aucun point d'entree en ligne de commande. Il ne peut pas etre lance par DevContext."
+    }
+
+    Write-Host "  $($editeur.Label) [$(Get-CtxProp $m 'label' $Name)] -> $Path" -ForegroundColor Cyan
 
     # Lancement DETACHE. `code.cmd` execute `Code.exe cli.js` en avant-plan, sans
     # `start` : cmd.exe attend donc la fin du processus, et le terminal appelant
@@ -389,8 +423,8 @@ function Open-DevCode {
     # pwsh > cmd > start > Code.exe : c'est lui qui transmet GH_CONFIG_DIR,
     # SUPABASE_ACCESS_TOKEN et la configuration Vercel au terminal integre de
     # VS Code. Sans cet heritage, l'isolation ne vaudrait que pour les extensions.
-    $exe = Join-Path (Split-Path (Split-Path $codeCmd.Source -Parent) -Parent) 'Code.exe'
-    if (Test-Path -LiteralPath $exe) {
+    $exe = Find-CtxEditorExecutable -Editor $editeur
+    if ($exe) {
         # Seules les VALEURS sont guillemetees : un chemin peut contenir une
         # espace, un flag jamais — et `"--user-data-dir"` ne serait pas reconnu.
         $quoted = $codeArgs | ForEach-Object { if ($_ -like '--*') { $_ } else { '"{0}"' -f $_ } }
@@ -409,7 +443,7 @@ function Open-DevCode {
     else {
         # Chemin non standard (autre distribution, autre OS) : on retombe sur le
         # CLI, quitte a garder le terminal occupe.
-        & code @codeArgs
+        & $codeCmd.Source @codeArgs
     }
 }
 
@@ -574,6 +608,8 @@ function Resolve-CtxSupabaseRef {
 function Set-CtxSupabaseToken {
     # $null EFFACE la variable au lieu d'y mettre une chaine vide : une chaine
     # vide serait lue par la CLI comme « jeton fourni mais invalide ».
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Aide privee, non exportee : pose une variable d environnement du processus courant, pas un etat systeme.')]
     param([AllowEmptyString()][AllowNull()][string]$Value)
     if ([string]::IsNullOrEmpty($Value)) {
         Remove-Item Env:SUPABASE_ACCESS_TOKEN -ErrorAction SilentlyContinue
@@ -648,7 +684,10 @@ function Get-CtxSupabaseEnv {
 }
 
 function Update-DevSupabaseIndex {
-    [CmdletBinding()]
+    # SupportsShouldProcess, et il est HONORE plus bas. Cette commande reecrit
+    # l'index dont depend le garde-fou production : pouvoir demander ce qu'elle
+    # ferait sans qu'elle le fasse n'est pas un ornement.
+    [CmdletBinding(SupportsShouldProcess)]
     param([string]$Name = $env:DEVCTX)
 
     if (-not $Name) { throw "Aucun contexte actif. 'work <contexte>' d'abord, ou 'sb-index <contexte>'." }
@@ -707,7 +746,9 @@ function Update-DevSupabaseIndex {
     finally { Set-CtxSupabaseToken $previous }
 
     $path = Get-CtxSupabaseIndexPath $Name
-    $index | ConvertTo-Json -Depth 4 | Set-Content $path -Encoding UTF8
+    if ($PSCmdlet.ShouldProcess($path, 'reecrire l index Supabase')) {
+        $index | ConvertTo-Json -Depth 4 | Set-Content $path -Encoding UTF8
+    }
     Write-Host "  index ecrit : $path" -ForegroundColor Green
 }
 
@@ -733,7 +774,7 @@ function Get-DevSupabaseMap {
         folder.
 
         This is not a convenience. On 13 Aug 2026 the question "which account
-        is client-site on?" could only be answered by reading the index by
+        is this site on?" could only be answered by reading the index by
         hand, though the answer had been on the machine since the beginning. A
         guard whose data cannot be inspected is a guard that eventually gets
         switched off.
@@ -839,7 +880,7 @@ function Sync-CtxSupabaseEnv {
 
       Le defaut etait invisible, ce qui le rendait pire qu'une panne : la
       commande reussissait, sur le mauvais projet. Constate le 8 aout 2026 par
-      le preflight d'demo-app, qui voyait 3 projets sans jamais voir demo-app-prod.
+      le preflight d'un projet, qui voyait 3 bases sans jamais voir sa production.
     #>
     [CmdletBinding()]
     param([string]$Path = (Get-Location).Path)
@@ -1419,6 +1460,8 @@ Set-Alias -Name sb-index  -Value Update-DevSupabaseIndex
 Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
 Set-Alias -Name ctx-doctor -Value Get-DevContextDoctor
 Set-Alias -Name ctx-mcp    -Value New-DevProjectMcp
+Set-Alias -Name ctx-editors -Value Get-DevEditorList
+Set-Alias -Name ctx-shortcut -Value New-DevShortcut
 
 $exportedFunctions = @(
     'Use-DevContext', 'Clear-DevContext', 'Get-DevContextList', 'New-DevContext',
@@ -1426,12 +1469,13 @@ $exportedFunctions = @(
     'Assert-DevContext', 'Resolve-DevContextForPath', 'Invoke-DevVercel',
     'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard',
     'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp',
-    'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl'
+    'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl',
+    'Get-DevEditorList', 'New-DevShortcut'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',
     'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index', 'ctx-sb',
-    'ctx-doctor', 'ctx-mcp'
+    'ctx-doctor', 'ctx-mcp', 'ctx-editors', 'ctx-shortcut'
 )
 
 Export-ModuleMember -Function $exportedFunctions -Alias $exportedAliases

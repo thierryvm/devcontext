@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     $script:ShimDir = Join-Path $PSScriptRoot '..' 'shims'
     $script:Shim    = Join-Path $script:ShimDir 'supabase.ps1'
 }

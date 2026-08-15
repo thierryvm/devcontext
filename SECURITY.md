@@ -45,6 +45,13 @@ older lines receive no backports.
   connection string it is judged on that; when it cannot, and the context holds
   any production project, the command is refused. This is the one place the
   guard fails closed.
+- **Editor sessions are separated per context.** Each context owns a profile
+  directory, and the editor keeps its GitHub, Copilot and marketplace sessions
+  inside it, encrypted by the OS. An entry point in `PATH` supplies the flag, so
+  a terminal, an npm script, "Open with" and an agent all land on the right one
+  — not only the launcher we wrote. What each editor actually supports is
+  probed, never assumed, and probing a GUI-only editor is refused rather than
+  attempted (see the limits below).
 - **Diagnostics never echo a *credential*.** `ctx doctor` reports the *name* of
   a key, never its value. Messages that can carry data from elsewhere — API
   errors, the output of a binary found on `PATH` — pass through
@@ -68,6 +75,9 @@ one you have been allowed to assume away is not.
 | **`DEVCTX_ALLOW_PROD=1` disables it** | Intentional, for the one command that genuinely needs it. Setting it in `$PROFILE` removes the guard while leaving the impression of having it — `ctx doctor` reports it as a finding when set. |
 | **Anyone who can write to `shims/` runs code everywhere** | The folder sits first in `PATH`. Its filesystem permissions are part of your threat model, not ours. |
 | **`npx` fetches at run time** | A generated `.mcp.json` uses `npx -y @supabase/mcp-server-supabase@latest`, which downloads on every start. That is upstream's recommended form; pin the version yourself if your threat model requires it. |
+| **A shortcut pointing at the executable bypasses everything** | `C:\...\Code.exe` consults no `PATH`, so no entry point can reach it. Nothing here can change that; `ctx doctor` reads your shortcuts and reports which ones open a context project on the shared profile, and `ctx-shortcut` writes correct ones. Detection, not prevention. |
+| **Some editors cannot be isolated at all** | Isolation needs a command-line entry point exposing `--user-data-dir`. An editor shipping only a GUI executable has none, and DevContext will **not** launch a GUI to find out — doing so on 15 Aug 2026 opened a window, triggered a self-update relaunch, and left the application crashing on a broken pipe. Such an editor is listed by `ctx-editors` with its capability read from disk and labelled `declared`, and `ctx doctor` says plainly that its sessions stay shared. |
+| **`--extensions-dir` is not universal** | Antigravity accepts `--user-data-dir` and has no `--extensions-dir`. Profile isolation — which is where the sign-ins live — still applies; extensions remain common. The flag is never passed to an editor that ignores it, because a flag silently dropped reads as isolation you do not have. |
 | **The vault is as strong as its passphrase** | DevContext stores secrets in Microsoft's SecretStore. Its security properties are Microsoft's, not ours. |
 
 ## Verifying these claims yourself

@@ -1,4 +1,4 @@
-# Filet de regression sur les deux fonctions qui decident, en production, a quel
+﻿# Filet de regression sur les deux fonctions qui decident, en production, a quel
 # contexte et a quel compte appartient un dossier.
 #
 # Elles n'avaient ete verifiees qu'a LA MAIN, le 5 aout 2026. C'est le pire

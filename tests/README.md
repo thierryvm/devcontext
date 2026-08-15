@@ -16,7 +16,7 @@ Stated honestly, because a coverage claim nobody can check is worth nothing.
 
 | Level | File | Guarantees |
 |---|---|---|
-| Decision | `Guard`, `Doctor`, `Jetons`, `Mcp`, `Installer` | Every return path of every pure decision, exhaustively, without touching a machine |
+| Decision | `Guard`, `Doctor`, `Jetons`, `Mcp`, `Installer`, `Editors`, `Shortcuts` | Every return path of every pure decision, exhaustively, without touching a machine |
 | Contract | `Manifest` | psd1 ↔ psm1 export parity, format file validity — **without importing the module** |
 | Resolution | `ContextResolution` | Which context owns a folder, including the prefix trap and nesting |
 | Integration | `Shim`, `SupabaseIndex`, `SupabaseMap` | A whole fake world under `$TestDrive`: context, index, git repository, decoy binary |
@@ -28,6 +28,19 @@ Stated honestly, because a coverage claim nobody can check is worth nothing.
 mutation. `-Live` token checks are read-only identity probes and are skipped
 when no token is loaded. WSL is not exercised — it is an acknowledged gap, and
 `ctx doctor` reports it rather than pretending otherwise.
+
+**No test launches an editor**, and that is a deliberate limit rather than an
+oversight. `Editors` and `Shortcuts` prove the RULES — which flag may be
+injected, what counts as evidence that one is supported, which folder a command
+line points at — against fake filesystems and fabricated capabilities. Whether
+a given editor on a given machine honours `--user-data-dir` is a question about
+that machine, and it is answered at runtime by the probe, whose own rule
+(*a flag counts only when the directory it names appeared*) is what the suite
+pins down.
+
+The same reasoning bars a test from opening a window. A suite that launches GUI
+applications is a suite people stop running, and on 15 Aug 2026 launching one to
+interrogate it left it crashing in a loop on the user's screen.
 
 ---
 

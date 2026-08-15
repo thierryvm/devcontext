@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+﻿# ---------------------------------------------------------------------------
 # ctx doctor -- what can I actually do in THIS folder, and where will it land?
 # ---------------------------------------------------------------------------
 #
@@ -26,6 +26,8 @@
 $script:DoctorVerdicts = @('OK', 'INFO', 'ATTENTION', 'PROBLEME', 'ABSENT')
 
 function New-CtxCheck {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Fonction pure : construit un objet de constat, ne modifie aucun etat.')]
     param(
         [Parameter(Mandatory)][string]$Domaine,
         [Parameter(Mandatory)][string]$Sujet,
@@ -149,7 +151,7 @@ function Test-CtxDoctorBinaire {
 
     New-CtxCheck -Domaine $Nom -Sujet 'binaire' -Verdict 'ATTENTION' `
         -Detail ("$($reels.Count) installations de versions differentes : " +
-                 (($reels | ForEach-Object { "$($_.Version) ($(Split-Path $_.Chemin -Parent))" }) -join ' | ')) `
+        (($reels | ForEach-Object { "$($_.Version) ($(Split-Path $_.Chemin -Parent))" }) -join ' | ')) `
         -Correctif "n'en garder qu'une — la version depend sinon du shell appelant"
 }
 
@@ -326,7 +328,7 @@ function Get-CtxMcpFacts {
     $claude = Join-Path $HOME '.claude.json'
     if (Test-Path -LiteralPath $claude) {
         # -AsHashtable is required: the file holds keys that differ only by case
-        # (C:\Users\moi\desktop and ...\Desktop), which ConvertFrom-Json
+        # (\Users\moi\desktop and ...\Desktop), which ConvertFrom-Json
         # refuses outright without it.
         $j = try { Get-Content -LiteralPath $claude -Raw | ConvertFrom-Json -AsHashtable } catch { $null }
         if ($j) {
@@ -337,8 +339,8 @@ function Get-CtxMcpFacts {
             }
             if ($j['projects']) {
                 $cle = @($j['projects'].Keys | Where-Object {
-                    $_.Replace('/', '\').TrimEnd('\') -ieq $Dossier.Replace('/', '\').TrimEnd('\')
-                }) | Select-Object -First 1
+                        $_.Replace('/', '\').TrimEnd('\') -ieq $Dossier.Replace('/', '\').TrimEnd('\')
+                    }) | Select-Object -First 1
                 if ($cle -and $j['projects'][$cle]['mcpServers']) {
                     foreach ($k in $j['projects'][$cle]['mcpServers'].Keys) {
                         $trouves.Add([pscustomobject]@{ Nom = $k; Definition = [pscustomobject]$j['projects'][$cle]['mcpServers'][$k]; Portee = 'ce dossier' })
@@ -418,17 +420,17 @@ function Get-DevContextDoctor {
 
     if (-not $proprio) {
         $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'INFO' `
-            -Detail 'ce dossier n appartient a aucun contexte'))
+                    -Detail 'ce dossier n appartient a aucun contexte'))
     }
     elseif (-not $actif) {
         $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'ATTENTION' `
-            -Detail "dossier du contexte '$proprio', mais aucun contexte actif dans ce shell" `
-            -Correctif "work $proprio -NoCd"))
+                    -Detail "dossier du contexte '$proprio', mais aucun contexte actif dans ce shell" `
+                    -Correctif "work $proprio -NoCd"))
     }
     elseif ($actif -ne $proprio) {
         $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'PROBLEME' `
-            -Detail "dossier du contexte '$proprio', identite active '$actif'" `
-            -Correctif "work $proprio -NoCd"))
+                    -Detail "dossier du contexte '$proprio', identite active '$actif'" `
+                    -Correctif "work $proprio -NoCd"))
     }
     else {
         $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'OK' -Detail $proprio))
@@ -443,48 +445,48 @@ function Get-DevContextDoctor {
             $origine   = (git config --show-origin user.email 2>$null) -replace '\s.*$', '' -replace '^file:', ''
             $emailAttendu = if ($manifeste) { Get-CtxProp $manifeste 'email' } else { $null }
             $checks.Add((Test-CtxDoctorIdentiteGit -EmailAttendu $emailAttendu `
-                -EmailReel $emailReel -Origine $origine))
+                        -EmailReel $emailReel -Origine $origine))
 
             $push = (git remote get-url --push origin 2>$null)
             $checks.Add((Test-CtxDoctorRemote -UrlPush $push `
-                -AliasAttendu $(if ($proprio) { "github-$proprio" } else { $null })))
+                        -AliasAttendu $(if ($proprio) { "github-$proprio" } else { $null })))
         }
         else {
             $checks.Add((New-CtxCheck -Domaine 'git' -Sujet 'depot' -Verdict 'INFO' `
-                -Detail 'pas un depot git'))
+                        -Detail 'pas un depot git'))
         }
     }
     finally { Pop-Location }
 
     # --- binaires ----------------------------------------------------------
     $checks.Add((Test-CtxDoctorBinaire -Nom 'git' -Installations @(Get-CtxBinaireFacts 'git') `
-        -CorrectifAbsent 'winget install Git.Git'))
+                -CorrectifAbsent 'winget install Git.Git'))
     $checks.Add((Test-CtxDoctorBinaire -Nom 'gh' -Installations @(Get-CtxBinaireFacts 'gh') `
-        -CorrectifAbsent 'winget install GitHub.cli'))
+                -CorrectifAbsent 'winget install GitHub.cli'))
     $checks.Add((Test-CtxDoctorBinaire -Nom 'supabase' -Installations @(Get-CtxBinaireFacts 'supabase') `
-        -CorrectifAbsent 'npm i -g supabase'))
+                -CorrectifAbsent 'npm i -g supabase'))
     $checks.Add((Test-CtxDoctorBinaire -Nom 'vercel' -Installations @(Get-CtxBinaireFacts 'vercel') `
-        -CorrectifAbsent 'npm i -g vercel'))
+                -CorrectifAbsent 'npm i -g vercel'))
     $checks.Add((Test-CtxDoctorBinaire -Nom 'node' -Installations @(Get-CtxBinaireFacts 'node') `
-        -CorrectifAbsent 'winget install OpenJS.NodeJS.LTS'))
+                -CorrectifAbsent 'winget install OpenJS.NodeJS.LTS'))
 
     # --- gh ----------------------------------------------------------------
     if ($proprio) {
         $attendu = Join-Path (Get-CtxPath $proprio) 'gh'
         if (-not $env:GH_CONFIG_DIR) {
             $checks.Add((New-CtxCheck -Domaine 'gh' -Sujet 'compte' -Verdict 'PROBLEME' `
-                -Detail 'GH_CONFIG_DIR absent : gh utilise la config globale, donc le dernier compte connecte' `
-                -Correctif "work $proprio -NoCd"))
+                        -Detail 'GH_CONFIG_DIR absent : gh utilise la config globale, donc le dernier compte connecte' `
+                        -Correctif "work $proprio -NoCd"))
         }
         elseif ($env:GH_CONFIG_DIR.TrimEnd('\') -ne $attendu.TrimEnd('\')) {
             $checks.Add((New-CtxCheck -Domaine 'gh' -Sujet 'compte' -Verdict 'PROBLEME' `
-                -Detail "GH_CONFIG_DIR pointe sur un autre contexte" `
-                -Correctif "work $proprio -NoCd"))
+                        -Detail "GH_CONFIG_DIR pointe sur un autre contexte" `
+                        -Correctif "work $proprio -NoCd"))
         }
         else {
             $login = Get-CtxProp $manifeste 'github.login'
             $checks.Add((New-CtxCheck -Domaine 'gh' -Sujet 'compte' -Verdict 'OK' `
-                -Detail $(if ($login) { $login } else { 'config dediee au contexte' })))
+                        -Detail $(if ($login) { $login } else { 'config dediee au contexte' })))
         }
     }
 
@@ -496,13 +498,13 @@ function Get-DevContextDoctor {
 
         if (-not $envProjet) {
             $checks.Add((New-CtxCheck -Domaine 'supabase' -Sujet 'projet' -Verdict 'ATTENTION' `
-                -Detail "projet lie mais absent de l index, ou environnement non marque" `
-                -Correctif 'sb-index'))
+                        -Detail "projet lie mais absent de l index, ou environnement non marque" `
+                        -Correctif 'sb-index'))
         }
         elseif ($envProjet -eq 'prod') {
             $checks.Add((New-CtxCheck -Domaine 'supabase' -Sujet 'projet' -Verdict 'ATTENTION' `
-                -Detail 'ce dossier vise un projet de PRODUCTION' `
-                -Correctif 'db reset y est refuse, db push hors branche par defaut aussi'))
+                        -Detail 'ce dossier vise un projet de PRODUCTION' `
+                        -Correctif 'db reset y est refuse, db push hors branche par defaut aussi'))
         }
         else {
             $checks.Add((New-CtxCheck -Domaine 'supabase' -Sujet 'projet' -Verdict 'OK' -Detail $envProjet))
@@ -510,13 +512,13 @@ function Get-DevContextDoctor {
 
         if ($cleAttendue -and $env:DEVCTX_SUPABASE_KEY -and $env:DEVCTX_SUPABASE_KEY -ne $cleAttendue) {
             $checks.Add((New-CtxCheck -Domaine 'supabase' -Sujet 'compte' -Verdict 'PROBLEME' `
-                -Detail "le jeton charge n est pas celui que ce projet attend" `
-                -Correctif "work $proprio -NoCd"))
+                        -Detail "le jeton charge n est pas celui que ce projet attend" `
+                        -Correctif "work $proprio -NoCd"))
         }
         elseif ($cleAttendue -and -not $env:SUPABASE_ACCESS_TOKEN) {
             $checks.Add((New-CtxCheck -Domaine 'supabase' -Sujet 'compte' -Verdict 'ATTENTION' `
-                -Detail 'aucun jeton charge dans ce shell' `
-                -Correctif "work $proprio -NoCd"))
+                        -Detail 'aucun jeton charge dans ce shell' `
+                        -Correctif "work $proprio -NoCd"))
         }
         elseif ($cleAttendue) {
             $checks.Add((New-CtxCheck -Domaine 'supabase' -Sujet 'compte' -Verdict 'OK' -Detail $cleAttendue))
@@ -534,12 +536,12 @@ function Get-DevContextDoctor {
     if (Test-Path -LiteralPath $vercelProjet) {
         if ($proprio -and -not $env:DEVCTX_VERCEL_CONFIG) {
             $checks.Add((New-CtxCheck -Domaine 'vercel' -Sujet 'session' -Verdict 'PROBLEME' `
-                -Detail 'projet Vercel lie, mais aucune session de contexte chargee' `
-                -Correctif "work $proprio -NoCd"))
+                        -Detail 'projet Vercel lie, mais aucune session de contexte chargee' `
+                        -Correctif "work $proprio -NoCd"))
         }
         else {
             $checks.Add((New-CtxCheck -Domaine 'vercel' -Sujet 'session' -Verdict 'OK' `
-                -Detail 'projet lie, session dediee au contexte'))
+                        -Detail 'projet lie, session dediee au contexte'))
         }
     }
 
@@ -547,11 +549,36 @@ function Get-DevContextDoctor {
     $mcp = @(Get-CtxMcpFacts -Dossier $dossier)
     if ($mcp.Count -eq 0) {
         $checks.Add((New-CtxCheck -Domaine 'mcp' -Sujet 'serveurs' -Verdict 'INFO' `
-            -Detail 'aucun serveur MCP declare pour ce dossier'))
+                    -Detail 'aucun serveur MCP declare pour ce dossier'))
     }
     foreach ($s in $mcp) {
         $checks.Add((Test-CtxDoctorMcpServeur -Nom $s.Nom -Definition $s.Definition -Portee $s.Portee))
     }
+
+    # --- editeurs ----------------------------------------------------------
+    #
+    # La question qu'un raccourci ne pose jamais : si j'ouvre ce projet avec cet
+    # editeur, ai-je mes propres sessions, ou celles de tout le monde ?
+    foreach ($e in (Get-DevEditorList)) {
+        if ($e.Profil -eq 'isole') {
+            $detail = if ($e.Extensions -eq 'isolees') { 'profil et extensions par contexte' }
+            else { 'profil par contexte, extensions communes' }
+            $checks.Add((New-CtxCheck -Domaine 'editeur' -Sujet $e.Commande -Verdict 'OK' `
+                        -Detail "$detail ($($e.Methode))"))
+        }
+        else {
+            $checks.Add((New-CtxCheck -Domaine 'editeur' -Sujet $e.Commande -Verdict 'ATTENTION' `
+                        -Detail "$($e.Editeur) n expose pas --user-data-dir : ses sessions restent communes a tous les contextes" `
+                        -Correctif 'aucun ; limite de cet editeur, pas du module'))
+        }
+    }
+
+    # --- raccourcis --------------------------------------------------------
+    #
+    # Le seul lanceur que le PATH ne peut pas atteindre. Un raccourci qui vise
+    # l'executable en absolu court-circuite tout, et personne ne relit un
+    # raccourci -- alors on le lit pour lui.
+    foreach ($r in (Get-CtxRaccourciChecks)) { $checks.Add($r) }
 
     # --- path --------------------------------------------------------------
     $checks.Add((Test-CtxDoctorPathEntreeVide -Path $env:PATH))
@@ -572,7 +599,7 @@ function Test-CtxDoctorGardeFou {
       and an agent's shell.
     #>
     $shimDir = try { (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..' 'shims') -ErrorAction Stop).Path.TrimEnd('\') }
-               catch { return (New-CtxCheck -Domaine 'garde-fou' -Sujet 'shims' -Verdict 'ABSENT' -Detail 'dossier shims introuvable') }
+    catch { return (New-CtxCheck -Domaine 'garde-fou' -Sujet 'shims' -Verdict 'ABSENT' -Detail 'dossier shims introuvable') }
 
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     $pose = @($userPath -split ';' | Where-Object { $_ -and $_.TrimEnd('\').ToLowerInvariant() -eq $shimDir.ToLowerInvariant() }).Count -gt 0
@@ -608,16 +635,16 @@ function Test-CtxDoctorWsl {
     if (-not (Test-Path -LiteralPath $cle)) { return }
 
     $distros = @(Get-ChildItem -LiteralPath $cle -ErrorAction SilentlyContinue |
-                 Where-Object { $_.PSChildName -match '^\{' })
+            Where-Object { $_.PSChildName -match '^\{' })
     if ($distros.Count -eq 0) { return }
 
     $noms = @($distros | ForEach-Object {
-        (Get-ItemProperty -LiteralPath $_.PSPath -Name 'DistributionName' -ErrorAction SilentlyContinue).DistributionName
-    } | Where-Object { $_ })
+            (Get-ItemProperty -LiteralPath $_.PSPath -Name 'DistributionName' -ErrorAction SilentlyContinue).DistributionName
+        } | Where-Object { $_ })
 
     New-CtxCheck -Domaine 'garde-fou' -Sujet 'WSL' -Verdict 'ATTENTION' `
         -Detail ("$($distros.Count) distribution(s) installee(s)" +
-                 $(if ($noms) { " ($($noms -join ', '))" } else { '' }) +
-                 ' : le shim Windows n y est pas, le garde-fou ne couvre pas ces shells') `
+        $(if ($noms) { " ($($noms -join ', '))" } else { '' }) +
+        ' : le shim Windows n y est pas, le garde-fou ne couvre pas ces shells') `
         -Correctif 'y installer la CLI Supabase separement, ou ne pas viser un projet de production depuis WSL'
 }

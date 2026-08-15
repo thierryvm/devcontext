@@ -1,4 +1,4 @@
-# Les tests ci-dessous, ajoutes le 15 aout 2026 apres un audit de securite,
+﻿# Les tests ci-dessous, ajoutes le 15 aout 2026 apres un audit de securite,
 # couvrent une faille que la suite d'origine ne pouvait pas voir : elle
 # n'eprouvait que des flags BOOLEENS. Or la CLI Supabase a six options globales
 # qui prennent une VALEUR en argument separe, et cobra les accepte AVANT la

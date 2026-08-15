@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Installe, vérifie ou retire le routeur d'URI vscode://, et verrouille la clé
     de registre pour que VS Code ne puisse plus la reprendre.
@@ -43,9 +43,41 @@ $ErrorActionPreference = 'Stop'
 
 $SousCle = 'Software\Classes\vscode\shell\open\command'
 $Key     = "HKCU:\$SousCle"
-$PwshExe = 'C:\Program Files\PowerShell\7\pwsh.exe'
 $Routeur = Join-Path $PSScriptRoot 'vscode-uri-router.ps1'
-$CodeExe = 'C:\Users\moi\AppData\Local\Programs\Microsoft VS Code\Code.exe'
+
+# Resolution des executables : JAMAIS de chemin en dur.
+#
+# Ces deux lignes portaient le chemin de profil d'un utilisateur precis.
+# Le script ne fonctionnait donc que sur une seule machine, et publiait au
+# passage le nom d'utilisateur Windows de son auteur. Releve le 15 aout 2026.
+function Resolve-CtxExe {
+    param([string[]]$Candidats, [string]$Commande)
+    foreach ($c in $Candidats) { if ($c -and (Test-Path -LiteralPath $c -PathType Leaf)) { return $c } }
+    if ($Commande) {
+        # Depuis le lanceur bin/<nom>.cmd, remonter jusqu'a l'executable.
+        $cli = Get-Command $Commande -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty Source
+        $dossier = if ($cli) { Split-Path $cli -Parent }
+        for ($i = 0; $i -lt 4 -and $dossier; $i++) {
+            $exe = Get-ChildItem -LiteralPath $dossier -Filter '*.exe' -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.BaseName -eq $Commande } | Select-Object -First 1
+            if ($exe) { return $exe.FullName }
+            $parent = Split-Path $dossier -Parent
+            if ($parent -eq $dossier) { break }
+            $dossier = $parent
+        }
+    }
+}
+
+$PwshExe = Resolve-CtxExe -Commande 'pwsh' -Candidats @(
+    (Get-Process -Id $PID -ErrorAction SilentlyContinue).Path
+    (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe')
+)
+$CodeExe = Resolve-CtxExe -Commande 'code' -Candidats @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\Microsoft VS Code\Code.exe')
+    (Join-Path $env:ProgramFiles 'Microsoft VS Code\Code.exe')
+    (Join-Path ${env:ProgramFiles(x86)} 'Microsoft VS Code\Code.exe')
+)
 
 $Attendu = '"{0}" -NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" -Uri "%1"' -f $PwshExe, $Routeur
 $Origine = '"{0}" --open-url -- "%1"' -f $CodeExe
@@ -85,7 +117,12 @@ function Test-Verrou {
 }
 
 function Set-Verrou {
+    # Modifie les ACL d'une cle de registre : l'operation la moins reversible
+    # de ce depot, et celle qui merite le plus un -WhatIf.
+    [CmdletBinding(SupportsShouldProcess)]
     param([bool]$Actif)
+    $action = if ($Actif) { 'poser le refus d ecriture' } else { 'retirer le refus d ecriture' }
+    if (-not $PSCmdlet.ShouldProcess($Key, $action)) { return }
     $k = Open-CleAcl
     try {
         $sid = Get-Sid

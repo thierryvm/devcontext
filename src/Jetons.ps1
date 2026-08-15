@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+﻿# ---------------------------------------------------------------------------
 # ctx doctor -Live -- does this token work, and does it open the RIGHT account?
 # ---------------------------------------------------------------------------
 #
@@ -232,8 +232,8 @@ function Get-CtxJetonChecks {
             if ($erreur -match 'HTTP 401|Bad credentials') { $code = 401 }
         }
         $checks.Add((Test-CtxDoctorJetonGitHub `
-            -LoginAttendu (Get-CtxProp $Manifeste 'github.login') `
-            -LoginReel $login -Portees $portees -Code $code -Erreur $erreur))
+                    -LoginAttendu (Get-CtxProp $Manifeste 'github.login') `
+                    -LoginReel $login -Portees $portees -Code $code -Erreur $erreur))
     }
 
     # --- Supabase ----------------------------------------------------------
@@ -241,7 +241,7 @@ function Get-CtxJetonChecks {
         $r = Invoke-CtxApi -Uri 'https://api.supabase.com/v1/projects' `
             -Headers @{ Authorization = "Bearer $env:SUPABASE_ACCESS_TOKEN" }
         $checks.Add((Test-CtxDoctorJetonSupabase -RefAttendu $Ref `
-            -Projets @($r.Data) -Code $r.Code -Erreur $r.Erreur))
+                    -Projets @($r.Data) -Code $r.Code -Erreur $r.Erreur))
     }
 
     # --- Vercel ------------------------------------------------------------

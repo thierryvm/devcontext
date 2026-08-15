@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     $script:Installer = (Resolve-Path (Join-Path $PSScriptRoot '..' 'installer-shims.ps1')).Path
 
     # -AsLibrary loads the functions without touching the machine. Without it,

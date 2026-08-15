@@ -1,4 +1,4 @@
-#Requires -Version 7
+﻿#Requires -Version 7
 <#
     Production guard for the Supabase CLI.
 
@@ -76,7 +76,7 @@ try {
     # npm, execFileSync depuis Node, shell d'un agent. C'est-a-dire partout ou
     # l'alias PowerShell ne va deja pas -- toute la raison d'etre du shim.
     #
-    # Mesure le 15 aout 2026 : `supabase db reset --linked` sur demo-app-prod est
+    # Mesure le 15 aout 2026 : `supabase db reset --linked` sur une base de PRODUCTION est
     # passe depuis git-bash, arrete seulement par un timeout reseau.
     #
     # `work` reste utile (il charge le bon jeton) ; il n'est simplement plus ce

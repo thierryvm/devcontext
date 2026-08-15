@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Route une URI vscode:// vers l'instance VS Code qui l'attend.
 
@@ -40,12 +40,20 @@
     F:\Backups\vscode-uri-handler-2026-08-09\vscode-protocol-AVANT.reg
 #>
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '',
+    Justification = 'Uri et DryRun sont lus par Get-UriSafe et Send-Uri, qui les voient par heritage de portee. La regle n inspecte que la portee du parametre.')]
 param(
     [Parameter(Mandatory, Position = 0)][string]$Uri,
     [switch]$DryRun
 )
 
-$CodeExe = 'C:\Users\moi\AppData\Local\Programs\Microsoft VS Code\Code.exe'
+# JAMAIS de chemin en dur : ce fichier portait un chemin de profil, donc il ne
+# fonctionnait que sur une machine et publiait un nom d'utilisateur Windows.
+$CodeExe = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\Microsoft VS Code\Code.exe')
+    (Join-Path $env:ProgramFiles 'Microsoft VS Code\Code.exe')
+    (Join-Path ${env:ProgramFiles(x86)} 'Microsoft VS Code\Code.exe')
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
 $LogFile = Join-Path $env:LOCALAPPDATA 'DevContext\vscode-uri-router.log'
 
 # L'URI de callback OAuth porte le code d'autorisation dans sa query. On ne
@@ -55,7 +63,7 @@ function Get-UriSafe {
     return '(illisible)'
 }
 
-function Write-Log {
+function Write-RouteurLog {
     param([string]$Message)
     try {
         $d = Split-Path $LogFile -Parent
@@ -69,7 +77,11 @@ function Write-Log {
         Add-Content -LiteralPath $LogFile -Encoding UTF8 `
             -Value ('{0}  {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message)
     }
-    catch { }   # un log qui échoue ne doit jamais empêcher l'ouverture
+    catch {
+        # Circulaire : on ne peut pas journaliser l'echec du journal. Et un
+        # journal qui echoue ne doit jamais empecher une fenetre de s'ouvrir.
+        $null = $_
+    }
 }
 
 function Send-Uri {
@@ -107,14 +119,14 @@ try {
     }
 
     if ($uddByPid.Count -eq 0) {
-        Write-Log ('aucune instance isolee -> profil par defaut | {0}' -f (Get-UriSafe))
+        Write-RouteurLog ('aucune instance isolee -> profil par defaut | {0}' -f (Get-UriSafe))
         Send-Uri $null
         return
     }
 
     $distinct = @($uddByPid.Values | Sort-Object -Unique)
     if ($distinct.Count -eq 1) {
-        Write-Log ('1 instance isolee -> {0} | {1}' -f $distinct[0], (Get-UriSafe))
+        Write-RouteurLog ('1 instance isolee -> {0} | {1}' -f $distinct[0], (Get-UriSafe))
         Send-Uri $distinct[0]
         return
     }
@@ -154,7 +166,7 @@ public static class WinZ {
     }
 
     if ($target) {
-        Write-Log ('{0} instances -> ordre Z -> {1} | {2}' -f $distinct.Count, $target, (Get-UriSafe))
+        Write-RouteurLog ('{0} instances -> ordre Z -> {1} | {2}' -f $distinct.Count, $target, (Get-UriSafe))
     }
     else {
         # Aucune fenêtre visible reconnue (toutes minimisées ?). Faute de mieux,
@@ -163,12 +175,15 @@ public static class WinZ {
             Where-Object { $uddByPid.ContainsKey([uint32]$_.ProcessId) } |
             Sort-Object CreationDate -Descending | Select-Object -First 1
         $target = $uddByPid[[uint32]$dernier.ProcessId]
-        Write-Log ('{0} instances, aucune fenetre visible -> derniere lancee -> {1} | {2}' -f $distinct.Count, $target, (Get-UriSafe))
+        Write-RouteurLog ('{0} instances, aucune fenetre visible -> derniere lancee -> {1} | {2}' -f $distinct.Count, $target, (Get-UriSafe))
     }
 
     Send-Uri $target
 }
 catch {
-    Write-Log ('ERREUR: {0} -> repli profil par defaut | {1}' -f $_.Exception.Message, (Get-UriSafe))
-    try { Send-Uri $null } catch { }
+    Write-RouteurLog ('ERREUR: {0} -> repli profil par defaut | {1}' -f $_.Exception.Message, (Get-UriSafe))
+    # Dernier recours : on est deja dans le rattrapage. Lever ici priverait
+    # l'utilisateur de sa fenetre pour lui offrir une trace que personne ne lit.
+    try { Send-Uri $null }
+    catch { Write-RouteurLog ("repli par defaut en echec : " + $_.Exception.Message) }
 }

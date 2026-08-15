@@ -1,4 +1,4 @@
-# Le garde-fou vu depuis chaque shell qui peut l'appeler.
+﻿# Le garde-fou vu depuis chaque shell qui peut l'appeler.
 #
 # C'est la raison d'être du shim, et donc l'endroit où une régression coûte le
 # plus cher. Le 15 août 2026, `supabase db reset --linked` contre demo-app-prod est

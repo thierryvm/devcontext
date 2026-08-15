@@ -82,6 +82,12 @@ value. Every message that can carry an exception passes through
 | `if` as an argument | `Cmd -X (if (…) {…})` does not parse. Use `$(…)` or a variable. |
 | `pwsh -Command` inherits the parent environment | Declining to *set* a variable does not *clear* it. A test meant to run without a context inherited one and never built the case it claimed to. |
 | Clearing a real env var in a test | Removing `SUPABASE_ACCESS_TOKEN` in a `finally` disarmed the leak test that ran later. **Restore, never remove.** |
+| Running a GUI application to ask it a question | Probing Antigravity with CLI flags opened the editor, which self-updated, relaunched and crashed on `EPIPE` in a loop on the user's screen. Run a binary only when the install layout proves a command-line entry point exists; otherwise read its argument surface from disk. |
+| `[Parameter(Mandatory)]` on an array | Rejects `@()`. `installer-shims.ps1 -Restaurer` passes an empty list to mean "remove everything", and threw on parameter binding — removing the `PATH` entry but leaving the files. Add `[AllowEmptyCollection()]`. |
+| `continue` inside a `switch` | It continues the **enclosing loop**, not the switch. Right by accident here, wrong the day the block moves. Use `if`/`elseif` where a reader would have to stop and think. |
+| Injecting half a dependency | A function took an `-Exists` callback but still called `Test-Path -PathType Leaf` itself, so a test could describe a path and the function would still ask the real disk. Injected or not injected — never half. |
+| Assuming a fixed directory depth | VS Code puts `bin/code.cmd` two levels under `Code.exe`; Cursor puts it four. Walk up and look, do not count. |
+| A count as a discriminator | `--list-extensions` returned 160 for two different profiles holding 160 and 165 directories, which read as "the flag was ignored". Compare the values, not their number. |
 
 ---
 

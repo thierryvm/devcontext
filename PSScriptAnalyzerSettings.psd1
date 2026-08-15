@@ -1,4 +1,4 @@
-# Règles d'analyse statique pour DevContext.
+﻿# Règles d'analyse statique pour DevContext.
 #
 # Deux règles sont écartées, et il faut dire pourquoi : une exclusion muette
 # ressemble vite à un défaut qu'on a caché.

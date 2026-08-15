@@ -12,6 +12,93 @@ match the latest git tag.
 
 ---
 
+## [1.2.0] — 15 August 2026
+
+The release where isolation stopped depending on launching things our way.
+
+`Open-DevCode` had passed `--user-data-dir` since August 2026, so an editor
+opened through it had its own sign-ins. Everything else did not: a shortcut made
+by hand, `code .` in a terminal, "Open with" from the file explorer, an npm
+script, an agent. All of them landed on the shared profile, where signing into
+GitHub for a client project signs you out of your own — the reconnect-everything
+ritual after every reboot.
+
+### Added
+
+- **Editor isolation in `PATH`.** An entry point per editor, ahead of the real
+  one, injecting the context's profile directory. Covers every caller that
+  resolves a command by name. Same position, and the same reasoning, as the
+  production guard next door.
+- **`ctx-editors`** — which editors are installed, and whether each can be
+  isolated. Nothing is hardcoded: editors are found on the machine and their
+  capabilities probed.
+- **`ctx-shortcut`** — writes a shortcut that opens a project in its own
+  context, through the launcher rather than through an absolute path to an
+  executable.
+- **Shortcut audit in `ctx doctor`.** A shortcut targeting `Code.exe` directly
+  consults no `PATH`, so nothing can fix it from the outside. It is now read and
+  reported instead: which ones open a context project on the shared profile, and
+  which are already correct.
+- **`DEVCTX_SHIM_TRACE=1`** — the shim says on stderr which context it picked
+  and why. "My editor opened on the wrong account" had no answer otherwise, and
+  two contexts can be indistinguishable from the outside.
+- **`lancer-editeur.ps1`**, generalising `lancer-vscode.ps1` to every editor and
+  deducing the context from the folder instead of carrying it as a parameter. A
+  context written into a shortcut becomes wrong the day the project moves, and
+  nobody rereads a shortcut.
+- **`editors.json`** next to the contexts, to declare an editor DevContext does
+  not know.
+
+### Changed
+
+- **`Open-DevCode` takes `-Editor`** and no longer writes its flags by hand:
+  they come from a measured capability. Passing `--extensions-dir` to an editor
+  that ignores it reads as isolation in a shortcut while the extensions stay
+  shared.
+- **The executable behind a launcher is found by walking up**, not by assuming a
+  depth. VS Code puts `bin/code.cmd` two levels under `Code.exe`; Cursor puts
+  `resources/app/bin/cursor.cmd` four levels under `Cursor.exe`. "Two levels up"
+  is right for exactly one editor.
+- **Real project names removed from the repository and its history.** They were
+  never secrets, but a public repository naming somebody's production database
+  hands out infrastructure intelligence for free. The lessons in those comments
+  survive without the names.
+
+### Fixed
+
+- **`installer-shims.ps1 -Restaurer` threw on parameter binding** and left the
+  generated entry points behind while removing the `PATH` entry. Found by a test
+  written for the uninstall path, which is the path nobody exercises by hand.
+
+### Why discovery rather than a list
+
+The first draft was a table: name, executable, flags. It was wrong within the
+hour, on the machine that wrote it.
+
+- Cursor ships `resources/app/codeBin/code.cmd`. A table keyed on the name
+  `code` would have isolated Cursor's profile and called it VS Code.
+- Antigravity accepts `--user-data-dir`, has no `--extensions-dir` and no
+  `--list-extensions` at all. "It is a VS Code fork, therefore it takes the VS
+  Code flags" produces a command line the editor silently ignores.
+
+And a table is keyed on one machine. So the names shipped here are search
+**hints**; what an editor supports is measured, and what cannot be measured is
+reported as `declared` rather than rounded up to `measured`.
+
+### Why the probe never launches a GUI
+
+Established on 15 August 2026, at the user's expense. Probing Antigravity by
+running its executable with CLI flags did not print a version — it opened the
+editor, which relaunched itself after an update and threw `EPIPE: broken pipe`
+in a loop, because the console that started it had gone.
+
+A binary is now run only when the install layout proves a command-line entry
+point exists. Otherwise the application's argument surface is read from disk and
+labelled as such. A diagnostic that opens windows on someone's machine, or
+leaves an application crashing behind it, is not a diagnostic.
+
+---
+
 ## [1.1.0] — 15 August 2026
 
 The release where the guard started covering the shells it was built for, and

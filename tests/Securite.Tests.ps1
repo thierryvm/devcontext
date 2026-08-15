@@ -1,4 +1,4 @@
-# Tests de securite du depot lui-meme.
+﻿# Tests de securite du depot lui-meme.
 #
 # Un module dont le metier est de manipuler des jetons n'a pas le droit d'en
 # laisser fuir un. Ces tests ne verifient pas une fonction : ils verifient une

@@ -1,4 +1,4 @@
-#Requires -Version 7
+﻿#Requires -Version 7
 <#
 .SYNOPSIS
     Generates the animated terminal demos shown in README.md.
@@ -54,6 +54,8 @@ function New-CtxDemoSvg {
     <#
       $Lignes : @( @{ t = 'texte'; c = 'clef de couleur'; d = secondes avant la suivante } )
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Fonction pure : rend le SVG sous forme de chaine ; l ecriture est faite par l appelant.')]
     param(
         [Parameter(Mandatory)][object[]]$Lignes,
         [Parameter(Mandatory)][string]$Titre,

@@ -201,7 +201,7 @@ Nouvelle commande `ctx-sb` :
   COMPTE            PROJET             ENV    DOSSIERS
   supabase-token    third-app   -      third-app
   supabase-token    other-app          -      other-app
-  supabase-token    fourth-app  -      fourth-app
+  supabase-token    fourth-app         -      fourth-app
   supabase-token-2  demo-app-prod        PROD   demo-app, demo-app-landing, demo-app-redesign  ⚠
 ```
 

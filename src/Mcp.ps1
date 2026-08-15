@@ -35,7 +35,37 @@
 # Claude Code expands ${VAR} and ${VAR:-default} in command, args, env, url and
 # headers, which is what makes the header form below safe to commit.
 
-$script:McpFichier = '.mcp.json'
+# ---------------------------------------------------------------------------
+# Where each client keeps its project-scoped MCP configuration
+# ---------------------------------------------------------------------------
+#
+# MCP is an open standard; the file that declares it is not. Each client picked
+# its own location and its own root key, so a generator that only wrote
+# .mcp.json would tie this module to one assistant -- which is the exact kind of
+# lock-in it exists to remove. The identity belongs to the FOLDER, and so must
+# work whichever assistant the developer opens it with, this year or next.
+#
+# Only PROJECT-scoped files appear here. A client that stores its servers in a
+# machine-wide profile cannot be bound to a folder, and listing it would promise
+# something this module cannot deliver.
+
+$script:McpClients = [ordered]@{
+    'claude' = @{
+        Fichier = '.mcp.json'
+        Cle     = 'mcpServers'
+        Libelle = 'Claude Code'
+    }
+    'vscode' = @{
+        Fichier = '.vscode/mcp.json'
+        Cle     = 'servers'      # VS Code says "servers", not "mcpServers"
+        Libelle = 'VS Code'
+    }
+    'cursor' = @{
+        Fichier = '.cursor/mcp.json'
+        Cle     = 'mcpServers'
+        Libelle = 'Cursor'
+    }
+}
 
 # ---------------------------------------------------------------------------
 # Pure builders
@@ -83,6 +113,7 @@ function Merge-CtxMcpConfig {
     param(
         [AllowNull()]$Existant,
         [Parameter(Mandatory)][System.Collections.IDictionary]$Nouveaux,
+        [string]$Cle = 'mcpServers',
         [switch]$Force
     )
 
@@ -97,7 +128,7 @@ function Merge-CtxMcpConfig {
     if ($Existant) {
         $blocServeurs = $null
         foreach ($p in (Get-CtxPaires $Existant)) {
-            if ($p.Name -eq 'mcpServers') { $blocServeurs = $p.Value; continue }
+            if ($p.Name -eq $Cle) { $blocServeurs = $p.Value; continue }
             $fusion[$p.Name] = $p.Value
         }
         foreach ($p in (Get-CtxPaires $blocServeurs)) { $serveurs[$p.Name] = $p.Value }
@@ -110,7 +141,7 @@ function Merge-CtxMcpConfig {
         else                             { $conserves += $k }
     }
 
-    $fusion['mcpServers'] = $serveurs
+    $fusion[$Cle] = $serveurs
     [pscustomobject]@{
         Config    = $fusion
         Ajoutes   = $ajoutes
@@ -126,13 +157,19 @@ function Merge-CtxMcpConfig {
 function New-DevProjectMcp {
     <#
     .SYNOPSIS
-        Writes a project-scoped .mcp.json bound to this folder's account.
+        Writes project-scoped MCP configuration bound to this folder's account.
 
     .DESCRIPTION
         Declares the MCP servers this project can reach, taking their
         credentials from the environment DevContext already fills from the
-        folder. No secret is written, so the file can be committed, and the
+        folder. No secret is written, so the files can be committed, and the
         account follows the project instead of following whoever logged in last.
+
+        Assistant-agnostic on purpose. MCP is an open standard, and being tied
+        to one vendor's account is the problem this module exists to remove --
+        so being tied to one vendor's TOOL would be the same mistake wearing a
+        different hat. Claude Code, VS Code and Cursor each get their own file,
+        in their own format.
 
         Only servers whose prerequisites are actually present are declared:
         Supabase when the folder is linked to a project, GitHub when a token is
@@ -144,6 +181,11 @@ function New-DevProjectMcp {
     .PARAMETER Path
         Project folder. Defaults to the current one.
 
+    .PARAMETER Client
+        Which assistants to configure: claude, vscode, cursor. Without it, the
+        folder decides -- clients already present are refreshed, absent ones are
+        left alone rather than installed on someone's behalf.
+
     .PARAMETER Ecriture
         Allows the Supabase server to mutate. Ignored on a production project,
         which stays read-only.
@@ -152,14 +194,15 @@ function New-DevProjectMcp {
         Replaces servers of the same name that are already declared.
 
     .EXAMPLE
-        ctx-mcp
+        ctx-mcp -Client claude
 
     .EXAMPLE
-        ctx-mcp -WhatIf
+        ctx-mcp -Client claude, cursor -WhatIf
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [string]$Path = (Get-Location).Path,
+        [ValidateSet('claude', 'vscode', 'cursor')][string[]]$Client,
         [switch]$Ecriture,
         [switch]$Force
     )
@@ -195,41 +238,86 @@ function New-DevProjectMcp {
         return
     }
 
-    $cible    = Join-Path $dossier $script:McpFichier
-    $existant = $null
-    if (Test-Path -LiteralPath $cible) {
-        $existant = try { Get-Content -LiteralPath $cible -Raw | ConvertFrom-Json -AsHashtable }
-                    catch { throw "$script:McpFichier existant illisible : $($_.Exception.Message). Le corriger ou le deplacer avant de regenerer." }
-    }
-
-    $resultat = Merge-CtxMcpConfig -Existant $existant -Nouveaux $nouveaux -Force:$Force
-    $json = $resultat.Config | ConvertTo-Json -Depth 8
-
     # Avant la bifurcation ShouldProcess : ce qui a ete ECARTE est la moitie
     # utile du rapport, et -WhatIf est precisement le mode ou on veut la lire.
     foreach ($i in $ignores) { Write-Host "  ignore : $i" -ForegroundColor DarkGray }
 
-    if (-not $PSCmdlet.ShouldProcess($cible, 'ecrire la configuration MCP du projet')) {
-        Write-Host ''
-        Write-Host $json
+    # @() obligatoire : sans client detecte la fonction ne rend RIEN, et sous
+    # StrictMode lire .Count sur $null leve — donc le cas « rien a faire »
+    # plantait au lieu de le dire.
+    $cibles = @(Resolve-CtxMcpCibles -Dossier $dossier -Client $Client)
+    if ($cibles.Count -eq 0) {
+        Write-Warning "Aucun client MCP detecte dans ce dossier. Preciser -Client pour en creer un : $($script:McpClients.Keys -join ', ')"
         return
     }
 
-    Set-Content -LiteralPath $cible -Value $json -Encoding UTF8
+    Write-Host ''
+    foreach ($c in $cibles) {
+        $existant = $null
+        if (Test-Path -LiteralPath $c.Chemin) {
+            $existant = try { Get-Content -LiteralPath $c.Chemin -Raw | ConvertFrom-Json -AsHashtable }
+                        catch { throw "$($c.Chemin) existant illisible : $($_.Exception.Message). Le corriger ou le deplacer avant de regenerer." }
+        }
+
+        $resultat = Merge-CtxMcpConfig -Existant $existant -Nouveaux $nouveaux -Cle $c.Cle -Force:$Force
+        $json = $resultat.Config | ConvertTo-Json -Depth 8
+
+        if (-not $PSCmdlet.ShouldProcess($c.Chemin, "ecrire la configuration MCP ($($c.Libelle))")) {
+            Write-Host "  $($c.Libelle) — $($c.Chemin)" -ForegroundColor Cyan
+            Write-Host $json
+            Write-Host ''
+            continue
+        }
+
+        New-Item -ItemType Directory -Path (Split-Path $c.Chemin -Parent) -Force | Out-Null
+        Set-Content -LiteralPath $c.Chemin -Value $json -Encoding UTF8
+
+        Write-Host "  $($c.Libelle) — $($c.Chemin)" -ForegroundColor Green
+        if ($resultat.Ajoutes.Count)   { Write-Host "    ajoutes   : $($resultat.Ajoutes -join ', ')" -ForegroundColor Green }
+        if ($resultat.Remplaces.Count) { Write-Host "    remplaces : $($resultat.Remplaces -join ', ')" -ForegroundColor Yellow }
+        if ($resultat.Conserves.Count) {
+            Write-Host "    conserves : $($resultat.Conserves -join ', ') (-Force pour les remplacer)" -ForegroundColor DarkGray
+        }
+    }
 
     Write-Host ''
-    Write-Host "  $script:McpFichier ecrit" -ForegroundColor Green
-    Write-Host "    $cible"
-    if ($resultat.Ajoutes.Count)   { Write-Host "    ajoutes   : $($resultat.Ajoutes -join ', ')" -ForegroundColor Green }
-    if ($resultat.Remplaces.Count) { Write-Host "    remplaces : $($resultat.Remplaces -join ', ')" -ForegroundColor Yellow }
-    if ($resultat.Conserves.Count) {
-        Write-Host "    conserves : $($resultat.Conserves -join ', ')" -ForegroundColor DarkGray
-        Write-Host "                (-Force pour les remplacer)" -ForegroundColor DarkGray
+    Write-Host '  Aucun secret dans ces fichiers : les jetons viennent de l environnement,' -ForegroundColor DarkGray
+    Write-Host '  donc du contexte du dossier. Ils peuvent etre commites.' -ForegroundColor DarkGray
+    Write-Host '  Lancer l assistant depuis un terminal ou `work` a ete execute.' -ForegroundColor DarkGray
+    Write-Host ''
+}
+
+function Resolve-CtxMcpCibles {
+    <#
+      Which client configurations to write.
+
+      Without -Client, the folder decides: a client already present gets its
+      file refreshed, and one that is not present is left alone. Writing a
+      .cursor/ into a repository whose team does not use Cursor would be this
+      module littering someone else's project -- and it is a shared, committed
+      file, so the mess spreads on the next pull.
+
+      When nothing is detected, nothing is written and the caller is told to
+      name a client. Guessing would install an assistant's configuration on
+      behalf of a developer who never asked for that assistant.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Dossier,
+        [string[]]$Client
+    )
+
+    $noms = if ($Client) { $Client } else { $script:McpClients.Keys }
+
+    foreach ($nom in $noms) {
+        $def = $script:McpClients[$nom]
+        if (-not $def) { throw "Client MCP inconnu : '$nom'. Connus : $($script:McpClients.Keys -join ', ')" }
+
+        $chemin = Join-Path $Dossier ($def.Fichier -replace '/', '\')
+        # Sans -Client, on ne sert que les clients deja presents dans le dossier.
+        if (-not $Client -and -not (Test-Path -LiteralPath $chemin)) { continue }
+
+        [pscustomobject]@{
+            Nom = $nom; Chemin = $chemin; Cle = $def.Cle; Libelle = $def.Libelle
+        }
     }
-    foreach ($i in $ignores) { Write-Host "    ignore    : $i" -ForegroundColor DarkGray }
-    Write-Host ''
-    Write-Host '  Aucun secret dans ce fichier : les jetons viennent de l environnement,' -ForegroundColor DarkGray
-    Write-Host '  donc du contexte du dossier. Il peut etre commite.' -ForegroundColor DarkGray
-    Write-Host '  Lancer Claude Code depuis un terminal ou `work` a ete execute.' -ForegroundColor DarkGray
-    Write-Host ''
 }

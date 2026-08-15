@@ -1,0 +1,124 @@
+# Continuous integration for DevContext.
+#
+# Windows only, and that is not a shortcut. This module manipulates the Windows
+# user PATH, the HKCU registry, DPAPI-encrypted VS Code stores and git-bash --
+# there is nothing here another runner could meaningfully verify.
+#
+# The suite is split into three jobs rather than one, so a red build says WHICH
+# property broke. A single job reporting "tests failed" makes you read a log to
+# learn what a job name could have told you.
+
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**', 'hotfix/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Pester suite
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The security tests scan the whole history for credential patterns.
+          # A shallow clone would let them pass without having looked.
+          fetch-depth: 0
+
+      - name: Report the PowerShell in use
+        shell: pwsh
+        run: $PSVersionTable | Format-List
+
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.0.0 -Force -SkipPublisherCheck -Scope CurrentUser
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
+
+      - name: Run the suite
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/RunTests.ps1
+
+  manifest:
+    name: Manifest and module load
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install runtime dependencies
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
+
+      - name: The manifest is publishable as-is
+        shell: pwsh
+        run: |
+          # Test-ModuleManifest is what PowerShell Gallery runs on submission.
+          # Failing here beats failing on a release tag.
+          $m = Test-ModuleManifest ./DevContext.psd1
+          "Module {0} version {1}" -f $m.Name, $m.Version
+          if (-not $m.Description) { throw 'Description is required to publish' }
+
+      - name: The module imports on a machine that has never seen it
+        shell: pwsh
+        run: |
+          Import-Module ./DevContext.psd1 -Force -ErrorAction Stop
+          $mod = Get-Module DevContext
+          "Functions: {0}" -f $mod.ExportedFunctions.Count
+          "Aliases:   {0}" -f $mod.ExportedAliases.Count
+          if ($mod.ExportedFunctions.Count -lt 10) { throw 'Export list looks truncated' }
+
+  secrets:
+    name: No credential in the repository
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan the full history, not just the tip
+        shell: pwsh
+        run: |
+          # A credential removed in a later commit is still published: the
+          # working tree is clean and the history is not. This is the check
+          # the local suite cannot perform on a shallow clone.
+          $motifs = @(
+            'sbp_[A-Za-z0-9]{30,}', 'sb_secret_[A-Za-z0-9]{30,}',
+            'gh[pousr]_[A-Za-z0-9]{36,}', 'github_pat_[A-Za-z0-9_]{40,}',
+            'sk-[A-Za-z0-9]{40,}', 'xox[baprs]-[A-Za-z0-9-]{30,}',
+            '(AKIA|ASIA)[A-Z0-9]{16}', 'BEGIN [A-Z ]*PRIVATE KEY'
+          )
+          $historique = git log --all -p
+          $fautes = @()
+          foreach ($m in $motifs) {
+            $trouves = $historique | Select-String -Pattern $m -AllMatches
+            foreach ($t in $trouves) { $fautes += $t.Matches.Value }
+          }
+          # The test fixtures are deliberately obvious and deliberately fake.
+          $fautes = $fautes | Where-Object { $_ -notmatch '^(sbp_010203|ghp_AAAA|ghp_16Chars|github_pat_11ABCDEFG|sk-proj-abcdef|xoxb-123456|AKIAIOSFODNN7EXAMPLE)' }
+          if ($fautes) {
+            $fautes | Sort-Object -Unique | ForEach-Object { Write-Host "::error::possible credential in history: $_" }
+            throw "$($fautes.Count) credential-shaped string(s) found in history"
+          }
+          Write-Host 'History is clean.'

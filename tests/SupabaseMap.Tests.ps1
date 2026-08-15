@@ -1,4 +1,4 @@
-BeforeAll {
+﻿BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force
 }
 
@@ -135,7 +135,7 @@ Describe 'Get-DevSupabaseMap' {
             $avant = $env:DEVCTX
             try {
                 Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue
-                { Get-DevSupabaseMap } | Should -Throw '*contexte*'
+                { Get-DevSupabaseMap } | Should -Throw '*ctx-sb*'
             }
             finally { if ($avant) { $env:DEVCTX = $avant } }
         }

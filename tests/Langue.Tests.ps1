@@ -1,4 +1,4 @@
-# Le mecanisme bilingue.
+﻿# Le mecanisme bilingue.
 #
 # Deux dangers, et ils sont symetriques. Une cle presente dans une langue et
 # absente de l'autre produit un message a moitie traduit, que seul un lecteur de
@@ -165,6 +165,19 @@ Describe 'Aucune decision prise sur du texte affiche' {
         $verdicts['en'] | Should -Be $verdicts['fr']
     }
 
+    # UNE HEURISTIQUE LEXICALE A ETE ESSAYEE ICI, ET RETIREE.
+    #
+    # L'idee : reperer une assertion contenant un mot qui differe entre les deux
+    # langues. Trois versions, trois vagues de faux positifs -- d'abord les
+    # identifiants presents dans les tables (DevContext, Supabase, sb-index),
+    # puis les mots francais figurant dans les NOMS de test et les chemins de la
+    # meme ligne. Un test dont il faut sans cesse affiner le filtre finit ignore,
+    # et emporte ses vraies trouvailles avec lui.
+    #
+    # Remplacee par un controle DIRECT : la CI execute la suite entiere sous
+    # DEVCTX_LANG=fr puis sous DEVCTX_LANG=en. Une assertion qui depend de la
+    # langue echoue dans l'une des deux, sans heuristique et sans faux positif.
+    # Voir .github/workflows/ci.yml.
     It 'Get-DevEditorList expose un champ booleen a cote du libelle traduit' {
         # Le correctif structurel : le code decide sur Isole/ExtensionsIsolees,
         # l'humain lit Profil/Extensions. Retirer les booleens ferait revenir le

@@ -207,7 +207,9 @@ Describe 'Test-CtxDoctorPathEntreeVide' {
         InModuleScope DevContext {
             $r = Test-CtxDoctorPathEntreeVide -Path 'C:\a;;C:\b;'
             $r.Verdict | Should -Be 'ATTENTION'
-            $r.Detail  | Should -Match '2 entree'
+            # Sur le NOMBRE, pas sur la prose : le libelle est traduit, et l'agent de CI
+            # ne parle pas la meme langue que le poste qui a ecrit le test.
+            $r.Detail  | Should -Match '\b2\b'
         }
     }
 }

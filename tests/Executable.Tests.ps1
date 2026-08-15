@@ -24,14 +24,16 @@ Describe 'Get-CtxSupabaseExe — exclusion du dossier des shims' {
             Mock Get-Command -ParameterFilter { $Name -eq 'supabase' } {
                 @([pscustomobject]@{ Source = (Join-Path $script:ShimDir 'supabase.cmd') })
             }
-            { Get-CtxSupabaseExe } | Should -Throw '*introuvable*'
+            # 'supabase' est le seul fragment stable d'une langue a l'autre.
+            { Get-CtxSupabaseExe } | Should -Throw '*supabase*'
         }
     }
 
     It 'leve quand aucun candidat n existe' {
         InModuleScope DevContext {
             Mock Get-Command -ParameterFilter { $Name -eq 'supabase' } { @() }
-            { Get-CtxSupabaseExe } | Should -Throw '*introuvable*'
+            # 'supabase' est le seul fragment stable d'une langue a l'autre.
+            { Get-CtxSupabaseExe } | Should -Throw '*supabase*'
         }
     }
 

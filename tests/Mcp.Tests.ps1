@@ -198,7 +198,7 @@ Describe 'New-DevProjectMcp' {
         New-Item -ItemType Directory -Path (Join-Path $casse 'supabase\.temp') -Force | Out-Null
         Set-Content (Join-Path $casse 'supabase\.temp\project-ref') 'refbidon000000000000' -NoNewline
         Set-Content (Join-Path $casse '.mcp.json') '{ ceci nest pas du json'
-        { New-DevProjectMcp -Path $casse -Client claude -Confirm:$false } | Should -Throw '*illisible*'
+        { New-DevProjectMcp -Path $casse -Client claude -Confirm:$false } | Should -Throw '*.mcp.json*'
     }
 
     It 'est expose comme alias ctx-mcp' {

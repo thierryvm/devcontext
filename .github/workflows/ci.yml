@@ -26,9 +26,22 @@ concurrency:
 
 jobs:
   tests:
-    name: Pester suite
+    # La suite tourne dans LES DEUX langues.
+    #
+    # Le 15 aout 2026, la CI est passee au rouge alors que tout etait vert en
+    # local : l'agent est anglophone, le poste francophone, et cinq assertions
+    # comparaient le TEXTE d'un message traduit. Une seule langue testee, c'est
+    # une moitie de logiciel testee -- et c'est toujours la moitie que l'auteur
+    # ne lit pas qui casse.
+    name: Pester suite (${{ matrix.langue }})
     runs-on: windows-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        langue: [fr, en]
+    env:
+      DEVCTX_LANG: ${{ matrix.langue }}
 
     steps:
       - uses: actions/checkout@v7

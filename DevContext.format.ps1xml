@@ -66,5 +66,76 @@
         </TableRowEntries>
       </TableControl>
     </View>
+
+    <!--
+        ctx doctor. Same reason as above: five properties, so the default is a
+        list, and a diagnostic read one paragraph per line is a diagnostic
+        nobody reads to the end.
+
+        The fix is folded into the same cell as the finding, on its own line:
+        a separate column would be empty on most rows and would steal the width
+        the finding needs. Wrap is on for that reason.
+
+        Colour comes from $PSStyle, which PowerShell 7.2 and later measures
+        correctly when sizing columns.
+    -->
+    <View>
+      <Name>DevContext.DoctorCheck</Name>
+      <ViewSelectedBy>
+        <TypeName>DevContext.DoctorCheck</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>Verdict</Label>
+            <Width>9</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Domaine</Label>
+            <Width>10</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Sujet</Label>
+            <Width>14</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Constat</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <Wrap/>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>
+                  $c = switch ($_.Verdict) {
+                      'OK'        { $PSStyle.Foreground.Green }
+                      'INFO'      { $PSStyle.Foreground.BrightBlack }
+                      'ATTENTION' { $PSStyle.Foreground.Yellow }
+                      'PROBLEME'  { $PSStyle.Foreground.Red }
+                      'ABSENT'    { $PSStyle.Foreground.Magenta }
+                      default     { '' }
+                  }
+                  "$c$($_.Verdict)$($PSStyle.Reset)"
+                </ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Domaine</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Sujet</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>
+                  if ($_.Correctif) {
+                      "$($_.Detail)`n  $($PSStyle.Foreground.Cyan)-> $($_.Correctif)$($PSStyle.Reset)"
+                  } else { $_.Detail }
+                </ScriptBlock>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
   </ViewDefinitions>
 </Configuration>

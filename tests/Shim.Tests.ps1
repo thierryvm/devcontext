@@ -125,10 +125,21 @@ exit /b 42
         # "Ce qui est verifie" section of README.md, where $profile and $Args
         # are named. The shim then received garbage and let everything pass.
         $script:Run = {
-            param($ShimPath, $Proj, $CtxRoot, $Decoy, $CliArgs, $Allow)
+            param($ShimPath, $Proj, $CtxRoot, $Decoy, $CliArgs, $Allow, $SansContexte)
+            # Il faut EFFACER la variable, pas seulement s'abstenir de la poser :
+            # `pwsh -Command` herite de l'environnement du parent, et Pester
+            # tourne dans un shell ou un contexte est actif. S'abstenir laissait
+            # l'enfant heriter de DEVCTX='perso' — le test ne reproduisait donc
+            # jamais la condition qu'il annonçait, et serait reste vert sur un
+            # shim casse.
+            $poseCtx = if ($SansContexte) {
+                'Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue'
+            } else {
+                "`$env:DEVCTX = 'demo'"
+            }
             $code = @"
 `$env:DEVCTX_ROOT = '$CtxRoot'
-`$env:DEVCTX = 'demo'
+$poseCtx
 `$env:DEVCTX_ALLOW_PROD = '$Allow'
 `$env:PATH = '$Decoy;' + `$env:PATH
 Set-Location '$Proj'
@@ -179,6 +190,42 @@ exit `$LASTEXITCODE
         finally {
             Set-Content (Join-Path $script:proj 'supabase' '.temp' 'project-ref') 'refdeprod' -NoNewline
         }
+    }
+
+    It 'refuse db reset SANS contexte actif, en resolvant le dossier' {
+        # Le trou du 15 aout 2026. Le shim commencait par
+        #     if (-not $env:DEVCTX) { Invoke-Real }
+        # donc il s'effacait des que la variable de session manquait — c'est-a-dire
+        # dans git-bash, dans un script npm, dans un execFileSync Node, dans le
+        # shell d'un agent. Soit exactement la population pour laquelle il
+        # existe : la ou l'alias PowerShell ne va pas.
+        #
+        # Verifie en vrai le 15 aout 2026 : `supabase db reset --linked` sur
+        # ankora-prod est passe depuis git-bash. Il n'a echoue que sur un
+        # timeout reseau.
+        #
+        # C'est le DOSSIER qui decide, jamais la session.
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy 'db reset' '' $true
+        $r.Output | Should -Match 'REFUSE'
+        $r.Output | Should -Match 'demo-prod'
+        $r.Output | Should -Not -Match 'LEURRE-APPELE'
+        $r.Code   | Should -Be 1
+    }
+
+    It 'refuse db push hors branche par defaut SANS contexte actif' {
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy 'db push' '' $true
+        $r.Output | Should -Match 'REFUSE'
+        $r.Output | Should -Not -Match 'LEURRE-APPELE'
+        $r.Code   | Should -Be 1
+    }
+
+    It 'laisse passer une commande inoffensive SANS contexte actif' {
+        # La correction ne doit pas transformer l'absence de contexte en blocage
+        # general : ce serait rendre l'outil insupportable et le faire desinstaller.
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy 'db pull' '' $true
+        $r.Output | Should -Match 'LEURRE-APPELE'
+        $r.Output | Should -Not -Match 'REFUSE'
+        $r.Code   | Should -Be 42
     }
 
     It 'laisse passer db push une fois revenu sur la branche par defaut' {

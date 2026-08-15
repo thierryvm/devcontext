@@ -1,4 +1,4 @@
-# Isolation des contextes de travail
+﻿# Isolation des contextes de travail
 
 **Pourquoi ce dossier existe, et quel problème il résout**
 
@@ -47,7 +47,7 @@ C'est l'amendement du 5 août 2026, et il vient d'un incident réel.
 
 La première version traitait le personnel comme un **état par défaut** : `ctx-off` effaçait toutes les variables et rendait la main. Or effacer `GH_CONFIG_DIR` ne rend pas la main à « personne » — ça la rend à la **configuration globale de la machine**, c'est-à-dire au dernier compte connecté, quel qu'il soit.
 
-Conséquence : les projets clients étaient blindés, le projet personnel ne l'était pas. Et le garde-fou de réécriture d'URL n'était écrit que pour les racines clientes — rien ne protégeait `F:\PROJECTS\Apps`.
+Conséquence : les projets clients étaient blindés, le projet personnel ne l'était pas. Et le garde-fou de réécriture d'URL n'était écrit que pour les racines clientes — rien ne protégeait `C:\Work\Apps`.
 
 C'est le projet personnel qui a failli partir sur un compte client.
 

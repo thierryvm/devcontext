@@ -1,4 +1,4 @@
-# Installing DevContext on a fresh machine
+﻿# Installing DevContext on a fresh machine
 
 This repository is the **single source** of the module. There is no second copy —
 that is deliberate, and it is the most important sentence in this document.
@@ -21,56 +21,92 @@ is nothing to synchronise, so there is nothing to drift.
 
 ---
 
-## Install
+## Install from PowerShell Gallery
 
-### 1. Dependencies
-
-```powershell
-Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser
-```
-
-The vault is a **hard** dependency. Without it no token is loaded and the module
-cannot keep its promise, so it refuses to import rather than half-work.
-
-### 2. Clone
+### 1. The module
 
 ```powershell
-git clone https://github.com/thierryvm/devcontext.git F:\PROJECTS\Apps\devcontext
+Install-PSResource DevContext        # or: Install-Module DevContext
 ```
 
-The path barely matters, but placing the repository under a context root means
-DevContext manages itself.
+The vault — `Microsoft.PowerShell.SecretManagement` and
+`Microsoft.PowerShell.SecretStore` — comes along as a declared dependency. It is
+a **hard** one: without it no token is loaded and the module cannot keep its
+promise, so it refuses to import rather than half-work.
 
-### 3. Link the module folder
+### 2. The production guard
+
+Not optional, and not automatic. Installing a module cannot modify your `PATH`,
+and it should not: that is a change to your machine, and it belongs to a command
+you chose to run.
 
 ```powershell
-$modules = "$HOME\Documents\PowerShell\Modules\DevContext"
-if (Test-Path $modules) { Rename-Item $modules 'DevContext.before-link' }
-New-Item -ItemType SymbolicLink -Path $modules -Target 'F:\PROJECTS\Apps\devcontext'
+pwsh -NoProfile -File (Join-Path (Get-Module DevContext -ListAvailable)[0].ModuleBase 'installer-shims.ps1')
 ```
 
-> Elevation is only needed if Windows **Developer Mode** is off. With it on, the
-> command works without administrator rights.
-
-### 4. Install the production guard
-
-```powershell
-pwsh -NoProfile -File F:\PROJECTS\Apps\devcontext\installer-shims.ps1
-```
-
-This puts `shims\` at the **front** of the user `PATH`, which is what makes the
-guard reachable from git-bash, npm scripts, Node and an AI agent's shell — not
-only from PowerShell. It backs up the previous `PATH` first and is fully
-reversible:
+This is what makes the guard reachable from git-bash, npm scripts, Node and an AI
+agent's shell — not only from a PowerShell session that imported the module. It
+backs up the previous `PATH` first and is fully reversible:
 
 ```powershell
 pwsh -NoProfile -File .\installer-shims.ps1 -Verifier    # report, change nothing
 pwsh -NoProfile -File .\installer-shims.ps1 -Restaurer   # remove it again
 ```
 
+### 3. Run it again after every update
+
+`PATH` receives `%LOCALAPPDATA%\DevContext\current\shims`, a path with no version
+number in it. Behind `current` sits a **junction** to the installed module, and
+that is what a new version has to repoint.
+
+Why it works this way: installed from the Gallery, a module lives under
+`...\Modules\DevContext\1.3.1\`. Putting *that* in `PATH` would pin a version —
+the next release lands in a sibling folder, `PATH` keeps naming the old one, and
+the guard runs stale logic until the old version is removed, at which point it
+disappears without a word. That was the state of 1.3.0, for a few hours.
+
+`ctx doctor` reports a junction pointing anywhere other than the loaded module,
+so a forgotten step shows up as a finding rather than as silence.
+
+---
+
+## Install from a clone, to work on the module
+
+```powershell
+Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser
+
+git clone https://github.com/thierryvm/devcontext.git
+$depot = (Resolve-Path .\devcontext).Path
+
+$modules = "$HOME\Documents\PowerShell\Modules\DevContext"
+if (Test-Path $modules) { Rename-Item $modules 'DevContext.before-link' }
+New-Item -ItemType SymbolicLink -Path $modules -Target $depot
+
+pwsh -NoProfile -File "$depot\installer-shims.ps1"
+```
+
+> Elevation is only needed if Windows **Developer Mode** is off. With it on, the
+> command works without administrator rights. (The junction the installer creates
+> needs neither — that is why it is a junction and not a symlink.)
+
+The symlink means the module PowerShell loads and the repository you edit are the
+same files. There is nothing to synchronise, so there is nothing to drift — and
+no chance of fixing the copy that is not the one being executed, which is exactly
+what happened on 12 Aug 2026.
+
+The test suite ships with the clone, not with the Gallery package:
+
+```powershell
+pwsh -NoProfile -File .\tests\RunTests.ps1
+```
+
 User scope only. No administrator rights, no machine-wide change.
 
-### 5. Verify — in a NEW terminal
+---
+
+## Verify — in a NEW terminal
+
+`PATH` changes land in the next terminal, never in the one that made them.
 
 ```powershell
 work perso -NoCd
@@ -78,15 +114,14 @@ ctx
 ctx-doctor
 ```
 
-`ctx` must answer **GO**. Until it has, **delete nothing.**
-
-### 6. Once proven
+`ctx` must answer **GO**. Until it has, **delete nothing** — in particular not
+the `DevContext.before-link` folder, if the clone install renamed one:
 
 ```powershell
 Remove-Item "$HOME\Documents\PowerShell\Modules\DevContext.before-link" -Recurse -Force
 ```
 
-### Rolling back
+## Rolling back
 
 ```powershell
 pwsh -NoProfile -File .\installer-shims.ps1 -Restaurer
@@ -151,7 +186,7 @@ backup is a secret that has already been copied somewhere it did not belong.
 ## Recreating a context
 
 ```powershell
-ctx-new perso -Label 'Perso' -Email '...' -Root 'F:\PROJECTS\Apps' -GithubLogin '...'
+ctx-new perso -Label 'Perso' -Email '...' -Root 'C:\Work\Apps' -GithubLogin '...'
 ```
 
 `ctx-new` asks for each token in turn, with masked input. Press Enter to skip

@@ -1,4 +1,4 @@
-# Architecture
+﻿# Architecture
 
 How DevContext is put together, and why each piece sits where it does. Written
 for whoever maintains it next — human or agent.
@@ -192,8 +192,8 @@ one that has not changed costs nothing.
 a context nested under another resolves to the more specific of the two.
 
 `Get-NormalizedRoot` appends a trailing separator, and that separator is the
-whole point: without it, `F:\PROJECTS\Apps` also matches
-`F:\PROJECTS\Apps-Autre`, and the guard confidently states the opposite of the
+whole point: without it, `C:\Work\Apps` also matches
+`C:\Work\Apps-Autre`, and the guard confidently states the opposite of the
 truth. `tests/ContextResolution.Tests.ps1` pins this case by name.
 
 ---

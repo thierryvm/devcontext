@@ -1,4 +1,4 @@
-# DevContext
+﻿# DevContext
 
 **Your identity, your credentials and your AI tooling follow the folder you are
 standing in — not the account you last logged into.**
@@ -8,9 +8,9 @@ account, Vercel session, Supabase tokens, VS Code profile, MCP servers. Several
 coexist at once. You never log out of anything.
 
 ```powershell
-work perso                  # this terminal is now "perso"
-cd F:\PROJECTS\Clients\acme # …and this folder belongs to a client
-ctx                         # NO-GO — and it tells you why
+work perso               # this terminal is now "perso"
+cd C:\Work\Clients\acme  # …and this folder belongs to a client
+ctx                      # NO-GO — and it tells you why
 ```
 
 <p align="center">
@@ -98,16 +98,43 @@ quietly open a client project on your personal profile.
 Requires **Windows** and **PowerShell 7+**.
 
 ```powershell
-Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser
+Install-PSResource DevContext        # or: Install-Module DevContext
+```
 
-git clone https://github.com/thierryvm/devcontext.git F:\PROJECTS\Apps\devcontext
+Then one more command, which is not optional:
+
+```powershell
+pwsh -NoProfile -File (Join-Path (Get-Module DevContext -ListAvailable)[0].ModuleBase 'installer-shims.ps1')
+```
+
+That second line is what puts the production guard in `PATH`. Without it the
+guard exists only inside a PowerShell session that imported the module — which
+covers neither git-bash, nor npm scripts, nor `execFileSync` from Node, nor an AI
+agent's shell. That is, none of the callers most likely to make the mistake.
+
+**Run it again after every module update.** `PATH` names a stable path that never
+changes, but the junction behind it has to be repointed at the new version.
+`ctx doctor` says so out loud when it is stale, rather than letting the guard go
+quiet — see [`docs/GUIDE.md`](docs/GUIDE.md).
+
+<details>
+<summary>Installing from a clone instead, to work on the module</summary>
+
+```powershell
+git clone https://github.com/thierryvm/devcontext.git
 New-Item -ItemType SymbolicLink `
     -Path   "$HOME\Documents\PowerShell\Modules\DevContext" `
-    -Target 'F:\PROJECTS\Apps\devcontext'
+    -Target (Resolve-Path .\devcontext)
 
-# Puts the production guard in PATH, so it covers every shell.
-pwsh -NoProfile -File F:\PROJECTS\Apps\devcontext\installer-shims.ps1
+pwsh -NoProfile -File .\devcontext\installer-shims.ps1
 ```
+
+The symlink means the module PowerShell loads and the repository you edit are
+the same files — there is no copy to keep in sync, and no chance of fixing the
+one that is not being executed. Tests ship with the clone, not with the package:
+`pwsh -NoProfile -File .\tests\RunTests.ps1`.
+
+</details>
 
 Then create your first context — `ctx` tells you this itself when there are none:
 
@@ -141,9 +168,9 @@ line, so a gap is visible instead of silent.
 SSH keys, so a removable drive is a real choice with real consequences — the
 command lets you make it, and does not move anything on your behalf.
 
-The module is **used from the repository, never copied**. A second copy is how a
-fix ends up applied to the file nobody is running — see `INSTALLATION.md`, which
-also documents the rollback for every machine-level change.
+`INSTALLATION.md` documents the rollback for every machine-level change: the
+`PATH` entry, the junction, the `vscode://` handler. Each one is reversible with
+a single command, and each is backed up before it is touched.
 
 **New here? [`docs/GUIDE.md`](docs/GUIDE.md)** walks from an empty machine to a
 working day, and lists what to do when something is wrong.
@@ -189,10 +216,10 @@ an agent — all of them open the shared profile. So DevContext puts an entry
 point for each editor in `PATH`, ahead of the real one:
 
 ```
-$ cd F:\PROJECTS\Clients\acme\site
+$ cd C:\Work\Clients\acme\site
 $ code .          # opens on acme's profile, with acme's gh, acme's tokens
 
-$ cd F:\PROJECTS\Apps\my-thing
+$ cd C:\Work\Apps\my-thing
 $ code .          # opens on your own profile — both windows at once
 ```
 

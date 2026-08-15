@@ -11,10 +11,12 @@
 
 @{
     RootModule        = 'DevContext.psm1'
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '1.1.0'
     GUID              = 'b4f2c8a1-7e35-4d69-9a02-3c8d1e5f7b04'
     Author            = 'Thierry V.'
-    Description       = 'Cloisonnement des identités de développement par contexte : git, SSH, gh, Vercel, Supabase. Un contexte = un dossier + une identité complète, plusieurs coexistant en simultané.'
+    # En anglais : c'est le texte affiché sur PowerShell Gallery, donc la
+    # première phrase que lit quelqu'un qui ne connaît pas encore l'outil.
+    Description       = 'Keep development identities apart, per folder. One context = one folder + one complete identity: git email, SSH key, GitHub account, Vercel session, Supabase tokens, VS Code profile, MCP servers. Several coexist at once, and the folder decides which applies -- including a guard that refuses destructive commands against a production database, from every shell.'
 
     PowerShellVersion = '7.0'
 

@@ -116,7 +116,15 @@ jobs:
             foreach ($t in $trouves) { $fautes += $t.Matches.Value }
           }
           # The test fixtures are deliberately obvious and deliberately fake.
-          $fautes = $fautes | Where-Object { $_ -notmatch '^(sbp_010203|ghp_AAAA|ghp_16Chars|github_pat_11ABCDEFG|sk-proj-abcdef|xoxb-123456|AKIAIOSFODNN7EXAMPLE)' }
+          # Prefixes only, kept SHORT on purpose: writing a full key-shaped
+          # string here -- even a public documentation example -- makes this
+          # very file trip the repository's own secret scan. It did, once.
+          $fixtures = @('sbp_010203', 'ghp_AAAA', 'ghp_16Chars', 'github_pat_11ABCDEFG',
+                        'sk-proj-abcdef', 'xoxb-123456', 'AKIAIOSFODNN')
+          $fautes = $fautes | Where-Object {
+            $valeur = $_
+            -not ($fixtures | Where-Object { $valeur.StartsWith($_) })
+          }
           if ($fautes) {
             $fautes | Sort-Object -Unique | ForEach-Object { Write-Host "::error::possible credential in history: $_" }
             throw "$($fautes.Count) credential-shaped string(s) found in history"

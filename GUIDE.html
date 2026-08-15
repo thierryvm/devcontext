@@ -133,10 +133,10 @@
 </ul>
 
 <div class="box">
-  <b>La question que tu as posée : « j'ai ankora ouvert dans VS Code, si je tape <code>work perso</code> dans le terminal, il comprend ? »</b>
-  <p><b>Le terminal, oui.</b> Il reçoit les variables du contexte. Attention : <code>work</code> fait aussi un <code>cd</code> vers la racine — tu sortirais d'ankora. Pour rester où tu es : <code>work perso -NoCd</code>.</p>
+  <b>La question que tu as posée : « j'ai demo-app ouvert dans VS Code, si je tape <code>work perso</code> dans le terminal, il comprend ? »</b>
+  <p><b>Le terminal, oui.</b> Il reçoit les variables du contexte. Attention : <code>work</code> fait aussi un <code>cd</code> vers la racine — tu sortirais d'demo-app. Pour rester où tu es : <code>work perso -NoCd</code>.</p>
   <p><b>La fenêtre VS Code, non.</b> Son compte GitHub et son Copilot restent ceux de l'instance globale. Un terminal intégré ne peut pas reconfigurer l'éditeur qui l'héberge. Pour une fenêtre VS Code réellement « perso », il faut l'ouvrir avec <code>code-ctx perso</code> — c'est le <code>--user-data-dir</code> séparé qui isole les sessions d'auth.</p>
-  <p><b>git dans ankora, déjà bon</b>, sans rien taper : ankora est sous <code>F:\PROJECTS\Apps\</code>, donc le <code>includeIf</code> s'applique.</p>
+  <p><b>git dans demo-app, déjà bon</b>, sans rien taper : demo-app est sous <code>F:\PROJECTS\Apps\</code>, donc le <code>includeIf</code> s'applique.</p>
 </div>
 
 <h2 id="qui-decide">2 · Qui décide du compte, outil par outil</h2>
@@ -255,8 +255,8 @@ web-ctx perso</code></pre>
 
 <h3>Cas 1 — Je démarre ma journée sur un projet</h3>
 <pre><code>work perso
-code-ctx perso "F:\PROJECTS\Apps\ankora"</code></pre>
-<p>Le second argument est <b>le projet</b> que tu veux ouvrir. C'est la forme à privilégier : VS Code s'ouvre directement sur <code>ankora</code>, avec son <code>package.json</code>, son <code>tsconfig</code>, son <code>node_modules</code> — les extensions (ESLint, TypeScript, Tailwind) trouvent leur configuration là où elles l'attendent.</p>
+code-ctx perso "F:\PROJECTS\Apps\demo-app"</code></pre>
+<p>Le second argument est <b>le projet</b> que tu veux ouvrir. C'est la forme à privilégier : VS Code s'ouvre directement sur <code>demo-app</code>, avec son <code>package.json</code>, son <code>tsconfig</code>, son <code>node_modules</code> — les extensions (ESLint, TypeScript, Tailwind) trouvent leur configuration là où elles l'attendent.</p>
 
 <pre><code>code-ctx perso    <span class="c"># sans chemin → ouvre toute la racine F:\PROJECTS\Apps</span></code></pre>
 <p>Sans chemin, tu obtiens l'arborescence complète de tes 17 projets dans l'explorateur. Pratique pour naviguer, <b>moins bon pour travailler</b> : les extensions raisonnent alors sur la racine et non sur le projet, ce qui les rend lentes ou muettes.</p>
@@ -284,7 +284,7 @@ code-ctx perso "F:\PROJECTS\Apps\ankora"</code></pre>
   <b>Claude Code connaît le dispositif — dans tous tes projets</b>
   <p>Un protocole agent est chargé automatiquement à chaque session, quel que soit le projet ouvert : <code>~\.claude\CLAUDE.md</code> importe <code>~\.claude\devcontext-agent.md</code>.</p>
   <p>Il lui demande de lancer <code>ctx</code> au démarrage et de <b>rapporter le verdict</b>, de refuser de pousser ou déployer sur un <code>NO-GO</code>, de connaître les pièges (URL avec <code>login@</code>, <code>user.email</code> en dur, index Supabase périmé) et de ne jamais écrire un jeton ailleurs que dans le coffre.</p>
-  <p><b>Pourquoi pas un fichier par projet :</b> ankora et Terminal Learning sont des dépôts <b>publics</b>. Un <code>CLAUDE.md</code> par projet publierait tes chemins, emails et noms de comptes. Le fichier global ne part que dans <code>claude-config</code>, qui est privé.</p>
+  <p><b>Pourquoi pas un fichier par projet :</b> demo-app et Terminal Learning sont des dépôts <b>publics</b>. Un <code>CLAUDE.md</code> par projet publierait tes chemins, emails et noms de comptes. Le fichier global ne part que dans <code>claude-config</code>, qui est privé.</p>
   <p>Concrètement : demande <i>« on est bien sur le bon compte ? »</i> dans n'importe quel projet, il saura quoi vérifier et quoi te répondre.</p>
 </div>
 
@@ -314,7 +314,7 @@ code-ctx perso "F:\PROJECTS\Apps\ankora"</code></pre>
 <div class="box warn">
   <b>Erreur <code>tsserver.js ne pointe pas vers une installation valide</code></b>
   <p>Symptôme d'une fenêtre ouverte sur <b>la racine</b> <code>F:\PROJECTS\Apps</code> au lieu d'un projet. Ton réglage <code>"typescript.tsdk": "node_modules/typescript/lib"</code> est relatif au dossier ouvert, et il n'y a pas de <code>node_modules</code> à la racine.</p>
-  <p><b>Correctif :</b> rien à reconfigurer — ouvre le projet, pas la racine : <code>code-ctx perso "F:\PROJECTS\Apps\ankora"</code>.</p>
+  <p><b>Correctif :</b> rien à reconfigurer — ouvre le projet, pas la racine : <code>code-ctx perso "F:\PROJECTS\Apps\demo-app"</code>.</p>
 </div>
 
 <h3>Et si je bosse sur mon autre portable ?</h3>
@@ -512,19 +512,19 @@ work perso -NoCd ; ctx     <span class="c"># non-régression</span></code></pre>
 <div class="box warn">
   <b>Correctif du 8 août 2026 — le wrapper ne suffisait pas</b>
   <p>Le wrapper n'intercepte que les commandes tapées <b>dans PowerShell</b>. Un binaire appelé directement — <code>execFileSync</code> depuis Node, un script bash, un agent IA — ne le traverse jamais : il ne voit que la variable <code>SUPABASE_ACCESS_TOKEN</code>, que <code>work</code> figeait sur le compte par défaut.</p>
-  <p>Résultat : le préflight d'Ankora listait trois projets sans jamais voir <code>ankora-prod</code>. <b>La commande réussissait, sur le mauvais compte</b> — pire qu'une panne, parce qu'invisible.</p>
+  <p>Résultat : le préflight d'Demo-App listait trois projets sans jamais voir <code>demo-app-prod</code>. <b>La commande réussissait, sur le mauvais compte</b> — pire qu'une panne, parce qu'invisible.</p>
   <p><b>Corrigé à la racine :</b> <code>work</code> résout maintenant le jeton d'après le dossier, et un hook le resynchronise à chaque <code>cd</code>. <code>$env:DEVCTX_SUPABASE_KEY</code> dit quelle clé est active, et <code>ctx</code> rend <b>NO-GO</b> si elle ne correspond pas au projet.</p>
 </div>
 
 <h3>Ce que tu vois</h3>
-<pre><code>PS F:\PROJECTS\Apps\ankora&gt; supabase projects list
-  [ankora-prod -&gt; supabase-token-2]     <span class="c">← bascule signalée</span>
-  ankora-prod
+<pre><code>PS F:\PROJECTS\Apps\demo-app&gt; supabase projects list
+  [demo-app-prod -&gt; supabase-token-2]     <span class="c">← bascule signalée</span>
+  demo-app-prod
 
-PS F:\PROJECTS\Apps\airsoft-aywaille&gt; supabase projects list
+PS F:\PROJECTS\Apps\third-app&gt; supabase projects list
   Terminal Learning                     <span class="c">← compte par défaut, aucun message</span>
-  IronTrack
-  airsoft-aywaille</code></pre>
+  NeutralName
+  third-app</code></pre>
 <p>Le message n'apparaît que lorsque le compte utilisé <b>n'est pas</b> celui chargé par <code>work</code>. Signaler l'exception, pas la normale.</p>
 
 <h3>Reconstruire l'index — <code>sb-index</code></h3>

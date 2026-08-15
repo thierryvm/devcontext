@@ -19,6 +19,12 @@ the one that gets it uninstalled on first run.
 - **`ctx-root`**, `ctx-new`, `ctx-end`, `ctx-mcp`, `ctx-shortcut`,
   `ctx-editors`, `ctx doctor`, `work`, the production guard refusal, the
   installers and the launchers all speak both.
+- **`tools/Build-Package.ps1`**, which assembles the exact folder that gets
+  published, from `git ls-files` rather than from a directory walk. The source is
+  what git TRACKS, not what the folder CONTAINS, so build artifacts and ignored
+  files are excluded by construction rather than by a list somebody has to
+  remember. It refuses to run on a modified tree: a package must correspond to a
+  commit, or the published version is reproducible nowhere.
 
 ### Changed
 
@@ -38,6 +44,20 @@ the one that gets it uninstalled on first run.
   human and are translated.
 
 ### Fixed
+
+- **The package would have shipped `.git` in full**, caught by building a test
+  package and reading it before publishing anything. 825 KB out of 1060 -- 78% of
+  the package -- including `.git/config` with the author's push URL and SSH host
+  alias, and `.git/filter-repo/commit-map`, the old-to-new commit table of a
+  history rewrite. `Publish-PSResource` packs everything in the folder it is
+  given and excludes nothing of its own.
+
+  This is the one defect in the project that no later version could have
+  repaired: a published version cannot be deleted, only unlisted, and an unlisted
+  version stays downloadable by exact version number. `tests/Paquet.Tests.ps1`
+  now asserts on the assembled folder itself, and covers the symmetric danger --
+  EXCLUDING something the module needs, which would only ever show up on a
+  machine that installed from the Gallery.
 
 - **Code deciding on displayed text.** Three occurrences, each invisible in the
   language that wrote it.

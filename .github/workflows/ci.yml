@@ -57,6 +57,14 @@ jobs:
       - name: Install test dependencies
         shell: pwsh
         run: |
+          # PSGallery n'est pas garanti enregistre sur un agent neuf. Le poser
+          # comme acquis a fait tomber un job de la matrice sur
+          # « No repository with the name 'PSGallery' was found » pendant que
+          # l'autre passait -- une precondition supposee, donc une CI qui echoue
+          # au hasard. On l'enregistre s'il manque.
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default -ErrorAction Stop
+          }
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module Pester -MinimumVersion 5.0.0 -Force -SkipPublisherCheck -Scope CurrentUser
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
@@ -90,6 +98,14 @@ jobs:
       - name: Install runtime dependencies
         shell: pwsh
         run: |
+          # PSGallery n'est pas garanti enregistre sur un agent neuf. Le poser
+          # comme acquis a fait tomber un job de la matrice sur
+          # « No repository with the name 'PSGallery' was found » pendant que
+          # l'autre passait -- une precondition supposee, donc une CI qui echoue
+          # au hasard. On l'enregistre s'il manque.
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default -ErrorAction Stop
+          }
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
           Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser

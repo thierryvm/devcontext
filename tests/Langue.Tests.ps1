@@ -135,6 +135,75 @@ Describe 'Tables de textes' {
     }
 }
 
+Describe 'Aucune decision prise sur du texte affiche' {
+    AfterAll {
+        InModuleScope DevContext { Set-CtxLangue | Out-Null }
+    }
+
+    It 'ctx doctor rend le meme verdict dans les deux langues' {
+        # LE piege structurel de toute traduction, et il a mordu ici le 15 aout
+        # 2026 : le doctor comparait `$e.Profil -eq 'isole'`, un litteral
+        # francais, alors que ce champ venait de devenir traduit. En anglais la
+        # comparaison echouait et CHAQUE editeur etait rapporte comme non isole
+        # -- un faux avertissement visible seulement pour les lecteurs anglais,
+        # donc invisible sur la machine qui l'a introduit.
+        #
+        # Une valeur affichee ne sert jamais de valeur de decision. Ce test le
+        # verifie sur la sortie complete, pas sur un champ en particulier :
+        # traduire un libelle ne doit deplacer aucun verdict.
+        $verdicts = @{}
+        foreach ($langue in 'fr', 'en') {
+            $sortie = pwsh -NoProfile -Command "
+                `$env:DEVCTX_LANG='$langue'
+                Import-Module '$(Join-Path (Split-Path $PSScriptRoot -Parent) 'DevContext.psd1')' -Force
+                Get-DevContextDoctor -Path '$PSScriptRoot' |
+                    ForEach-Object { `$_.Domaine + '|' + `$_.Sujet + '|' + `$_.Verdict }
+            "
+            $verdicts[$langue] = @($sortie) -join "`n"
+        }
+        $verdicts['fr'] | Should -Not -BeNullOrEmpty
+        $verdicts['en'] | Should -Be $verdicts['fr']
+    }
+
+    It 'Get-DevEditorList expose un champ booleen a cote du libelle traduit' {
+        # Le correctif structurel : le code decide sur Isole/ExtensionsIsolees,
+        # l'humain lit Profil/Extensions. Retirer les booleens ferait revenir le
+        # bug par la porte qu'il a deja empruntee.
+        InModuleScope DevContext {
+            $proprietes = (Get-Command Get-DevEditorList).ScriptBlock.ToString()
+            $proprietes | Should -Match 'Isole\s*='
+            $proprietes | Should -Match 'ExtensionsIsolees\s*='
+        }
+    }
+
+    It 'aucun code ne compare a un libelle traduit' {
+        # Filet plus large : si une comparaison porte sur une valeur qui existe
+        # dans les tables de textes, c'est presque surement le meme defaut.
+        $racine = Split-Path $PSScriptRoot -Parent
+        $textes = (Import-PowerShellDataFile (Join-Path $racine 'lang/fr.psd1')).Values |
+            Where-Object { $_ -and $_.Length -ge 4 -and $_ -notmatch '\{|\s' }
+
+        # Sur les JETONS, pas sur le texte brut. La premiere version signalait le
+        # commentaire qui DECRIT le bug -- exactement la meme confusion entre
+        # code et prose que le test corrige plus haut. Un test qui lit du texte
+        # ne sait pas distinguer une comparaison d'une explication.
+        $fautifs = foreach ($f in @(& git -C $racine ls-files '*.ps1' '*.psm1')) {
+            if ($f -like 'tests/*' -or $f -like 'lang/*') { continue }
+            $jetons = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+                (Join-Path $racine $f), [ref]$jetons, [ref]$null)
+            $code = ($jetons |
+                    Where-Object { $_.Kind -ne 'Comment' } |
+                    ForEach-Object { $_.Text }) -join ' '
+
+            foreach ($valeur in $textes) {
+                if ($code -match "-eq\s+'$([regex]::Escape($valeur))'") { "$f : -eq '$valeur'" }
+            }
+        }
+        ($fautifs | Sort-Object -Unique) | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'Cles utilisees et cles declarees' {
     It 'toute cle appelee dans le code existe dans les deux tables' {
         $fr = Import-PowerShellDataFile (Join-Path $script:Racine 'lang/fr.psd1')

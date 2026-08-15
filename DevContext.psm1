@@ -431,9 +431,9 @@ function Use-DevContext {
     }
 
     Write-Host ""
-    Write-Host "  CONTEXTE : $($env:DEVCTX_LABEL)" -ForegroundColor Cyan
-    Write-Host "  Compte   : $(Get-CtxProp $m 'email')"  -ForegroundColor DarkGray
-    Write-Host "  Secrets  : $(if ($loaded) { $loaded -join ', ' } else { 'aucun charge' })" -ForegroundColor DarkGray
+    Write-Host "  $(T 'work.contexte' $env:DEVCTX_LABEL)" -ForegroundColor Cyan
+    Write-Host "  $(T 'work.compte' (Get-CtxProp $m 'email'))"  -ForegroundColor DarkGray
+    Write-Host "  $(T 'work.secrets' $(if ($loaded) { $loaded -join ', ' } else { T 'work.secretsAucun' }))" -ForegroundColor DarkGray
     Write-Host ""
 }
 

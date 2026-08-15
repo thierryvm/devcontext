@@ -637,12 +637,23 @@ function Get-DevEditorList {
 
     foreach ($editor in Get-CtxEditorFacts) {
         $caps = Get-CtxEditorCapabilitiesCached -Editor $editor -Refresh:$Refresh
+        # Isole et ExtensionsIsolees sont les champs sur lesquels le CODE decide.
+        # Profil et Extensions sont ceux que l'HUMAIN lit, et ils sont traduits.
+        #
+        # Les deux existent parce que confondre les deux est un bug reel : le
+        # doctor comparait `$e.Profil -eq 'isole'`, un litteral francais. Des que
+        # la sortie est passee en anglais, la comparaison a echoue et CHAQUE
+        # editeur a ete rapporte comme non isole -- un faux avertissement, en
+        # anglais seulement, donc invisible sur la machine qui l'a introduit.
+        # Une valeur affichee ne doit jamais servir de valeur de decision.
         [pscustomobject]@{
-            PSTypeName = 'DevContext.EditorStatus'
-            Editeur    = $editor.Label
-            Commande   = $editor.Name
-            Profil     = if ($caps.UserDataDir) { 'isole' } else { 'PARTAGE' }
-            Extensions = if ($caps.ExtensionsDir) { 'isolees' } else { 'partagees' }
+            PSTypeName        = 'DevContext.EditorStatus'
+            Editeur           = $editor.Label
+            Commande          = $editor.Name
+            Isole             = [bool]$caps.UserDataDir
+            ExtensionsIsolees = [bool]$caps.ExtensionsDir
+            Profil     = if ($caps.UserDataDir) { T 'editeur.profil.isole' } else { T 'editeur.profil.partage' }
+            Extensions = if ($caps.ExtensionsDir) { T 'editeur.ext.isolees' } else { T 'editeur.ext.partagees' }
             Methode    = $caps.Method
             Chemin     = if ($editor.Cli) { $editor.Cli } else { $editor.Exe }
         }

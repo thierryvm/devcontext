@@ -1,0 +1,25 @@
+name: Feature request
+description: Something the tool should do and does not
+labels: [enhancement]
+body:
+  - type: textarea
+    id: probleme
+    attributes:
+      label: What goes wrong today
+      description: |
+        Describe the situation, not the solution. The most useful reports name
+        a mistake that actually happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposition
+    attributes:
+      label: What you have in mind
+    validations:
+      required: true
+
+  - type: textarea
+    id: contournement
+    attributes:
+      label: How you work around it now

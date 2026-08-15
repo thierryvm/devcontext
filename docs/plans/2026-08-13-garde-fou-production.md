@@ -1,5 +1,12 @@
 # Garde-fou production — plan d'implémentation
 
+> **Noms de projets remplacés par des marque-places.** Ce document décrit une
+> investigation réelle ; les noms de projets, de dépôts et de bases y ont été
+> remplacés par demo-app, other-app, 	hird-app. La méthode et les
+> conclusions sont inchangées — seule la topologie réelle a été retirée, parce
+> qu'un document qui explique où se trouve une base de production et comment son
+> garde-fou fonctionne est un document de reconnaissance.
+
 > **Pour les agents :** SOUS-COMPÉTENCE REQUISE — utiliser
 > `superpowers:subagent-driven-development` (recommandé) ou
 > `superpowers:executing-plans` pour dérouler ce plan tâche par tâche. Les
@@ -526,7 +533,7 @@ Describe 'Get-CtxSupabaseEnvGuess' {
         InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'demo-app-prod' | Should -Be 'prod' }
     }
     It 'rend null sur un nom neutre' {
-        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'IronTrack' | Should -BeNullOrEmpty }
+        InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'other-app' | Should -BeNullOrEmpty }
     }
     It 'ne confond pas reproduction avec production' {
         InModuleScope DevContext { Get-CtxSupabaseEnvGuess 'reproduction-bug' | Should -BeNullOrEmpty }
@@ -910,7 +917,7 @@ l'appellent par son chemin.
 
 ```powershell
 work perso -NoCd
-Set-Location F:\PROJECTS\Apps\demo-app-refonte
+Set-Location F:\PROJECTS\Apps\demo-app-redesign
 pwsh -NoProfile -File F:\PROJECTS\Apps\devcontext\shims\supabase.ps1 db reset --dry-run
 ```
 
@@ -1036,7 +1043,7 @@ function Get-DevSupabaseMap {
       folders point at it.
 
       Not a convenience. On 13 Aug 2026 the question "which account is
-      client-site on?" could only be answered by reading the index by
+      third-app on?" could only be answered by reading the index by
       hand, though the answer had been on the machine all along. A guard whose
       data cannot be inspected is a guard that eventually gets switched off.
     #>
@@ -1316,7 +1323,7 @@ Puis, dans un **terminal neuf** :
 
 ```powershell
 work perso -NoCd
-Set-Location F:\PROJECTS\Apps\demo-app-refonte
+Set-Location F:\PROJECTS\Apps\demo-app-redesign
 supabase --version          # doit repondre normalement
 ```
 
@@ -1335,7 +1342,7 @@ C'est la vérification qui justifie tout le chantier : le shell qu'un agent
 utilise.
 
 ```bash
-cd /f/PROJECTS/Apps/demo-app-refonte
+cd /f/PROJECTS/Apps/demo-app-redesign
 supabase db reset --dry-run
 echo "code de sortie : $?"
 ```
@@ -1562,7 +1569,7 @@ Puis insérer cette section après le garde-fou nº 3 :
 
 `ctx` juge **qui tu es**. Il ne jugeait pas **ce que tu vas toucher**.
 
-Le 13 août 2026, trois dossiers — `demo-app`, `demo-app-landing`, `demo-app-refonte` —
+Le 13 août 2026, trois dossiers — `demo-app`, `demo-app-landing`, `demo-app-redesign` —
 visaient la même base `demo-app-prod`. Ce sont trois *worktrees* du même dépôt,
 donc partager la base est cohérent. Mais l'un portait 19 migrations contre 22
 sur `main` : un `supabase db reset` depuis ce dossier aurait reconstruit la
@@ -1699,10 +1706,10 @@ l'implémentation a lieu un autre jour) :
 
 ### Sécurité
 
-Le 13 août 2026, `demo-app`, `demo-app-landing` et `demo-app-refonte` — trois
+Le 13 août 2026, `demo-app`, `demo-app-landing` et `demo-app-redesign` — trois
 *worktrees* du même dépôt — visaient tous `demo-app-prod`. Partager la base est
 cohérent puisque c'est la même application ; ce ne l'était pas que
-`demo-app-refonte` porte **19 migrations contre 22** sur `main`. Un
+`demo-app-redesign` porte **19 migrations contre 22** sur `main`. Un
 `supabase db reset` depuis ce dossier aurait reconstruit la production trois
 crans en arrière, données comprises, avec `ctx` répondant GO.
 

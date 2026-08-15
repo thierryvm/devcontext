@@ -70,6 +70,19 @@ ritual after every reboot.
   generated entry points behind while removing the `PATH` entry. Found by a test
   written for the uninstall path, which is the path nobody exercises by hand.
 
+### Removed
+
+- **`GUIDE.html`**, the author's personal working guide, from the tree **and
+  from the history**. A document describing one person's accounts, folder layout
+  and procedures is noise for every reader except its author, and free
+  reconnaissance for anyone else. It returns later as a documentation section of
+  the dashboard -- as data that tool displays, never as a file this project
+  ships. `docs/GUIDE.md` is the guide for people who USE DevContext, and that
+  one belongs here.
+- **A personal email address and user-profile paths** from the history. They had
+  been cleared from the tree in this release; the history still carried them,
+  which is the half people forget.
+
 ### Why discovery rather than a list
 
 The first draft was a table: name, executable, flags. It was wrong within the

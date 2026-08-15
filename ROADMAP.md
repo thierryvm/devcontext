@@ -115,6 +115,21 @@ nothing on it is the most important screen in the product.** It must say what
 this thing is for, what is missing, and the one action that comes next. A UI that
 renders an empty table has failed in the same way a CLI that prints "none" has.
 
+**A documentation section, including personal notes.** The dashboard carries the
+project's own documentation, and alongside it a place for the operator's own —
+their accounts, their conventions, the procedures that belong to their machine
+and nobody else's.
+
+That material is deliberately *not* in this repository. A guide describing one
+person's accounts and folder layout has no business in a public repository: it is
+noise for every reader except its author, and free reconnaissance for anyone
+else. It was removed from the tree and from the history on 15 August 2026, and it
+returns as data the dashboard displays — never as a file the project ships.
+
+The distinction to keep: [`docs/GUIDE.md`](docs/GUIDE.md) teaches **anyone** to
+use the tool and belongs to the project. A personal guide teaches **one person**
+to run their own estate and belongs to them.
+
 Likely shape: a local web UI served by a `ctx dashboard` command, or Tauri if it
 needs to live in the tray. The decision waits until the CLI surface has settled
 — building a UI over an API that is still moving is how both end up bad.

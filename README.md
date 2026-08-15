@@ -135,7 +135,10 @@ The module is **used from the repository, never copied**. A second copy is how a
 fix ends up applied to the file nobody is running — see `INSTALLATION.md`, which
 also documents the rollback for every machine-level change.
 
-Full walkthrough: [`INSTALLATION.md`](INSTALLATION.md) ·
+**New here? [`docs/GUIDE.md`](docs/GUIDE.md)** walks from an empty machine to a
+working day, and lists what to do when something is wrong.
+
+Install details: [`INSTALLATION.md`](INSTALLATION.md) ·
 Reasoning: [`POURQUOI.md`](POURQUOI.md) ·
 Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 

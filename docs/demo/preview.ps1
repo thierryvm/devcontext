@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Why this exists: browser automation refuses `file://` URLs. Anything visual
-    in this repository -- an animated SVG, a rendered GUIDE.html, a future
+    in this repository -- an animated SVG, a rendered Markdown page, a future
     dashboard -- therefore cannot be checked by opening it directly, and
     "the XML parses" is not the same claim as "it displays".
 
@@ -51,7 +51,7 @@ Write-Host ''
 Write-Host '  Exemples :' -ForegroundColor DarkGray
 Write-Host "    http://127.0.0.1:$Port/docs/demo/guard-refusal.svg" -ForegroundColor DarkGray
 Write-Host "    http://127.0.0.1:$Port/docs/demo/ctx-doctor.svg" -ForegroundColor DarkGray
-Write-Host "    http://127.0.0.1:$Port/GUIDE.html" -ForegroundColor DarkGray
+Write-Host "    http://127.0.0.1:$Port/docs/GUIDE.md" -ForegroundColor DarkGray
 Write-Host ''
 Write-Host '  Ctrl+C pour arreter.' -ForegroundColor DarkGray
 Write-Host ''

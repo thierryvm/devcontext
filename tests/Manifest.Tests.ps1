@@ -85,11 +85,19 @@ Describe 'fichier de format' {
         }
     }
 
-    It 'declare une vue table pour le type de ctx-sb' {
-        $xml = [xml](Get-Content $script:FormatFile -Raw)
-        $vue = $xml.Configuration.ViewDefinitions.View
-        $vue.ViewSelectedBy.TypeName | Should -Be 'DevContext.SupabaseMapEntry'
-        $vue.TableControl            | Should -Not -BeNullOrEmpty
+    It 'declare une vue table pour <_>' -ForEach @(
+        'DevContext.SupabaseMapEntry'
+        'DevContext.DoctorCheck'
+    ) {
+        # Chaque type publie doit avoir la sienne : sans vue, PowerShell bascule
+        # en liste des la cinquieme propriete, et une sortie lue un paragraphe
+        # par ligne n'est plus lue jusqu'au bout.
+        $type = $_
+        $xml  = [xml](Get-Content $script:FormatFile -Raw)
+        $vue  = @($xml.Configuration.ViewDefinitions.View |
+                  Where-Object { $_.ViewSelectedBy.TypeName -eq $type })
+        $vue.Count        | Should -Be 1 -Because "$type doit avoir exactement une vue"
+        $vue[0].TableControl | Should -Not -BeNullOrEmpty
     }
 
     It 'est reference par le manifeste' {

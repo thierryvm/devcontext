@@ -530,6 +530,10 @@ function Get-DevContextDoctor {
 
     # --- garde-fou ---------------------------------------------------------
     $checks.Add((Test-CtxDoctorGardeFou))
+    # Rend $null quand tous nos shims sont bien en tete : ne rien dire est la
+    # bonne reponse quand tout va bien.
+    $masques = Test-CtxDoctorShimsDevant
+    if ($masques) { $checks.Add($masques) }
     # Rend $null quand aucune distribution WSL n'est installee : rien a signaler.
     $wsl = Test-CtxDoctorWsl
     if ($wsl) { $checks.Add($wsl) }
@@ -642,12 +646,84 @@ function Test-CtxDoctorGardeFou {
             -Detail (T 'doc.garde.horsPath') `
             -Correctif (T 'doc.garde.horsPathFix')
     }
-    if ($env:DEVCTX_ALLOW_PROD -eq '1') {
+    # LES TROIS DEROGATIONS, ET NON LA SEULE PREMIERE.
+    #
+    # Depuis la 1.4.0 il y a un garde-fou par outil, donc une variable par
+    # outil. N'en surveiller qu'une rendrait « actif dans tous les shells » a
+    # quelqu'un dont le garde-fou gh est desarme depuis son $PROFILE -- soit
+    # exactement le mensonge que ce fichier existe pour empecher.
+    $derogations = @(
+        'DEVCTX_ALLOW_PROD'
+        'DEVCTX_ALLOW_GH'
+        'DEVCTX_ALLOW_VERCEL'
+    )
+    $desarmes = @($derogations | Where-Object { [Environment]::GetEnvironmentVariable($_) -eq '1' })
+    if ($desarmes.Count -gt 0) {
         return New-CtxCheck -Domaine 'garde-fou' -Sujet 'portee' -Verdict 'ATTENTION' `
-            -Detail (T 'doc.garde.desarme') `
-            -Correctif (T 'doc.garde.desarmeFix')
+            -Detail (T 'doc.garde.desarme' ($desarmes -join ', ')) `
+            -Correctif (($desarmes | ForEach-Object { "Remove-Item Env:$_" }) -join ' ; ')
     }
     New-CtxCheck -Domaine 'garde-fou' -Sujet 'portee' -Verdict 'OK' -Detail (T 'doc.garde.ok')
+}
+
+function Test-CtxDoctorShimsDevant {
+    <#
+      NOS SHIMS SONT-ILS REELLEMENT DEVANT LES VRAIS BINAIRES ?
+
+      Etre dans le PATH ne suffit pas : encore faut-il y etre EN PREMIER.
+      Windows compose le PATH ainsi -- SYSTEME d'abord, UTILISATEUR ensuite --
+      et l'installateur ecrit deliberement dans le PATH utilisateur, pour ne
+      demander aucun droit administrateur. Un binaire installe pour toute la
+      machine est donc resolu AVANT nos shims, sans que rien ne le signale.
+
+      Mesure le 16 aout 2026 : `gh` installe par winget dans
+      C:\Program Files\GitHub CLI arrivait a l'index 10, nos shims a l'index 19.
+      Le garde-fou etait pose, annonce actif, et jamais atteint.
+
+      `supabase` echappait au probleme par accident -- il vient de npm, donc du
+      PATH utilisateur. Un accident n'est pas une architecture, et ce controle
+      existe pour que le prochain ne passe pas inapercu.
+
+      Le resolveur est injecte : la decision se verifie alors sans dependre du
+      PATH de la machine qui fait tourner les tests.
+    #>
+    param(
+        [string[]]$Outils = @('supabase', 'gh', 'vercel'),
+        [string[]]$Dossiers = (Get-CtxShimDirs),
+        [scriptblock]$Resolveur = {
+            param($nom)
+            $trouves = Get-Command $nom -CommandType Application, ExternalScript -All -ErrorAction SilentlyContinue
+            @($trouves | Select-Object -ExpandProperty Source)
+        }
+    )
+
+    $masques = @()
+    foreach ($outil in $Outils) {
+        $sources = @(& $Resolveur $outil)
+        # Absent de la machine : ce n'est pas notre sujet, et
+        # Test-CtxDoctorBinaire le dit deja.
+        if ($sources.Count -eq 0) { continue }
+
+        $premier = $sources[0]
+        if (Test-CtxDossierEstShimDevContext -Dossier (Split-Path $premier -Parent) -Dossiers $Dossiers) { continue }
+
+        # Le binaire gagne-t-il alors qu'un shim existe pour lui ? Si aucun de
+        # nos dossiers n'apparait du tout, c'est le PATH entier qui manque, et
+        # Test-CtxDoctorGardeFou le rapporte deja -- ne pas le dire deux fois.
+        $nousSommesLa = @($sources | Where-Object {
+                Test-CtxDossierEstShimDevContext -Dossier (Split-Path $_ -Parent) -Dossiers $Dossiers
+            }).Count -gt 0
+        if (-not $nousSommesLa) { continue }
+
+        $masques += [pscustomobject]@{ Outil = $outil; Gagnant = (Split-Path $premier -Parent) }
+    }
+
+    if ($masques.Count -eq 0) { return }
+
+    $detail = ($masques | ForEach-Object { "$($_.Outil) -> $($_.Gagnant)" }) -join ' ; '
+    New-CtxCheck -Domaine 'garde-fou' -Sujet 'priorite' -Verdict 'PROBLEME' `
+        -Detail (T 'doc.garde.masque' $detail) `
+        -Correctif (T 'doc.garde.masqueFix')
 }
 
 function Test-CtxDoctorWsl {

@@ -45,11 +45,15 @@ src/                         DOT-SOURCED. Never invoked directly.
   Mcp.ps1                    ctx mcp — project-scoped MCP, any assistant
   Editors.ps1                ctx editors — find editors, measure what they support
   Shortcuts.ps1              ctx doctor / ctx shortcut — the launcher PATH cannot reach
+  Gh.ps1                     gh — the identity correction, and the guard behind it
+  Vercel.ps1                 vercel — production refusals, and session redirection
 
 shims/                       INVOKED BY PATH, by any shell.
-  supabase.ps1               The guard. Decides, then delegates or refuses.
-  supabase.cmd               Entry point for cmd.exe, PowerShell, npm  (CRLF)
-  supabase                   Entry point for POSIX shells               (LF)
+  supabase.ps1               The production guard. Decides, then delegates or refuses.
+  gh.ps1                     Identity. Corrects when it can, refuses when it cannot.
+  vercel.ps1                 Production refusals, plus --global-config injection
+  <tool>.cmd                 Entry point for cmd.exe, PowerShell, npm  (CRLF)
+  <tool>                     Entry point for POSIX shells               (LF)
   editor.ps1                 Editor isolation, shared by every editor
   <editor>.cmd / <editor>    GENERATED per machine, from the editors found there
 
@@ -160,6 +164,56 @@ carry `--db-url`, and a `--db-url` carries a password.
 
 ---
 
+## One rule, two callers
+
+A guarded CLI is reached two ways, and this is the invariant that keeps them
+honest: **the rule lives in the module, never in the shim.**
+
+| Caller | Reaches | Covers |
+|---|---|---|
+| `shims/<tool>` in `PATH` | every shell | git-bash, cmd, npm, Node, an agent |
+| the module's alias | PowerShell only | and it wins there — aliases outrank `PATH` |
+
+That last cell is the whole point. `Get-Command supabase` in a session that
+imported the module answers **`Alias`**, not the shim. Until 16 August 2026 the
+gathering and the decision lived inside `shims/supabase.ps1`, and
+`Invoke-DevSupabase` never called the guard — so the protection covered every
+shell except the one it was used from every day. Measured against a decoy:
+`db reset --linked` on a production project ran, exit code 42, no refusal.
+
+So each tool has `Resolve-Ctx<Tool>Verdict` in the module, and both callers ask
+it. A shim that holds a rule is a rule that only exists for the callers passing
+through that shim.
+
+The suite missed it for the same reason it was written: every end-to-end test
+invoked the shim **by path**. It exercised the file, never the command a user
+types. Tests for a guard must name the *command*, not the *script*.
+
+---
+
+## Correct, or refuse
+
+The three guarded CLIs do not behave the same way, and the difference is not
+stylistic.
+
+| Tool | On an unwanted state | Because |
+|---|---|---|
+| `supabase` | **refuses** | Nobody can guess which database was meant. |
+| `gh` | **corrects**, refuses only when it cannot | The folder holds the right answer: which context owns it. |
+| `vercel` | both | Session directory: corrects. Production deploy from a side branch: refuses. |
+
+The rule for the next one: **correct when the answer is knowable, refuse only
+when it is not.** A refusal is a cost paid by the user, and it is only worth
+paying when the alternative is guessing.
+
+Two properties survive in both directions. A correction applies to the **child
+process only** — `gh.ps1` sets `GH_CONFIG_DIR` on itself, which exists solely to
+launch `gh`. And a value the caller set **deliberately** is never overwritten;
+it is judged and reported instead. An outsourced choice that silently reverses
+an explicit one is worse than no help at all.
+
+---
+
 ## Three entry points, one script
 
 `supabase.cmd`, `supabase` and `supabase.ps1` are not redundancy. PowerShell and
@@ -263,8 +317,25 @@ Say you want `ctx doctor` to cover Netlify.
    wrong account*, which is the failure that matters.
 5. **Export** — only if it is user-facing, and then in **both** lists.
 
-Adding a guarded CLI is the same shape: a new folder in `shims/` with its three
-entry points, a pure `Test-Ctx<Tool>Guard`, and a line in `installer-shims.ps1`.
+Adding a guarded CLI is the same shape, with one extra step that is not
+optional:
+
+1. **`src/<Tool>.ps1`** — a pure `Test-Ctx<Tool>Guard` taking facts as
+   parameters, plus `Resolve-Ctx<Tool>Verdict` doing the gathering. Both live in
+   the module. See *One rule, two callers* above for why the shim must not hold
+   them.
+2. **`shims/<tool>.ps1`, `.cmd`, and the extensionless sibling** — CRLF for the
+   first, LF for the last, pinned in `.gitattributes`.
+3. **Both lists in `installer-shims.ps1`** — `$script:ShimFichiers` so a partial
+   install is caught, `$script:ShimOutils` so `-Verifier` shows the resolution.
+4. **`shims/.gitignore`** — it is an allowlist; an unlisted file is treated as
+   generated.
+5. **If the module also exposes an alias for that tool**, point it at the same
+   `Resolve-Ctx<Tool>Verdict`. Otherwise the alias and the shim are two
+   implementations of one rule, and the one people hit is whichever they
+   happened to type.
+6. **Tests at both ends**: the pure decision exhaustively, and end-to-end
+   against a **decoy** binary — from PowerShell *and* from git-bash.
 
 ---
 

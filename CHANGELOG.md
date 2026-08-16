@@ -1,3 +1,116 @@
+## [1.4.0] - 16 August 2026
+
+### Added
+
+- **`gh` runs under the folder's account, from any shell.** `gh` reads its
+  identity from `GH_CONFIG_DIR`; without it, it falls back to the machine-wide
+  config — whichever account was logged in last. `work` sets the variable, but
+  `work` is a PowerShell command, so from git-bash, an npm script or an agent's
+  shell it never was. **This is the failure the whole tool was built around**,
+  and until now it was handled by a rule people had to remember: *never run `gh`
+  from bash*.
+
+  The roadmap said *refuse a PR when `GH_CONFIG_DIR` does not match*. Half of
+  that was the wrong instinct. Refusing is right for Supabase because nobody can
+  guess which database was meant; here **the folder holds the right answer**, so
+  the entry point supplies the directory itself — on the child process only,
+  never on the caller's session. Refusing is what is left when there is nothing
+  to supply.
+
+  | State | What happens |
+  |---|---|
+  | unset, context has a `gh` account | supplied, silently |
+  | unset, command is `gh auth ...` | supplied, and said out loud |
+  | unset, no account yet, a **write** | refused, naming the two lines that fix it |
+  | set and matching | nothing |
+  | set on another context | writes refused, reads flagged on stderr |
+
+  A deliberately set `GH_CONFIG_DIR` is never overwritten — a tool that silently
+  reverses an explicit choice is worse than no help. Reads are never refused
+  either: a blocked user reaches for the raw binary, which has no guard at all.
+
+  Writing commands are recognised by **verb** — `create`, `delete`, `merge`,
+  `edit`, split on hyphens so `project item-add` counts — which is what makes a
+  noun GitHub adds tomorrow covered without a change here. `gh api` is judged on
+  its method, and on whether a field is present, because the CLI itself switches
+  to POST when one is.
+
+- **`vercel` joins the guarded set.** A `--prod` deployment from a branch other
+  than the default is refused, as is `env rm` naming `production`. `rollback`,
+  `promote` and `rm` are deliberately left alone — refusing a repair gesture
+  always lands during an incident, from a hotfix branch. `vercel build --prod`
+  builds locally and is not a deployment.
+
+  Session isolation moved to the same footing: the config directory is resolved
+  from the **folder** rather than from `$env:DEVCTX_VERCEL_CONFIG`, and injected
+  only towards a directory that actually holds a session — or when the command
+  is `login`/`logout`/`switch`, whose subject *is* that directory. Pointing at
+  an empty config would answer "not logged in" where `vercel` worked, which is a
+  regression, not a protection.
+
+- **`gh` is also a module alias, and that is not symmetry.** Measured on the
+  author's machine while verifying this release:
+
+  ```
+  gh     -> C:\Program Files\GitHub CLI\gh.exe   (system PATH, index 10)
+  shims  -> ...\DevContext\current\shims         (user PATH,   index 19)
+  ```
+
+  Windows composes `PATH` as **system first, user second**, and the installer
+  writes to the user half on purpose — that is what lets it require no
+  administrator rights. A binary installed machine-wide is therefore resolved
+  **before** our shims, and `gh` from winget or the MSI is exactly that. The
+  guard was installed, announced active, and never reached.
+
+  `supabase` escaped this by accident: it comes from npm, so from the user PATH.
+  An accident is not an architecture. The alias makes the guard effective under
+  PowerShell whatever the PATH order; from bash it cannot, and that limit is
+  written down rather than papered over. `ctx doctor` now names the directory
+  that wins and the two ways out.
+
+### Changed
+
+- **The three CLI wrappers no longer swallow short options.** `[CmdletBinding()]`
+  turns a function into an advanced one, and an advanced function claims
+  PowerShell's common parameters — so any short option that prefixes one became
+  ambiguous before reaching the CLI:
+
+  ```
+  gh api -i user
+  -> parameter name 'i' is ambiguous: -InformationAction, -InformationVariable
+  ```
+
+  `shims/supabase.ps1` has documented this trap since day one — *"no `param()`
+  block on purpose"* — but the lesson had only been drawn for **scripts**. The
+  module's own functions carried it, and it surfaced when the `gh` alias made
+  the module's own diagnostic go through its own wrapper. Fixed on all three at
+  once, with a test on the AST: repairing a class of defect only where you met
+  it leaves it alive in its twin. `-c -d -e -i -o -p -v -w` were all affected.
+
+- **The module's internal `gh` calls bypass the wrapper.** `ctx` and
+  `ctx doctor -Live` ask `gh` which account is active. Routed through the alias,
+  that question would be answered *after* the wrapper corrected
+  `GH_CONFIG_DIR` — reporting the right account on a machine where git-bash
+  still goes out with the wrong one. A diagnostic observes the state; it must
+  never repair it on the way.
+
+- **`ctx doctor` reports every disarmed guard, not the first one.** There is now
+  one waiver variable per tool — deliberately, so that waiving one never waives
+  the others — and the check knew only `DEVCTX_ALLOW_PROD`. Someone with
+  `DEVCTX_ALLOW_GH=1` in their `$PROFILE` would have been told the guard was
+  "active in every shell", which is precisely the lie that file exists to
+  prevent.
+
+- **`installer-shims.ps1 -Verifier` shows the resolution of all three CLIs.** A
+  shim can sit in front for one tool and behind for another — npm reinstalling
+  `vercel` elsewhere in `PATH`, for instance — and a report showing only
+  `supabase` read as an answer for all of them.
+
+- **The line-ending tests cover all three POSIX entry points.** Wrong endings
+  break nothing under Windows; they break only under bash, which is exactly the
+  population the entry points exist for. A regression there would have stayed
+  invisible until the day it mattered.
+
 ## [1.3.5] - 16 August 2026
 
 ### Fixed

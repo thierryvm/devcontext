@@ -296,13 +296,44 @@ Against a Supabase project tagged `prod`:
 Any uncertainty passes through. A guard that blocks whenever it hesitates gets
 uninstalled within the week, and an uninstalled guard protects nothing.
 
+Against Vercel: a `--prod` deployment from a branch other than the default, and
+`env rm` naming `production`. `rollback` and `promote` are deliberately left
+alone — refusing a repair gesture always lands during an incident.
+
 To override for a single command — never in `$PROFILE`:
 
 ```powershell
 $env:DEVCTX_ALLOW_PROD = 1
 ```
 
-`ctx doctor` reports it as a finding whenever it is set.
+One variable per tool, so waiving one guard never waives the others.
+`ctx doctor` names every one that is set.
+
+---
+
+## `gh` under the right account, from any shell
+
+`gh` reads its account from `GH_CONFIG_DIR`. Without it, it falls back to the
+machine-wide config — whichever account you logged into last. `work` sets the
+variable, but `work` is a PowerShell command, so from git-bash, an npm script or
+an agent's shell it was never set. **That is the failure this whole tool was
+built around**, and it was handled by a rule people had to remember: *never run
+`gh` from bash*.
+
+The entry point in `PATH` now resolves the context from the **folder** and
+supplies the directory itself, on the child process only:
+
+```bash
+cd /f/PROJECTS/Clients/acme/site
+gh pr create              # goes out as the acme account, from git-bash
+```
+
+It **corrects rather than refuses**, which is the difference with the Supabase
+guard: nobody can guess which database you meant, but the folder already knows
+which account owns it. It refuses only when it has nothing to supply — the
+context has no `gh` account yet — and then only for commands that *write*, while
+naming the two lines that fix it. A `GH_CONFIG_DIR` you set deliberately is
+never overwritten; a mismatch refuses writes and flags reads on stderr.
 
 ---
 

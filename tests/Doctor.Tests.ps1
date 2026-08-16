@@ -294,3 +294,77 @@ Describe 'Get-DevContextDoctor' {
             Should -Be 'Get-DevContextDoctor'
     }
 }
+
+Describe 'Test-CtxDoctorShimsDevant' {
+    # ETRE DANS LE PATH NE SUFFIT PAS : encore faut-il y etre EN PREMIER.
+    #
+    # Windows compose le PATH systeme AVANT le PATH utilisateur, et
+    # l'installateur ecrit dans le second pour ne demander aucun droit
+    # administrateur. Un binaire installe pour toute la machine est donc resolu
+    # avant nos shims -- sans que rien ne le signale.
+    #
+    # Mesure le 16 aout 2026 : gh installe par winget dans
+    # C:\Program Files\GitHub CLI arrivait a l'index 10, nos shims a l'index 19.
+    # Le garde-fou etait pose, annonce actif, et jamais atteint.
+    #
+    # Le resolveur est injecte : la decision se verifie donc sans dependre du
+    # PATH de la machine qui fait tourner les tests.
+
+    BeforeAll {
+        $script:NosDossiers = @('D:\module\shims', 'C:\Users\moi\AppData\Local\DevContext\current\shims')
+    }
+
+    It 'ne dit rien quand nos shims sont bien en tete' {
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            $faux = { param($n) @("$($d[0])\$n.cmd", "C:\Program Files\Truc\$n.exe") }
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux |
+                Should -BeNullOrEmpty
+        }
+    }
+
+    It 'SIGNALE un binaire systeme resolu avant le shim' {
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            $faux = { param($n) @("C:\Program Files\GitHub CLI\$n.exe", "$($d[1])\$n.cmd") }
+            $c = Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux
+            $c.Verdict | Should -Be 'PROBLEME'
+            $c.Detail  | Should -Match 'gh'
+            $c.Detail  | Should -Match 'GitHub CLI'
+        }
+    }
+
+    It 'reconnait nos dossiers sous CHACUN de leurs noms' {
+        # Le shim peut etre resolu par la jonction alors que la liste connait le
+        # dossier du module. Cinquieme site du meme defaut si on l'oubliait ici.
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            $faux = { param($n) @("$($d[1])\$n.cmd", "C:\Program Files\Truc\$n.exe") }
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux |
+                Should -BeNullOrEmpty
+        }
+    }
+
+    It 'se tait quand l outil n est pas installe du tout' {
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur { param($n) @() } |
+                Should -BeNullOrEmpty
+        }
+    }
+
+    It 'se tait quand le PATH entier manque, que l autre controle rapporte deja' {
+        # Aucun de nos dossiers dans la resolution : c'est Test-CtxDoctorGardeFou
+        # qui le dit. Deux constats pour une cause apprennent a lire en diagonale.
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            $faux = { param($n) @("C:\Program Files\GitHub CLI\$n.exe") }
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux |
+                Should -BeNullOrEmpty
+        }
+    }
+
+    It 'nomme TOUS les outils masques, pas seulement le premier' {
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            $faux = { param($n) @("C:\Program Files\$n\$n.exe", "$($d[0])\$n.cmd") }
+            $c = Test-CtxDoctorShimsDevant -Outils @('gh', 'vercel') -Dossiers $d -Resolveur $faux
+            $c.Detail | Should -Match 'gh'
+            $c.Detail | Should -Match 'vercel'
+        }
+    }
+}

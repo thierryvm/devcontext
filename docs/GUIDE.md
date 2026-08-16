@@ -194,18 +194,35 @@ A lone `ctx` right after a successful `work` in a *different* process will say
 NO-GO. That is correct — they are two processes. To check, chain them in one:
 `work perso -NoCd; ctx`.
 
-### git is protected everywhere, `gh` is not
+### What is protected from which shell
 
 | Tool | Isolated by | Works from bash? |
 |---|---|---|
 | git identity | `includeIf` per path in `~/.gitconfig` | **yes** |
 | git push | `insteadOf` → per-context SSH key | **yes** |
-| `gh` | `GH_CONFIG_DIR`, set by `work` | **no** |
-| `vercel` | a wrapper injecting `--global-config` | **no** |
+| `gh` | the entry point supplies `GH_CONFIG_DIR` from the folder | **yes**, since 1.4.0 |
+| `vercel` | the entry point injects `--global-config` from the folder | **yes**, since 1.4.0 |
+| `supabase` | the guard in `PATH`, plus the token `work` loads | **yes** |
 
-git is safe from any shell, because its rules live in config files the binary
-reads regardless. `gh`, `vercel` and `supabase` are isolated by environment
-variables and PowerShell wrappers — **run them from PowerShell, after `work`**.
+git is safe from any shell because its rules live in config files the binary
+reads regardless. The other three used to depend on `work` having run, which
+made them PowerShell-only — the reason this guide once said *"run them from
+PowerShell"*. Since 1.4.0 the entry point in `PATH` resolves the context from
+the **folder** and supplies the configuration itself, so `gh pr create` typed in
+git-bash goes out under the right account.
+
+Two things `work` still does that no entry point can: loading the tokens into
+your session, and changing directory. Prefixing outgoing commands with
+`work <ctx> -NoCd` remains the habit — it is simply no longer the only thing
+standing between you and a commit under the wrong name.
+
+When a context has no `gh` account yet, a *write* is refused rather than sent
+under the machine-wide account, and the refusal names the fix:
+
+```powershell
+work perso -NoCd
+gh auth login          # lands in this context, from anywhere inside it
+```
 
 ---
 

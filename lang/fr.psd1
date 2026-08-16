@@ -88,6 +88,24 @@
     'garde.introuvable'       = '{0} introuvable dans le PATH (hors shims).'
     'garde.refuseAlias'       = 'Commande refusee par le garde-fou de production DevContext.'
 
+    # --- gh : identite -------------------------------------------------------
+    'gh.refuse'               = 'REFUSE - identite GitHub DevContext'
+    'gh.correctif'            = 'Pour repartir sur la bonne identite :'
+    'gh.derogation'           = "Si cette commande est vraiment voulue, pour celle-ci seulement :"
+    'gh.raison.autreContexte' = "GH_CONFIG_DIR designe un autre contexte que '{0}', qui possede ce dossier. Cette commande ecrirait sur GitHub sous le mauvais compte."
+    'gh.avert.autreContexte'  = "DevContext : lecture sous une identite qui n'est pas celle de '{0}'."
+    'gh.avert.authRedirige'   = "DevContext : gh auth s'applique au contexte '{0}'."
+    'gh.raison.sansConfig'    = "Le contexte '{0}' n'a pas encore de compte gh. Cette commande partirait sous le compte global de la machine, c'est-a-dire le dernier connecte."
+    'gh.refuseAlias'          = 'Commande refusee par le garde-fou d identite GitHub DevContext.'
+
+    # --- vercel --------------------------------------------------------------
+    'vercel.refuse'           = 'REFUSE - garde-fou production DevContext (vercel)'
+    'vercel.derogation'       = "Si cette commande est vraiment voulue, pour celle-ci seulement :"
+    'vercel.raison.envRm'     = "'env rm' vise l'environnement production."
+    'vercel.raison.prodBranche' = "Deploiement de production depuis la branche '{0}' au lieu de '{1}'."
+    'vercel.avert.session'    = "DevContext : la session vercel s'applique au contexte '{0}'."
+    'vercel.refuseAlias'      = 'Commande refusee par le garde-fou de production DevContext.'
+
     # --- coffre et manifeste ---------------------------------------------------
     'vault.absent'            = "Module SecretManagement absent. Installer :`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"
     'vault.creation'          = "Creation du coffre '{0}'..."
@@ -113,6 +131,7 @@
 
     # --- binaires enrobes -------------------------------------------------------
     'bin.vercelAbsent'        = 'vercel introuvable dans le PATH.'
+    'bin.ghAbsent'            = 'gh introuvable dans le PATH (hors shims).'
     'bin.supabaseAbsent'      = 'supabase introuvable dans le PATH (hors shims).'
     'bin.supabaseEcarte'      = "supabase n'a ete trouve que dans un dossier reconnu comme un dossier de shims DevContext : {0}. Un dossier l'est s'il porte editor.ps1 ET supabase.ps1. Si c'est une vraie installation Supabase, renommer ou retirer ces deux fichiers. NE PAS appeler le binaire directement pour contourner : le garde-fou de production ne s'appliquerait plus."
 
@@ -320,9 +339,15 @@
     'doc.garde.jonctionAbsente' = 'Le PATH designe le chemin stable, mais la jonction n existe pas : le garde-fou ne se lance plus.'
     'doc.garde.jonctionPerimee' = 'La jonction pointe sur {0}, alors que le module charge est {1}. Le garde-fou tourne sur une version perimee.'
     'doc.garde.jonctionFix'     = 'pwsh -File installer-shims.ps1   (a relancer apres chaque mise a jour du module)'
-    'doc.garde.desarme'       = 'DEVCTX_ALLOW_PROD=1 : le garde-fou est desarme dans ce shell'
-    'doc.garde.desarmeFix'    = 'Remove-Item Env:DEVCTX_ALLOW_PROD'
-    'doc.garde.ok'            = 'actif dans tous les shells'
+    'doc.garde.desarme'       = '{0} : garde-fou desarme dans ce shell'
+    'doc.garde.masque'        = 'Shim masque : un binaire est resolu avant le notre -- {0}'
+    'doc.garde.masqueFix'     = "Le PATH SYSTEME precede toujours le PATH utilisateur, ou l'installateur ecrit. Reinstaller cet outil en portee utilisateur (winget install --scope user), ou sortir son dossier du PATH systeme. Sous PowerShell l'alias du module couvre le cas ; depuis bash, non."
+    # Dit ce qui a ete VERIFIE -- les shims sont joignables -- et non ce qui
+    # serait agreable a conclure. Qu'ils gagnent reellement la resolution est une
+    # autre question, et c'est le controle 'priorite' qui y repond : l'ancienne
+    # formule « actif dans tous les shells » s'affichait juste au-dessus d'un
+    # PROBLEME disant l'inverse.
+    'doc.garde.ok'            = 'shims dans le PATH, donc joignables depuis tous les shells'
     'doc.wsl.distros'         = '{0} distribution(s) installee(s) ({1}) : le shim Windows n y est pas, le garde-fou ne couvre pas ces shells'
     'doc.wsl.fix'             = 'y installer la CLI Supabase separement, ou ne pas viser un projet de production depuis WSL'
 

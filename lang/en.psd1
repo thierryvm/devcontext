@@ -88,6 +88,24 @@
     'garde.introuvable'       = '{0} not found in PATH (outside the shims).'
     'garde.refuseAlias'       = 'Command refused by the DevContext production guard.'
 
+    # --- gh: identity --------------------------------------------------------
+    'gh.refuse'               = 'REFUSED - DevContext GitHub identity'
+    'gh.correctif'            = 'To get back on the right identity:'
+    'gh.derogation'           = 'If you really mean this command, for this one only:'
+    'gh.raison.autreContexte' = "GH_CONFIG_DIR points at a context other than '{0}', which owns this folder. This command would write to GitHub under the wrong account."
+    'gh.avert.autreContexte'  = "DevContext: reading under an identity that is not '{0}'."
+    'gh.avert.authRedirige'   = "DevContext: gh auth applies to context '{0}'."
+    'gh.raison.sansConfig'    = "Context '{0}' has no gh account yet. This command would run under the machine-wide account, that is, the last one logged into."
+    'gh.refuseAlias'          = 'Command refused by the DevContext GitHub identity guard.'
+
+    # --- vercel --------------------------------------------------------------
+    'vercel.refuse'           = 'REFUSED - DevContext production guard (vercel)'
+    'vercel.derogation'       = 'If you really mean this command, for this one only:'
+    'vercel.raison.envRm'     = "'env rm' targets the production environment."
+    'vercel.raison.prodBranche' = "Production deployment from branch '{0}' instead of '{1}'."
+    'vercel.avert.session'    = "DevContext: the vercel session applies to context '{0}'."
+    'vercel.refuseAlias'      = 'Command refused by the DevContext production guard.'
+
     # --- vault and manifest -----------------------------------------------------
     'vault.absent'            = "SecretManagement module missing. Install it:`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"
     'vault.creation'          = "Creating vault '{0}'..."
@@ -113,6 +131,7 @@
 
     # --- wrapped binaries --------------------------------------------------------
     'bin.vercelAbsent'        = 'vercel not found in PATH.'
+    'bin.ghAbsent'            = 'gh not found in PATH (outside the shims).'
     'bin.supabaseAbsent'      = 'supabase not found in PATH (outside the shims).'
     'bin.supabaseEcarte'      = 'supabase was found only in a directory recognised as a DevContext shims directory: {0}. A directory counts as one when it carries both editor.ps1 and supabase.ps1. If that is a real Supabase install, rename or remove those two files. Do NOT call the binary directly to work around this: the production guard would no longer apply.'
 
@@ -320,9 +339,10 @@
     'doc.garde.jonctionAbsente' = 'PATH points at the stable path, but the junction does not exist: the guard no longer runs.'
     'doc.garde.jonctionPerimee' = 'The junction points at {0}, while the loaded module is {1}. The guard is running a stale version.'
     'doc.garde.jonctionFix'     = 'pwsh -File installer-shims.ps1   (run again after every module update)'
-    'doc.garde.desarme'       = 'DEVCTX_ALLOW_PROD=1: the guard is disarmed in this shell'
-    'doc.garde.desarmeFix'    = 'Remove-Item Env:DEVCTX_ALLOW_PROD'
-    'doc.garde.ok'            = 'active in every shell'
+    'doc.garde.desarme'       = '{0}: guard disarmed in this shell'
+    'doc.garde.masque'        = 'Shim shadowed: another binary resolves before ours -- {0}'
+    'doc.garde.masqueFix'     = 'The SYSTEM PATH always precedes the user PATH, which is where the installer writes. Reinstall that tool at user scope (winget install --scope user), or take its directory out of the system PATH. Under PowerShell the module alias covers this; from bash it does not.'
+    'doc.garde.ok'            = 'shims in PATH, therefore reachable from every shell'
     'doc.wsl.distros'         = '{0} distribution(s) installed ({1}): the Windows shim is not on them, the guard does not cover those shells'
     'doc.wsl.fix'             = 'install the Supabase CLI there separately, or do not target a production project from WSL'
 

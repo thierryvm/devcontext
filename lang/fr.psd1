@@ -113,6 +113,7 @@
     # --- binaires enrobes -------------------------------------------------------
     'bin.vercelAbsent'        = 'vercel introuvable dans le PATH.'
     'bin.supabaseAbsent'      = 'supabase introuvable dans le PATH (hors shims).'
+    'bin.supabaseEcarte'      = "supabase n'a ete trouve que dans un dossier reconnu comme un dossier de shims DevContext : {0}. Un dossier l'est s'il porte editor.ps1 ET supabase.ps1. Si c'est une vraie installation Supabase, renommer ou retirer ces deux fichiers. NE PAS appeler le binaire directement pour contourner : le garde-fou de production ne s'appliquerait plus."
 
     # --- sb-index ---------------------------------------------------------------
     'index.aucunActif'        = "Aucun contexte actif. 'work <contexte>' d'abord, ou 'sb-index <contexte>'."

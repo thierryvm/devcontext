@@ -749,17 +749,34 @@ function Get-CtxSupabaseExe {
 
       -ExcludeDir garde sa forme d'origine (un chemin unique) pour les tests et
       les appelants existants ; sans lui, l'ensemble complet est exclu.
+
+      DEUX ECHECS, DEUX MESSAGES. L'exclusion echoue FERMEE -- elle fait lever,
+      jamais executer -- et c'est le seul sens acceptable pour un module qui
+      garde une base de production. Mais le message, lui, mentait sur sa cause :
+      un dossier portant par hasard editor.ps1 et supabase.ps1 rendait
+      « supabase introuvable » alors que le binaire etait bien la.
+
+      Un utilisateur bloque par un message faux ne depose pas de rapport : il
+      contourne le wrapper et appelle le binaire brut, donc SANS garde. Le
+      message est ainsi le dernier endroit ou l'on a le droit d'etre imprecis --
+      dire ce qui a ete ecarte, et pourquoi, est ce qui evite le contournement.
     #>
     param([string[]]$ExcludeDir = (Get-CtxShimDirs))
 
     $exclus = @($ExcludeDir | Where-Object { $_ })
 
-    $candidate = Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue |
-        Where-Object {
-            -not (Test-CtxDossierEstShimDevContext -Dossier (Split-Path $_.Source -Parent) -Dossiers $exclus)
-        } | Select-Object -First 1
+    $tous = @(Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue)
+    $candidate = $tous | Where-Object {
+        -not (Test-CtxDossierEstShimDevContext -Dossier (Split-Path $_.Source -Parent) -Dossiers $exclus)
+    } | Select-Object -First 1
 
-    if (-not $candidate) { throw (T 'bin.supabaseAbsent') }
+    if (-not $candidate) {
+        if ($tous.Count -gt 0) {
+            $ecartes = @($tous | ForEach-Object { Split-Path $_.Source -Parent } | Sort-Object -Unique)
+            throw (T 'bin.supabaseEcarte' ($ecartes -join ', '))
+        }
+        throw (T 'bin.supabaseAbsent')
+    }
     $candidate.Source
 }
 

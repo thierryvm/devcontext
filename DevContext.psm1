@@ -192,7 +192,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1', 'Gh.ps1', 'Vercel.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -669,21 +669,39 @@ function Invoke-DevVercel {
       L'isolation Vercel ne reposait en fait que sur VERCEL_TOKEN — ce qui suffit,
       mais ce n'est pas ce que l'arborescence laissait croire.
     #>
-    [CmdletBinding()]
-    param([Parameter(ValueFromRemainingArguments)]$Rest)
+    # PAS DE BLOC param() : voir Invoke-DevSupabase. `vercel -d` (debug) suffit a
+    # declencher l'ambiguite avec -Debug.
+    $arguments = @($args)
 
-    $exe = Get-Command vercel -CommandType Application, ExternalScript -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if (-not $exe) { throw (T 'bin.vercelAbsent') }
+    # LE GARDE-FOU D'ABORD, et le dossier de config resolu DEPUIS LE DOSSIER.
+    #
+    # Cet alias precede le shim du PATH dans toute session ayant importe le
+    # module : s'il portait sa propre logique, il rendrait un verdict different
+    # de celui de git-bash. C'est la panne corrigee en 1.3.5 sur `supabase`, et
+    # elle est evitee ici des le premier jour -- une seule regle, deux appelants.
+    #
+    # L'ancienne version lisait $env:DEVCTX_VERCEL_CONFIG, donc la SESSION.
+    # Resolve-CtxVercelVerdict lit le dossier, et ne retombe sur la variable que
+    # hors de toute racine de contexte.
+    $decision = $null
+    try { $decision = Resolve-CtxVercelVerdict -Arguments $arguments }
+    catch { $decision = $null }
 
-    if ($env:DEVCTX_VERCEL_CONFIG) {
-        if (-not (Test-Path $env:DEVCTX_VERCEL_CONFIG)) {
-            New-Item -ItemType Directory -Force -Path $env:DEVCTX_VERCEL_CONFIG | Out-Null
-        }
-        & $exe.Source '--global-config' $env:DEVCTX_VERCEL_CONFIG @Rest
+    if ($decision -and $decision.Verdict -and -not $decision.Verdict.Allowed) {
+        Write-CtxVercelRefus -Verdict $decision.Verdict
+        throw (T 'vercel.refuseAlias')
+    }
+    if ($decision -and $decision.Avertissement) {
+        Write-Host "  $($decision.Avertissement)" -ForegroundColor DarkGray
+    }
+
+    $exe = Get-CtxVercelExe
+
+    if ($decision -and $decision.ConfigDir) {
+        & $exe '--global-config' $decision.ConfigDir @arguments
     }
     else {
-        & $exe @Rest
+        & $exe @arguments
     }
 }
 
@@ -1464,8 +1482,14 @@ function Write-CtxGardeRefus {
 # ---------------------------------------------------------------------------
 
 function Invoke-DevSupabase {
-    [CmdletBinding()]
-    param([Parameter(ValueFromRemainingArguments)]$Rest)
+    # PAS DE BLOC param(), ET C'EST PORTEUR. Avec [CmdletBinding()], PowerShell
+    # reclame toute option courte qui prefixe un parametre commun : `supabase -o
+    # env` echouerait sur « le nom de parametre 'o' est ambigu ». Meme piege que
+    # celui documente en tete de shims/supabase.ps1, et il vaut pour une fonction
+    # autant que pour un script. Releve le 16 aout 2026 sur `gh api -i user`,
+    # corrige ici en meme temps : reparer une classe de defaut sur l'occurrence
+    # rencontree seulement, c'est la laisser vivre chez son jumeau.
+    $arguments = @($args)
 
     # LE GARDE-FOU D'ABORD, avant meme d'ouvrir le coffre.
     #
@@ -1478,7 +1502,7 @@ function Invoke-DevSupabase {
     # Une levee du rassemblement DELEGUE, comme dans le shim : un garde-fou qui
     # casse quand il hesite est desinstalle dans la semaine.
     $decision = $null
-    try { $decision = Resolve-CtxSupabaseVerdict -Arguments @($Rest) }
+    try { $decision = Resolve-CtxSupabaseVerdict -Arguments $arguments }
     catch { $decision = $null }
 
     if ($decision -and $decision.Verdict -and -not $decision.Verdict.Allowed) {
@@ -1521,12 +1545,12 @@ function Invoke-DevSupabase {
         $previous = $env:SUPABASE_ACCESS_TOKEN
         try {
             Set-CtxSupabaseToken $token
-            & $exe @Rest
+            & $exe @arguments
         }
         finally { Set-CtxSupabaseToken $previous }
     }
     else {
-        & $exe @Rest
+        & $exe @arguments
     }
 }
 
@@ -1879,8 +1903,12 @@ function Test-DevContext {
 
     # --- 2. Le compte GitHub actif est-il celui attendu ? ---
     $ghLogin = $null
-    if (Get-Command gh -ErrorAction SilentlyContinue) {
-        $ghLogin = gh api user --jq .login 2>$null
+    # Le binaire REEL, jamais l'alias du module : celui-ci corrigerait
+    # GH_CONFIG_DIR avant d'interroger l'API, et `ctx` repondrait GO en mesurant
+    # une identite qu'il vient lui-meme de reparer. Voir src/Jetons.ps1.
+    $ghExe = try { Get-CtxGhExe } catch { $null }
+    if ($ghExe) {
+        $ghLogin = & $ghExe api user --jq .login 2>$null
     }
     $expected = $env:DEVCTX_GH_LOGIN
     if ($expected -and $ghLogin -and ($ghLogin -ne $expected)) {
@@ -1980,6 +2008,11 @@ Set-Alias -Name code-ctx  -Value Open-DevCode
 Set-Alias -Name web-ctx   -Value Open-DevBrowser
 Set-Alias -Name vercel    -Value Invoke-DevVercel
 Set-Alias -Name supabase  -Value Invoke-DevSupabase
+# `gh` est alias depuis la 1.4.0, et pas par symetrie : sur une installation
+# standard il vit dans C:\Program Files, donc dans le PATH SYSTEME, que le PATH
+# utilisateur ne peut pas preceder. Le shim ne le voit alors jamais. Voir
+# Invoke-DevGh.
+Set-Alias -Name gh        -Value Invoke-DevGh
 Set-Alias -Name sb-index  -Value Update-DevSupabaseIndex
 Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
 Set-Alias -Name ctx-doctor -Value Get-DevContextDoctor
@@ -1995,11 +2028,12 @@ $exportedFunctions = @(
     'Invoke-DevSupabase', 'Update-DevSupabaseIndex', 'Test-CtxSupabaseGuard',
     'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp',
     'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl',
-    'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot'
+    'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
+    'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',
-    'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'sb-index', 'ctx-sb',
+    'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'gh', 'sb-index', 'ctx-sb',
     'ctx-doctor', 'ctx-mcp', 'ctx-editors', 'ctx-shortcut', 'ctx-root'
 )
 

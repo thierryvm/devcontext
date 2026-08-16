@@ -13,3 +13,15 @@
 !supabase.cmd
 !supabase.ps1
 !editor.ps1
+# gh et vercel sont commits comme supabase, et pour la meme raison : il n'existe
+# qu'UN binaire de chaque nom. L'argument du dessus vise les editeurs, qui sont
+# nombreux et propres a chaque machine. Le prix reste le meme -- sur une machine
+# sans `gh`, taper `gh` repond « gh introuvable dans le PATH (hors shims) »
+# plutot que « commande inconnue » -- et il est paye en connaissance de cause :
+# le message nomme la cause, et le code de sortie reste 127.
+!gh
+!gh.cmd
+!gh.ps1
+!vercel
+!vercel.cmd
+!vercel.ps1

@@ -48,6 +48,7 @@
         'Get-CtxSupabasePaires'
         'Get-CtxSupabaseRefDepuisUrl'
         'Get-DevSupabaseMap'
+        'Invoke-DevGh'
         'Invoke-DevSupabase'
         'Invoke-DevVercel'
         'New-DevContext'
@@ -57,14 +58,20 @@
         'Open-DevCode'
         'Resolve-DevContextForPath'
         'Set-DevContextRoot'
+        'Test-CtxGhEcriture'
+        'Test-CtxGhGuard'
         'Test-CtxSupabaseGuard'
+        'Test-CtxVercelGuard'
         'Test-DevContext'
         'Update-DevSupabaseIndex'
         'Use-DevContext'
     )
 
-    # `supabase` et `vercel` remplacent DÉLIBÉRÉMENT les binaires du même nom :
-    # c'est ce qui garantit qu'un appel direct passe par le contexte actif.
+    # `supabase`, `vercel` et `gh` remplacent DÉLIBÉRÉMENT les binaires du même
+    # nom : c'est ce qui garantit qu'un appel direct passe par le contexte actif.
+    # Pour `gh` c'est même la SEULE couverture possible sous PowerShell quand il
+    # est installé pour toute la machine — le PATH utilisateur ne peut pas
+    # précéder le PATH système. Voir Invoke-DevGh.
     AliasesToExport   = @(
         'code-ctx'
         'ctx'
@@ -80,6 +87,7 @@
         'ctx-sb'
         'ctx-shortcut'
         'ctx-who'
+        'gh'
         'sb-index'
         'supabase'
         'vercel'

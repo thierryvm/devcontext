@@ -43,18 +43,24 @@ rather than program output.
 
 ---
 
-## 1.4.0 — guard more than Supabase
+## 1.4.0 — shipped, 16 August 2026
 
-The shim pattern generalises. Each new tool is a folder in `shims/`, three entry
-points, and one pure `Test-Ctx<Tool>Guard`.
+`gh` and `vercel` join the guarded set. `code` was on this list and shipped
+early, in 1.2.0 — it turned out to be the most-felt problem, not the least.
 
-- **`vercel`** — refuse `--prod` deploys from a branch that is not the default,
-  and refuse `env rm` against production.
-- **`gh`** — refuse a push or a PR when `GH_CONFIG_DIR` does not match the
-  folder's context. This is the failure that started the whole project.
+The item was written as *refuse a PR when `GH_CONFIG_DIR` does not match*. Half
+of that turned out to be the wrong instinct. Refusing is what the Supabase guard
+must do, because nobody can guess which database was meant; for `gh` **the right
+answer is known — the folder holds it**, so the entry point supplies the
+directory instead of refusing. It refuses only when it has nothing to supply.
+The rule that came out of it, and which the next guarded tool inherits:
+**correct when the answer is knowable, refuse only when it is not.**
 
-`code` was on this list and shipped early, in 1.2.0 — it turned out to be the
-most-felt problem, not the least.
+`vercel` kept the two refusals as written, and gained the same session
+redirection.
+
+See `CHANGELOG.md`, and `SECURITY.md` for what each guard deliberately does not
+cover.
 
 ---
 

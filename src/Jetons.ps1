@@ -219,12 +219,20 @@ function Get-CtxJetonChecks {
     # --- GitHub ------------------------------------------------------------
     # Via la CLI et non l'API brute : elle lit GH_CONFIG_DIR, donc elle prouve
     # ce qui compte vraiment — l'identite que `gh` utilisera reellement ici.
-    if (Get-Command gh -CommandType Application -ErrorAction SilentlyContinue) {
+    #
+    # LE BINAIRE REEL, JAMAIS L'ALIAS DU MODULE. Depuis la 1.4.0, `gh` designe
+    # Invoke-DevGh dans toute session ayant importe le module -- et ce wrapper
+    # CORRIGE GH_CONFIG_DIR avant d'appeler la CLI. Un diagnostic qui passerait
+    # par lui mesurerait donc l'identite APRES correction : il repondrait « le
+    # bon compte » sur une machine ou git-bash, lui, part toujours sur le
+    # mauvais. Un diagnostic doit observer l'etat, jamais le reparer en chemin.
+    $ghExe = try { Get-CtxGhExe } catch { $null }
+    if ($ghExe) {
         $login = $null; $portees = $null; $code = 0; $erreur = $null
-        $brut = & gh api user --jq '.login' 2>&1
+        $brut = & $ghExe api user --jq '.login' 2>&1
         if ($LASTEXITCODE -eq 0) {
             $login = ([string]$brut).Trim()
-            $entetes = & gh api -i user 2>&1 | Select-String -Pattern '^X-OAuth-Scopes:' | Select-Object -First 1
+            $entetes = & $ghExe api -i user 2>&1 | Select-String -Pattern '^X-OAuth-Scopes:' | Select-Object -First 1
             if ($entetes) { $portees = ($entetes.Line -replace '^X-OAuth-Scopes:\s*', '').Trim() }
         }
         else {

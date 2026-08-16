@@ -57,7 +57,18 @@ $script:ShimDir  = Join-Path $PSScriptRoot 'shims'
 # src/Chemins.ps1 pour ce que cette distinction repare.
 $script:Jonction     = Get-CtxShimLien
 $script:CheminStable = Get-CtxShimStable
-$script:ShimFichiers = @('supabase.ps1', 'supabase.cmd', 'supabase', 'editor.ps1')
+$script:ShimFichiers = @(
+    'supabase.ps1', 'supabase.cmd', 'supabase'
+    'gh.ps1', 'gh.cmd', 'gh'
+    'vercel.ps1', 'vercel.cmd', 'vercel'
+    'editor.ps1'
+)
+
+# Les CLI enrobees par un shim COMMIS -- par opposition aux editeurs, dont les
+# points d'entree sont generes d'apres ce qui est installe sur la machine.
+# Sert au rapport de `-Verifier` : montrer la resolution reelle de chacune est
+# le seul moyen de voir qu'un shim est bien devant le vrai binaire.
+$script:ShimOutils = @('supabase', 'gh', 'vercel')
 
 # Written into every generated entry point, and the ONLY thing that authorises
 # deleting one. An installer that removes files by name pattern eventually
@@ -401,22 +412,31 @@ if ($Verifier) {
     foreach ($g in $generes) { Write-Host "    $($g.Name)" -ForegroundColor DarkGray }
     Write-Host ''
     Write-Host "  $(T 'inst.resolution')"
-    $resolus = @(Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue)
-    if (-not $resolus) { Write-Host "    $(T 'inst.aucune')" -ForegroundColor Yellow }
     $nosDossiers = @($script:CheminStable, $script:ShimDir)
-    foreach ($r in $resolus) {
-        $premier = Test-CtxDossierEstShim -Dossier (Split-Path $r.Source -Parent) -Dossiers $nosDossiers
-        $marque = if ($premier) { '->' } else { '  ' }
-        $couleur = if ($premier) { 'Green' } else { 'DarkGray' }
-        Write-Host ('    {0} {1}' -f $marque, $r.Source) -ForegroundColor $couleur
+    # Chaque outil separement, et non le seul `supabase` : un shim peut etre
+    # devant pour l'un et derriere pour l'autre -- npm reinstalle `vercel` et le
+    # place ailleurs dans PATH, par exemple. Un rapport qui n'en montre qu'un
+    # laisserait croire que la reponse vaut pour les trois.
+    $unDerriere = $false
+    foreach ($outil in $script:ShimOutils) {
+        Write-Host "    $outil" -ForegroundColor Cyan
+        $resolus = @(Get-Command $outil -CommandType Application, ExternalScript -All -ErrorAction SilentlyContinue)
+        if (-not $resolus) {
+            Write-Host "      $(T 'inst.aucune')" -ForegroundColor Yellow
+            continue
+        }
+        foreach ($r in $resolus) {
+            $notre = Test-CtxDossierEstShimDevContext -Dossier (Split-Path $r.Source -Parent) -Dossiers $nosDossiers
+            $marque = if ($notre) { '->' } else { '  ' }
+            $couleur = if ($notre) { 'Green' } else { 'DarkGray' }
+            Write-Host ('      {0} {1}' -f $marque, $r.Source) -ForegroundColor $couleur
+        }
+        if (-not (Test-CtxDossierEstShimDevContext -Dossier (Split-Path $resolus[0].Source -Parent) -Dossiers $nosDossiers)) {
+            $unDerriere = $true
+        }
     }
     Write-Host ''
-    $premierEstNotre = $false
-    if ($resolus) {
-        $premierDossier = Split-Path $resolus[0].Source -Parent
-        $premierEstNotre = Test-CtxDossierEstShim -Dossier $premierDossier -Dossiers $nosDossiers
-    }
-    if ($pose -and $resolus -and -not $premierEstNotre) {
+    if ($pose -and $unDerriere) {
         Write-Host "  $(T 'inst.poseNonActif')" -ForegroundColor Yellow
         Write-Host "  $(T 'inst.terminalNeuf')" -ForegroundColor Yellow
         Write-Host ''

@@ -40,6 +40,25 @@ older lines receive no backports.
   the one that imported the module. Detection examines every adjacent pair of
   non-option arguments, so placing a global flag before the command does not
   shift it out of view.
+- **GitHub writes are tied to the folder's identity.** `gh` reads its account
+  from `GH_CONFIG_DIR`, and without it falls back to the machine-wide config —
+  whichever account was logged in last. `work` sets it, but `work` is a
+  PowerShell command, so from git-bash, an npm script or an agent's shell it was
+  never set. The entry point in `PATH` now resolves the context **from the
+  folder** and supplies the directory itself, on the child process only. When
+  there is nothing to supply — the context has no `gh` account yet — a *write*
+  is refused and names the two commands that fix it, while *reads* pass. When
+  `GH_CONFIG_DIR` is set to a different context it is never overwritten, because
+  a deliberate choice is not ours to undo; writes are refused and reads are
+  flagged on stderr. Writing commands are recognised by **verb** (`create`,
+  `delete`, `merge`, `edit`, …, split on hyphens so `project item-add` counts),
+  which is what makes a noun GitHub adds tomorrow covered without a change here.
+- **Vercel production deployments are guarded, and sessions are separated.** A
+  `--prod` deployment from a branch other than the default is refused, as is
+  `env rm` naming `production`. The Vercel CLI has no `GH_CONFIG_DIR`
+  equivalent — its config directory is chosen only by `--global-config` — so the
+  entry point writes it into the command line, from the folder, and never when
+  the caller already passed one.
 - **A redirected target is refused rather than guessed.** `--db-url` points the
   CLI somewhere the folder does not. When the project ref can be read from the
   connection string it is judged on that; when it cannot, and the context holds
@@ -72,7 +91,10 @@ one you have been allowed to assume away is not.
 | **An absolute path bypasses the guard** | Calling `C:\...\supabase.exe` directly skips `PATH` resolution entirely. The guard stops mistakes, not a determined operator. |
 | **A local install bypasses the guard** | `npm run` and `npx` put `node_modules/.bin` *ahead* of `PATH`. A project carrying `supabase` as a dev dependency therefore reaches its own copy first, and the shim never sees the call. Check with `npm ls supabase`. |
 | **The guard fails open** | If the module is missing, the index unreadable, or anything unexpected happens, the command is passed through unchanged. A guard that blocks whenever it hesitates gets uninstalled within the week, and an uninstalled guard protects nothing. |
-| **`DEVCTX_ALLOW_PROD=1` disables it** | Intentional, for the one command that genuinely needs it. Setting it in `$PROFILE` removes the guard while leaving the impression of having it — `ctx doctor` reports it as a finding when set. |
+| **`DEVCTX_ALLOW_PROD=1` disables it** | Intentional, for the one command that genuinely needs it. There is one variable per tool — `DEVCTX_ALLOW_GH`, `DEVCTX_ALLOW_VERCEL` — deliberately, so that waiving one guard never waives the others. Setting any in `$PROFILE` removes a guard while leaving the impression of having it; `ctx doctor` names every one that is set. |
+| **An unknown `gh` verb is treated as a read** | Verb classification covers new *nouns* for free but not a new *writing verb*. The choice is deliberate: on an identity mismatch nothing passes **silently** — what is not refused is flagged — and `ctx` already answers `NO-GO` on the same condition. This guard is a second line, not the only one. |
+| **`vercel rollback`, `promote` and `rm` are not guarded** | `rollback` is a repair gesture, and refusing it always lands during an incident, from a hotfix branch. `promote` acts on an already-built deployment. What `rm` deletes is not identifiable as production from the command line alone, and refusing on a doubt is refusing at random. |
+| **`vercel env rm` without a named environment is not guarded** | Given no target the CLI opens a prompt, and the human sees what they pick. Refusing there would remove the command for development environments too, where it is routine. |
 | **Anyone who can write to `shims/` runs code everywhere** | The folder sits first in `PATH`. Its filesystem permissions are part of your threat model, not ours. |
 | **`npx` fetches at run time** | A generated `.mcp.json` uses `npx -y @supabase/mcp-server-supabase@latest`, which downloads on every start. That is upstream's recommended form; pin the version yourself if your threat model requires it. |
 | **A shortcut pointing at the executable bypasses everything** | `C:\...\Code.exe` consults no `PATH`, so no entry point can reach it. Nothing here can change that; `ctx doctor` reads your shortcuts and reports which ones open a context project on the shared profile, and `ctx-shortcut` writes correct ones. Detection, not prevention. |

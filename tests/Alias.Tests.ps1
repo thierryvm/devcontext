@@ -91,6 +91,32 @@ Describe 'les alias ne mangent pas les options courtes' {
         $sortie | Should -Not -Match 'ambigu|ambiguous'
     }
 
+    It 'gh garde une liste a virgules en UN seul argument' {
+        # LE SECOND DEFAUT DE L'ALIAS, mesure sur la commande qui ouvrait la PR
+        # de cette version. PowerShell analyse les arguments d'une FONCTION
+        # autrement que ceux d'un programme externe : `--json a,b,c` y devient un
+        # TABLEAU de trois elements. Splatte tel quel, gh recevait
+        # `--json databaseId status conclusion` et repondait
+        # « unknown command "status" ».
+        #
+        # Les listes a virgules sont partout dans ces CLI : --json, --label,
+        # --assignee. Un wrapper qui les casse est un wrapper qu'on retire.
+        $sortie = & $script:Appel $script:Module $script:ctxRoot $script:decoy 'gh run list --json databaseId,status,conclusion'
+        $sortie | Should -Match 'databaseId,status,conclusion'
+        $sortie | Should -Not -Match 'databaseId status conclusion'
+    }
+
+    It 'supabase et vercel gardent aussi leurs listes a virgules' {
+        # La correction vit dans UNE fonction partagee. Ces deux cas existent
+        # pour qu'elle ne puisse pas etre retiree d'un seul appelant sans que
+        # quelque chose rougisse.
+        $sb = & $script:Appel $script:Module $script:ctxRoot $script:decoy 'supabase gen types --schema public,auth'
+        $sb | Should -Match 'public,auth'
+
+        $vc = & $script:Appel $script:Module $script:ctxRoot $script:decoy 'vercel ls --meta a,b'
+        $vc | Should -Match 'a,b'
+    }
+
     It 'aucun des trois ne declare de bloc param' {
         # La cause, verifiee sur l'AST plutot que sur son symptome. Un bloc
         # param() qui reviendrait un jour rougirait ici, avec la raison ecrite

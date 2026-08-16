@@ -27,8 +27,8 @@
 
 .PARAMETER Path
     Dossier a ouvrir. Viser le PROJET, jamais la racine du contexte : ouvrir
-    F:\PROJECTS\Apps fait chercher tsserver dans F:\PROJECTS\Apps\node_modules,
-    qui n'existe pas.
+    C:\Work\Apps fait chercher tsserver dans C:\Work\Apps\node_modules, qui
+    n'existe pas.
 
 .PARAMETER Editor
     Nom de commande de l'editeur, tel que `ctx-editors` le liste. VS Code par
@@ -39,10 +39,10 @@
     qu'aucune racine ne couvre.
 
 .EXAMPLE
-    .\lancer-editeur.ps1 -Path 'F:\PROJECTS\Clients\acme\site'
+    .\lancer-editeur.ps1 -Path 'C:\Work\Clients\acme\site'
 
 .EXAMPLE
-    .\lancer-editeur.ps1 -Path 'F:\PROJECTS\Apps\demo' -Editor cursor
+    .\lancer-editeur.ps1 -Path 'C:\Work\Apps\demo' -Editor cursor
 
 .NOTES
     Cree le 15 aout 2026, en generalisant lancer-vscode.ps1 a tous les editeurs

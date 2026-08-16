@@ -70,15 +70,33 @@ Describe 'Test-CtxShortcutIsolated' {
 
     It 'accepte un raccourci passant par le dossier de shims' {
         InModuleScope DevContext {
-            Test-CtxShortcutIsolated -Target 'F:\devcontext\shims\code.cmd' -Arguments 'F:\p' `
-                -ShimDir 'F:\devcontext\shims' | Should -BeTrue
+            Test-CtxShortcutIsolated -Target 'D:\devcontext\shims\code.cmd' -Arguments 'D:\p' `
+                -ShimDirs @('D:\devcontext\shims') | Should -BeTrue
         }
     }
 
     It 'ne se laisse pas avoir par un antislash final sur le dossier de shims' {
         InModuleScope DevContext {
-            Test-CtxShortcutIsolated -Target 'F:\devcontext\shims\code.cmd' -Arguments '' `
-                -ShimDir 'F:\devcontext\shims\' | Should -BeTrue
+            Test-CtxShortcutIsolated -Target 'D:\devcontext\shims\code.cmd' -Arguments '' `
+                -ShimDirs @('D:\devcontext\shims\') | Should -BeTrue
+        }
+    }
+
+    It 'reconnait le dossier de shims sous CHACUN de ses noms' {
+        # Troisieme site du meme defaut, apres Get-CtxSupabaseExe (1.3.1) et
+        # Find-CtxEditorCli (1.3.2). Depuis que PATH designe une jonction, un
+        # raccourci peut nommer le dossier de shims par la jonction alors que ce
+        # code ne connaissait que le nom du module -- et `ctx doctor` rendait
+        # alors PROBLEME sur un raccourci parfaitement isole.
+        #
+        # Un diagnostic qui crie au loup sur du correct est desinstalle, et il
+        # emporte ses vraies trouvailles.
+        InModuleScope DevContext {
+            $noms = @('D:\module\shims', 'C:\Users\moi\AppData\Local\DevContext\current\shims')
+            foreach ($n in $noms) {
+                Test-CtxShortcutIsolated -Target "$n\code.cmd" -Arguments 'D:\p' -ShimDirs $noms |
+                    Should -BeTrue -Because "le raccourci nomme le dossier par $n"
+            }
         }
     }
 

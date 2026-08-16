@@ -156,19 +156,58 @@ function Get-CtxJonctionCible {
     @($item.Target)[0]
 }
 
+function Resolve-CtxCheminReel {
+    <#
+      Le dossier PHYSIQUE derriere un chemin, jonctions et liens suivis.
+
+      Sur une machine de developpement, la racine du module se rejoint par
+      plusieurs chemins : le depot, le lien symbolique des modules PowerShell, la
+      jonction de PATH. Comparer ces chaines entre elles rend un verdict de
+      difference sur un seul et meme dossier.
+
+      Ne leve jamais. Un chemin absent ou non resoluble revient tel quel : cette
+      fonction sert un diagnostic, qui doit pouvoir rapporter ce qu'il trouve
+      plutot que s'interrompre sur ce qu'il esperait.
+    #>
+    param([AllowEmptyString()][AllowNull()][string]$Chemin)
+
+    if (-not $Chemin) { return $Chemin }
+    try {
+        $item = Get-Item -LiteralPath $Chemin -Force -ErrorAction Stop
+        # $true : la cible FINALE, donc une chaine de liens entiere et pas
+        # seulement le premier maillon.
+        $final = $item.ResolveLinkTarget($true)
+        if ($final) { return $final.FullName }
+        return $item.FullName
+    }
+    catch { return $Chemin }
+}
+
 function Test-CtxJonctionSaine {
     <#
-      PURE. La jonction designe-t-elle bien le module attendu ?
+      La jonction designe-t-elle bien le module attendu ?
 
-      Separee de la lecture disque pour que le doctor puisse la verifier sans
-      dependre de l'etat de la machine qui execute les tests.
+      Pure a resolveur donne : la decision reste verifiable sans lien sur
+      disque, et c'est le meme motif que -Classify sur la resolution de cible
+      d'editeur.
+
+      LE RESOLVEUR N'EST PAS UN DETAIL. Mesure le 16 aout 2026 : la jonction
+      pointait sur le depot, le module etait charge depuis le lien symbolique des
+      modules PowerShell, et `ctx doctor` rendait PROBLEME sur son propre
+      garde-fou. Deux chaines, un seul dossier. Un diagnostic qui accuse a tort
+      le mecanisme qu'il surveille apprend a son lecteur a l'ignorer -- et ce
+      lecteur ratera la vraie panne, celle ou la jonction designe reellement une
+      version perimee.
     #>
     param(
         [AllowEmptyString()][AllowNull()][string]$Cible,
-        [Parameter(Mandatory)][AllowEmptyString()][string]$ModuleAttendu
+        [Parameter(Mandatory)][AllowEmptyString()][string]$ModuleAttendu,
+        [scriptblock]$Resolveur = { param($p) Resolve-CtxCheminReel -Chemin $p }
     )
     if (-not $Cible) { return $false }
-    $Cible.TrimEnd('\', '/').ToLowerInvariant() -eq $ModuleAttendu.TrimEnd('\', '/').ToLowerInvariant()
+    $a = [string](& $Resolveur $Cible)
+    $b = [string](& $Resolveur $ModuleAttendu)
+    $a.TrimEnd('\', '/').ToLowerInvariant() -eq $b.TrimEnd('\', '/').ToLowerInvariant()
 }
 
 function Set-CtxJonction {

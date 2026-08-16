@@ -295,6 +295,55 @@ Describe 'La jonction' {
         }
     }
 
+    It 'Test-CtxJonctionSaine compare les dossiers REELS, pas leurs noms' {
+        # MESURE SUR LA MACHINE DE L AUTEUR LE 16 AOUT 2026. `ctx doctor` rendait
+        # PROBLEME sur son propre garde-fou :
+        #
+        #   la jonction pointe sur F:\...\devcontext
+        #   le module charge est   ...\Documents\PowerShell\Modules\DevContext
+        #
+        # Deux chaines, UN dossier -- le second est un lien symbolique vers le
+        # premier. Le garde-fou tournait sur le bon code et le diagnostic
+        # annoncait une version perimee.
+        #
+        # Cinquieme occurrence du meme defaut. Ici le cout est le pire de tous :
+        # un diagnostic qui accuse a tort le mecanisme qu il surveille apprend a
+        # son lecteur a l ignorer, et ce lecteur ratera la vraie panne.
+        #
+        # Resolveur injecte : la decision reste verifiable sans lien sur disque.
+        InModuleScope DevContext {
+            $faux = { param($p) if ($p -match 'lien') { 'C:\reel\module' } else { $p } }
+            Test-CtxJonctionSaine -Cible 'C:\reel\module' -ModuleAttendu 'C:\chemin\du\lien' -Resolveur $faux |
+                Should -BeTrue
+            Test-CtxJonctionSaine -Cible 'C:\reel\module' -ModuleAttendu 'C:\ailleurs' -Resolveur $faux |
+                Should -BeFalse
+        }
+    }
+
+    It 'Resolve-CtxCheminReel suit une vraie jonction' {
+        $reel = Join-Path $TestDrive 'cible-reelle'
+        $lien = Join-Path $TestDrive 'la-jonction'
+        New-Item -ItemType Directory -Path $reel | Out-Null
+        New-Item -ItemType Junction -Path $lien -Target $reel | Out-Null
+
+        InModuleScope DevContext -Parameters @{ l = $lien; r = $reel } { param($l, $r)
+            (Resolve-CtxCheminReel -Chemin $l).TrimEnd('\') | Should -Be $r.TrimEnd('\')
+        }
+    }
+
+    It 'Resolve-CtxCheminReel rend le chemin tel quel quand rien n est a suivre' {
+        $simple = Join-Path $TestDrive 'dossier-ordinaire'
+        New-Item -ItemType Directory -Path $simple | Out-Null
+
+        InModuleScope DevContext -Parameters @{ s = $simple } { param($s)
+            (Resolve-CtxCheminReel -Chemin $s).TrimEnd('\') | Should -Be $s.TrimEnd('\')
+            # Un chemin absent ne doit pas lever : le doctor l appelle sur ce qu il
+            # trouve, pas sur ce qu il espere.
+            Resolve-CtxCheminReel -Chemin 'C:\ce\qui\n\existe\pas' | Should -Be 'C:\ce\qui\n\existe\pas'
+            Resolve-CtxCheminReel -Chemin '' | Should -BeNullOrEmpty
+        }
+    }
+
     It 'REFUSE d ecraser un vrai dossier' {
         # Un installateur qui efface ce qu il n a pas pose finit par effacer
         # autre chose. Meme regle que les points d entree, reconnus a leur marque

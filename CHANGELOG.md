@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.3.3] - 16 August 2026
 
 ### Changed
 

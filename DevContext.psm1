@@ -671,7 +671,7 @@ function Invoke-DevVercel {
     #>
     # PAS DE BLOC param() : voir Invoke-DevSupabase. `vercel -d` (debug) suffit a
     # declencher l'ambiguite avec -Debug.
-    $arguments = @($args)
+    $arguments = Get-CtxArgumentsBruts $args
 
     # LE GARDE-FOU D'ABORD, et le dossier de config resolu DEPUIS LE DOSSIER.
     #
@@ -1191,6 +1191,31 @@ function Get-CtxSupabasePaires {
     for ($i = 0; $i -lt $mots.Count - 1; $i++) { "$($mots[$i]) $($mots[$i + 1])" }
 }
 
+function Get-CtxArgumentsBruts {
+    <#
+      Restitue la ligne de commande TELLE QU'ELLE A ETE TAPEE.
+
+      PowerShell analyse les arguments d'une FONCTION autrement que ceux d'un
+      programme externe : `--json a,b,c` y devient un TABLEAU de trois elements,
+      et non la chaine 'a,b,c'. Splatte tel quel vers la CLI, cela donne
+      `--json a b c`, et `gh` repond « unknown command "status" ».
+
+      Mesure le 16 aout 2026 sur la commande qui ouvrait justement la PR de cette
+      version. Les listes separees par des virgules sont partout dans ces CLI :
+      `gh ... --json a,b`, `gh pr create --label a,b`, `gh issue list --assignee`.
+
+      Les shims n'ont pas ce probleme : ils sont atteints comme des programmes
+      externes. C'est le prix de l'alias, et il se paie ici, une seule fois pour
+      les trois.
+    #>
+    param([object[]]$Arguments = @())
+
+    @($Arguments | ForEach-Object {
+            if ($_ -is [System.Array]) { (@($_) | ForEach-Object { "$_" }) -join ',' }
+            else { "$_" }
+        })
+}
+
 function Get-CtxArgumentValeur {
     <#
       Reads the value of a flag, in either spelling: `--nom valeur` and
@@ -1489,7 +1514,7 @@ function Invoke-DevSupabase {
     # autant que pour un script. Releve le 16 aout 2026 sur `gh api -i user`,
     # corrige ici en meme temps : reparer une classe de defaut sur l'occurrence
     # rencontree seulement, c'est la laisser vivre chez son jumeau.
-    $arguments = @($args)
+    $arguments = Get-CtxArgumentsBruts $args
 
     # LE GARDE-FOU D'ABORD, avant meme d'ouvrir le coffre.
     #

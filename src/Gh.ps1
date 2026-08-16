@@ -349,7 +349,7 @@ function Invoke-DevGh {
       C'est le piege que shims/gh.ps1 documente en tete, et il vaut pour une
       FONCTION autant que pour un script. $args transmet tout verbatim.
     #>
-    $arguments = @($args)
+    $arguments = Get-CtxArgumentsBruts $args
 
     $verdict = $null
     try { $verdict = Resolve-CtxGhVerdict -Arguments $arguments }

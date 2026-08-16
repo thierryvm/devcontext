@@ -1,3 +1,35 @@
+## [Unreleased]
+
+### Fixed
+
+- **`ctx doctor` accused its own guard of being stale.** On a development
+  machine the junction points at the repository while the module loads through
+  the modules symlink — two strings, one folder — and the check reported
+  `PROBLEME: the guard runs stale logic` on a guard running exactly the right
+  code. That is the worst possible false alarm: a diagnostic that accuses the
+  mechanism it watches teaches its reader to ignore it, and that reader will
+  miss the real failure. `Test-CtxJonctionSaine` now compares the **physical**
+  folders through `Resolve-CtxCheminReel`, injected as a resolver so the
+  decision stays verifiable without links on disk.
+
+- **`ctx doctor` could report a correctly isolated shortcut as `PROBLEME`.**
+  `Test-CtxShortcutIsolated` and `Test-CtxShortcutLaunchesEditor` recognised our
+  shims directory by a single name. Since `PATH` names the junction, a shortcut
+  may spell that folder differently. Both now take the full list.
+
+  Third and fourth sites of the same defect, after `Get-CtxSupabaseExe` (1.3.1)
+  and `Find-CtxEditorCli` (1.3.2). The lesson is written into the repository
+  rather than only fixed: repairing a class of defect is not repairing the
+  occurrence you met.
+
+### Changed
+
+- **Help examples no longer name the author's drive.** `lancer-vscode.ps1`,
+  `lancer-editeur.ps1` and `ctx-shortcut` showed `F:\PROJECTS\...` in the text
+  `Get-Help` prints to a stranger. Comments citing a real incident keep the real
+  path — naming the machine where a bug happened is what makes the comment
+  checkable — but user-facing help does not.
+
 ## [1.3.3] - 16 August 2026
 
 ### Changed

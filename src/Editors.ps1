@@ -461,7 +461,7 @@ function Resolve-CtxEditorTargetPath {
     <#
       PURE. Which folder decides the context, given an editor's arguments.
 
-      `code .`, `code F:\projects\thing`, `code src/main.ts`, `code --wait
+      `code .`, `code C:\work\thing`, `code src/main.ts`, `code --wait
       COMMIT_EDITMSG`, `code --diff a b`, `code -g file.ts:42` -- the context
       comes from the FILE BEING OPENED, not from where the terminal happens to
       sit. Opening a client project from a personal folder must load the client

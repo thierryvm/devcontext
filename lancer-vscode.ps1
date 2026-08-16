@@ -23,14 +23,14 @@
 
 .PARAMETER Path
     Dossier à ouvrir. Viser le PROJET, jamais la racine du contexte :
-    ouvrir `F:\PROJECTS\Apps` fait chercher tsserver dans
-    `F:\PROJECTS\Apps\node_modules`, qui n'existe pas.
+    ouvrir `C:\Work\Apps` fait chercher tsserver dans
+    `C:\Work\Apps\node_modules`, qui n'existe pas.
 
 .EXAMPLE
-    .\lancer-vscode.ps1 -Context client-a -Path 'F:\PROJECTS\Clients\client-a\projet'
+    .\lancer-vscode.ps1 -Context client-a -Path 'C:\Work\Clients\client-a\projet'
 
 .NOTES
-    Créé le 8 août 2026. Appelé par les raccourcis de Desktop\Raccourcis-outils.
+    Créé le 8 août 2026. Appelé par les raccourcis du Bureau.
 #>
 [CmdletBinding()]
 param(

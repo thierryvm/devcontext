@@ -46,17 +46,25 @@ function Test-CtxShortcutIsolated {
       themselves, so demanding to see it written out would report every correct
       shortcut as broken. That is not a detail: a diagnostic whose false alarms
       outnumber its findings gets ignored, and then its real findings go with it.
+
+      -ShimDirs is a LIST, and that is the whole point. Since PATH names a
+      junction, one shims folder answers to several names; a shortcut may spell
+      it any of them. Comparing against a single name reported a perfectly
+      isolated shortcut as PROBLEME -- the third site of that defect, after
+      Get-CtxSupabaseExe and Find-CtxEditorCli.
     #>
     param(
         [AllowNull()][AllowEmptyString()][string]$Target,
         [AllowNull()][AllowEmptyString()][string]$Arguments,
-        [string]$ShimDir = ''
+        [string[]]$ShimDirs = @()
     )
 
     if ($Arguments -match '(?i)--user-data-dir') { return $true }
 
-    $inspected = "$Target $Arguments"
-    if ($ShimDir -and $inspected.ToLowerInvariant().Contains($ShimDir.TrimEnd('\', '/').ToLowerInvariant())) { return $true }
+    $inspected = "$Target $Arguments".ToLowerInvariant()
+    foreach ($d in $ShimDirs) {
+        if ($d -and $inspected.Contains($d.TrimEnd('\', '/').ToLowerInvariant())) { return $true }
+    }
 
     # Les lanceurs du module. lancer-vscode.ps1 est l'historique -- les
     # raccourcis ecrits en aout 2026 le referencent tous -- et lancer-editeur.ps1
@@ -82,7 +90,7 @@ function Test-CtxShortcutLaunchesEditor {
         [AllowNull()][AllowEmptyString()][string]$Target,
         [AllowNull()][AllowEmptyString()][string]$Arguments,
         [string[]]$EditeurExecutables = @(),
-        [string]$ShimDir = ''
+        [string[]]$ShimDirs = @()
     )
 
     $cible = if ($Target) { [System.IO.Path]::GetFileName($Target) } else { '' }
@@ -92,7 +100,10 @@ function Test-CtxShortcutLaunchesEditor {
 
     $inspected = "$Target $Arguments"
     if ($inspected -match '(?i)lancer-(vscode|editeur)\.ps1') { return $true }
-    if ($ShimDir -and $inspected.ToLowerInvariant().Contains($ShimDir.TrimEnd('\', '/').ToLowerInvariant())) { return $true }
+    $minuscule = $inspected.ToLowerInvariant()
+    foreach ($d in $ShimDirs) {
+        if ($d -and $minuscule.Contains($d.TrimEnd('\', '/').ToLowerInvariant())) { return $true }
+    }
 
     $false
 }
@@ -121,7 +132,7 @@ function Test-CtxDoctorRaccourci {
         [AllowNull()][AllowEmptyString()][string]$Arguments,
         [AllowNull()][AllowEmptyString()][string]$Contexte,
         [string[]]$EditeurExecutables = @(),
-        [string]$ShimDir = ''
+        [string[]]$ShimDirs = @()
     )
 
     # RIEN, et non un constat « OK, ne lance pas un editeur ».
@@ -134,11 +145,11 @@ function Test-CtxDoctorRaccourci {
     # sert jamais de valeur de DECISION. L'absence de constat, elle, ne se
     # traduit pas.
     if (-not (Test-CtxShortcutLaunchesEditor -Target $Target -Arguments $Arguments `
-                -EditeurExecutables $EditeurExecutables -ShimDir $ShimDir)) {
+                -EditeurExecutables $EditeurExecutables -ShimDirs $ShimDirs)) {
         return
     }
 
-    if (Test-CtxShortcutIsolated -Target $Target -Arguments $Arguments -ShimDir $ShimDir) {
+    if (Test-CtxShortcutIsolated -Target $Target -Arguments $Arguments -ShimDirs $ShimDirs) {
         $ou = if ($Contexte) { T 'rac.doc.dansContexte' $Contexte } else { T 'rac.doc.profilDedie' }
         return New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'OK' -Detail (T 'rac.doc.isole' $ou)
     }
@@ -201,7 +212,7 @@ function Get-CtxRaccourciChecks {
       "not an editor" -- a diagnostic nobody reads to the end is a diagnostic
       that hides its own findings.
     #>
-    param([string]$ShimDir = (Join-Path $PSScriptRoot '..' 'shims'))
+    param([string[]]$ShimDirs = (Get-CtxShimDirs))
 
     $executables = @(Get-CtxEditorFacts | ForEach-Object {
             $chemin = if ($_.Exe) { $_.Exe } else { $_.Cli }
@@ -217,8 +228,10 @@ function Get-CtxRaccourciChecks {
 
         if (-not $executables) { return }
 
-        $resolu = ''
-        if (Test-Path -LiteralPath $ShimDir) { $resolu = (Resolve-Path -LiteralPath $ShimDir).Path }
+        # Get-CtxShimDirs rend TOUS les noms du meme dossier -- celui du module et
+        # le chemin stable derriere la jonction. Un raccourci peut nommer l'un ou
+        # l'autre, et n'en reconnaitre qu'un rendait PROBLEME sur du correct.
+        $nosDossiers = @($ShimDirs | Where-Object { $_ })
 
         $vus = @{}
         $verdicts = foreach ($raccourci in Get-CtxShortcutFacts) {
@@ -237,7 +250,7 @@ function Get-CtxRaccourciChecks {
 
             $verdict = Test-CtxDoctorRaccourci -Nom $raccourci.Nom -Target $raccourci.Target `
                 -Arguments $raccourci.Arguments -Contexte $contexte `
-                -EditeurExecutables $executables -ShimDir $resolu
+                -EditeurExecutables $executables -ShimDirs $nosDossiers
 
             # Un raccourci sans rapport ne rend RIEN : plus de filtre sur un
             # libelle, qui cessait de matcher des que la sortie changeait de
@@ -286,8 +299,8 @@ function Get-CtxRaccourciChecks {
 
     .PARAMETER Path
         The project folder. Aim at the PROJECT, never at the context root:
-        opening F:\PROJECTS\Apps makes the language server look for
-        node_modules there, where there is none.
+        opening C:\Work\Apps makes the language server look for node_modules
+        there, where there is none.
 
     .PARAMETER Editor
         Command name of the editor, as `ctx-editors` lists it. Defaults to the
@@ -297,7 +310,7 @@ function Get-CtxRaccourciChecks {
         Folder to write into. Defaults to the desktop.
 
     .EXAMPLE
-        ctx-shortcut -Path F:\PROJECTS\Clients\acme\site
+        ctx-shortcut -Path C:\Work\Clients\acme\site
     #>
         [CmdletBinding(SupportsShouldProcess)]
         param(

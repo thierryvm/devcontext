@@ -1289,11 +1289,205 @@ function Test-CtxSupabaseGuard {
     }
 }
 
+function Get-CtxBranchesPour {
+    <#
+      La branche courante et la branche par defaut DU DOSSIER VISE.
+
+      « Du dossier vise » est la correction du 16 aout 2026. Ces deux valeurs
+      etaient lues la ou la commande etait TAPEE, alors que `--workdir` peut
+      designer un tout autre depot : le garde-fou jugeait donc la branche d'un
+      depot et la base d'un autre. Depuis un depot pose sur sa branche par
+      defaut, un `db push` vers une production restee sur une branche laterale
+      passait sans un mot.
+
+      Toute incertitude rend $null, et $null vaut « laisse passer » : on ne
+      bloque jamais sur une supposition.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Dossier)
+
+    $vide = [pscustomobject]@{ Courante = $null; Defaut = $null }
+    if (-not $Dossier -or -not (Test-Path -LiteralPath $Dossier)) { return $vide }
+
+    # Le drapeau, et non un Pop-Location dans un finally inconditionnel : si le
+    # Push echoue, ce finally depilerait l'emplacement de QUELQU'UN D'AUTRE et
+    # laisserait l'appelant ailleurs qu'il ne croit.
+    $pousse = $false
+    try {
+        Push-Location -LiteralPath $Dossier -ErrorAction Stop
+        $pousse = $true
+
+        $courante = git rev-parse --abbrev-ref HEAD 2>$null
+        if ($LASTEXITCODE -ne 0 -or $courante -eq 'HEAD') { $courante = $null }
+
+        $defaut = git symbolic-ref --short refs/remotes/origin/HEAD 2>$null
+        if ($LASTEXITCODE -eq 0 -and $defaut) {
+            # Retirer le prefixe du remote, et LUI SEUL. Un `-split '/'` suivi de
+            # [-1] tronquait une branche hierarchique : avec
+            # origin/HEAD -> origin/release/main, la branche par defaut devenait
+            # 'main', et un developpeur sur une branche locale nommee 'main'
+            # voyait son `db push` vers la production accepte.
+            $defaut = $defaut -replace '^origin/', ''
+        }
+        else {
+            $defaut = $null
+            foreach ($candidat in 'main', 'master') {
+                git show-ref --verify --quiet "refs/heads/$candidat" 2>$null
+                if ($LASTEXITCODE -eq 0) { $defaut = $candidat; break }
+            }
+        }
+
+        [pscustomobject]@{ Courante = $courante; Defaut = $defaut }
+    }
+    catch { $vide }
+    finally { if ($pousse) { Pop-Location } }
+}
+
+function Resolve-CtxSupabaseVerdict {
+    <#
+      RASSEMBLE les faits, puis appelle la decision pure. C'est la moitie
+      « gathering » du garde-fou : disque, index, git, environnement.
+
+      ELLE VIT DANS LE MODULE, ET NON DANS LE SHIM, DEPUIS LE 16 AOUT 2026.
+      Il y a deux appelants, et une regle en deux exemplaires derive :
+
+        - le shim du PATH couvre tous les shells -- git-bash, npm, un agent ;
+        - l'alias PowerShell couvre le seul shell ou il passe AVANT le shim.
+
+      Jusqu'a cette date l'alias ne consultait pas le garde-fou du tout. Comme
+      `work` importe le module, c'etait le cas de TOUS les terminaux de l'auteur.
+      Meme motif que l'incident du fichier de format le 13 aout 2026 : deux
+      mecanismes pour un seul travail, le plus faible gagnant en silence.
+
+      Rend $null quand il n'y a rien a juger -- hors contexte, hors projet lie,
+      aucune production en vue. « Rien a juger » vaut « laisse passer » : chaque
+      appelant delegue alors au binaire reel.
+    #>
+    param(
+        [string[]]$Arguments = @(),
+        # Le dossier depuis lequel la commande est tapee. Parametre et non
+        # $PWD lu ici : l'appelant sait ou il est, cette fonction ne le suppose
+        # pas -- et un test peut donc l'exercer sans deplacer le shell.
+        [string]$Path
+    )
+
+    # --workdir redirige la CLI vers un AUTRE projet. Le garde-fou doit juger la
+    # cible reelle, pas le dossier depuis lequel on tape :
+    #   supabase --workdir F:\...\projet-de-prod db push
+    # partait de n'importe ou et travaillait sur la production.
+    $dossier = Get-CtxArgumentValeur -Arguments $Arguments -Nom 'workdir'
+    if (-not $dossier) {
+        $dossier = if ($Path) { $Path } else { (Get-Location).Path }
+    }
+
+    # LE DOSSIER D'ABORD, la session seulement en secours.
+    #
+    # Lire $env:DEVCTX en priorite interrogeait l'index du MAUVAIS contexte
+    # quand session et dossier divergent -- l'etat que `ctx` qualifie justement
+    # de NO-GO -- n'y trouvait pas le projet, et concluait « pas de production ».
+    $contextes = @()
+    $manifeste = Resolve-DevContextForPath -Path $dossier
+    if ($manifeste) { $contextes += Get-CtxProp $manifeste 'name' }
+    if ($env:DEVCTX -and $env:DEVCTX -notin $contextes) { $contextes += $env:DEVCTX }
+    if ($contextes.Count -eq 0) { return }
+
+    $ref = Resolve-CtxSupabaseRef -Path $dossier
+    if (-not $ref) { return }
+
+    # Le verdict le plus restrictif l'emporte : si l'un des deux index connait ce
+    # projet comme une production, c'en est une.
+    $environment = $null
+    $contexte    = $contextes[0]
+    foreach ($c in $contextes) {
+        $e = Get-CtxSupabaseEnv -Ref $ref -ContextName $c
+        if ($e -eq 'prod') { $environment = 'prod'; $contexte = $c; break }
+        if ($e -and -not $environment) { $environment = $e; $contexte = $c }
+    }
+
+    # L'index contient-il une production, quelque part ? Sert au seul cas ou le
+    # garde-fou se ferme par defaut : un --db-url dont on ne sait pas lire la cible.
+    $indexProd = $false
+    foreach ($c in $contextes) {
+        $p = Get-CtxSupabaseIndexPath $c
+        if ($p -and (Test-Path $p)) {
+            $brut = Get-Content $p -Raw -ErrorAction SilentlyContinue
+            if ($brut -match '"env"\s*:\s*"prod"') { $indexProd = $true; break }
+        }
+    }
+
+    if ($environment -ne 'prod' -and -not $indexProd) { return }
+
+    $branches = Get-CtxBranchesPour -Dossier $dossier
+
+    $verdict = Test-CtxSupabaseGuard -Arguments $Arguments -Environment $environment `
+        -CurrentBranch $branches.Courante -DefaultBranch $branches.Defaut `
+        -Override:($env:DEVCTX_ALLOW_PROD -eq '1') -IndexContientProd:$indexProd
+
+    $nom = $null
+    $chemin = Get-CtxSupabaseIndexPath $contexte
+    if ($chemin -and (Test-Path $chemin)) {
+        $index  = Get-Content $chemin -Raw | ConvertFrom-Json
+        $entree = $index.PSObject.Properties | Where-Object { $_.Name -eq $ref } | Select-Object -First 1
+        if ($entree) { $nom = Get-CtxProp $entree.Value 'name' }
+    }
+
+    [pscustomobject]@{ Verdict = $verdict; Projet = $nom }
+}
+
+function Write-CtxGardeRefus {
+    <#
+      Le bloc de refus, ecrit UNE seule fois pour les deux appelants.
+
+      Rien ici n'imprime une variable d'environnement, un jeton, ni les
+      arguments de la commande : un refus finit dans les journaux et se colle
+      dans les conversations, et un `--db-url` porte un mot de passe.
+    #>
+    param(
+        [Parameter(Mandatory)]$Verdict,
+        [AllowNull()][AllowEmptyString()][string]$Projet
+    )
+
+    if (-not $Projet) { $Projet = T 'garde.nomInconnu' }
+
+    Write-Host ''
+    Write-Host "  $(T 'garde.refuse')" -ForegroundColor Red
+    Write-Host ''
+    Write-Host "    $(T 'garde.base' $Projet)" -ForegroundColor Yellow
+    Write-Host "    $(T 'garde.raison' $Verdict.Reason)"
+    Write-Host ''
+    Write-Host "    $(T 'garde.derogation')" -ForegroundColor DarkGray
+    Write-Host '      $env:DEVCTX_ALLOW_PROD = 1' -ForegroundColor DarkGray
+    Write-Host "    $(T 'garde.jamaisProfil1')" -ForegroundColor DarkGray
+    Write-Host "    $(T 'garde.jamaisProfil2')" -ForegroundColor DarkGray
+    Write-Host ''
+}
+
 # ---------------------------------------------------------------------------
 
 function Invoke-DevSupabase {
     [CmdletBinding()]
     param([Parameter(ValueFromRemainingArguments)]$Rest)
+
+    # LE GARDE-FOU D'ABORD, avant meme d'ouvrir le coffre.
+    #
+    # Cet alias precede le shim du PATH dans toute session PowerShell ayant
+    # importe le module. Jusqu'au 16 aout 2026 il ne consultait pas le garde-fou :
+    # mesure sur un leurre, `supabase db reset --linked` sur un projet marque
+    # prod, depuis un dossier lie, sur une branche laterale -- binaire appele,
+    # code 42, aucun refus.
+    #
+    # Une levee du rassemblement DELEGUE, comme dans le shim : un garde-fou qui
+    # casse quand il hesite est desinstalle dans la semaine.
+    $decision = $null
+    try { $decision = Resolve-CtxSupabaseVerdict -Arguments @($Rest) }
+    catch { $decision = $null }
+
+    if ($decision -and $decision.Verdict -and -not $decision.Verdict.Allowed) {
+        Write-CtxGardeRefus -Verdict $decision.Verdict -Projet $decision.Projet
+        # `throw` et non un simple affichage : $? doit rendre faux et un script
+        # doit s'arreter. Le shim, lui, sort en 1 -- meme resultat pour son
+        # appelant.
+        throw (T 'garde.refuseAlias')
+    }
 
     $exe = Get-CtxSupabaseExe
 

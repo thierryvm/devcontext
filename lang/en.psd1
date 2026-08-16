@@ -86,6 +86,7 @@
     'garde.raison.reset'      = "'{0}' destroys and recreates the database. Refused on a production project."
     'garde.raison.branche'    = "'{0}' towards a production project from branch '{1}' instead of '{2}'."
     'garde.introuvable'       = '{0} not found in PATH (outside the shims).'
+    'garde.refuseAlias'       = 'Command refused by the DevContext production guard.'
 
     # --- vault and manifest -----------------------------------------------------
     'vault.absent'            = "SecretManagement module missing. Install it:`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"

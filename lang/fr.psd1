@@ -86,6 +86,7 @@
     'garde.raison.reset'      = "'{0}' detruit et recree la base. Refuse sur un projet de production."
     'garde.raison.branche'    = "'{0}' vers un projet de production depuis la branche '{1}' au lieu de '{2}'."
     'garde.introuvable'       = '{0} introuvable dans le PATH (hors shims).'
+    'garde.refuseAlias'       = 'Commande refusee par le garde-fou de production DevContext.'
 
     # --- coffre et manifeste ---------------------------------------------------
     'vault.absent'            = "Module SecretManagement absent. Installer :`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"

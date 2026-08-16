@@ -1,3 +1,42 @@
+## [1.3.5] - 16 August 2026
+
+### Fixed
+
+- **The production guard did not cover PowerShell — the one shell it was used
+  from every day.** `supabase` resolves to the module's **alias** before it
+  resolves the `PATH` shim:
+
+  ```
+  Get-Command supabase -All
+  Alias        supabase       DevContext      <-- wins
+  Application  supabase.cmd   ...\shims\
+  ```
+
+  The alias leads to `Invoke-DevSupabase`, which never called
+  `Test-CtxSupabaseGuard`. Measured against a decoy binary on 16 August 2026:
+  `supabase db reset --linked`, on a project marked `prod`, from a linked folder,
+  on a side branch — the binary ran, exit code 42, no refusal. And `work` imports
+  the module, so this was the state of **every** terminal.
+
+  The suite did not catch it because every end-to-end test invoked the shim *by
+  path*. It exercised the file, never the command the user actually types. Both
+  callers are now tested on the same fake world, and a test pins the alias
+  precedence that caused it — so the day the alias goes away, that test explains
+  why it mattered.
+
+  Gathering and decision moved into the module (`Resolve-CtxSupabaseVerdict`,
+  `Write-CtxGardeRefus`); the shim applies the rule instead of holding it. Same
+  shape as the format-file incident of 13 August 2026: two mechanisms for one
+  job, the weaker winning in silence.
+
+- **`--workdir` judged the branch of the wrong repository.** The guard resolved
+  the target *database* from `--workdir` — the 15 August 2026 fix — but kept
+  reading the *branch* from the folder the command was typed in. Standing in a
+  repository on its default branch, `supabase --workdir <prod-project> db push`
+  passed while that project sat on a side branch. `Get-CtxBranchesPour` now reads
+  both branches in the targeted folder. Same class again: deciding on the wrong
+  subject.
+
 ## [1.3.4] - 16 August 2026
 
 ### Fixed

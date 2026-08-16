@@ -28,24 +28,39 @@ right in a shell that has never heard of DevContext?* If not, it belongs in
 
 ## Layout
 
+Three zones, and which one a file belongs to is decided by **who invokes it**.
+
 ```
 DevContext.psd1              Manifest. Version, dependencies, export list.
 DevContext.psm1              Core: contexts, activation, verification.
 DevContext.format.ps1xml     Table views for the objects commands return.
-src/
+lang/
+  fr.psd1  en.psd1           Every user-facing string, one key each.
+
+src/                         DOT-SOURCED. Never invoked directly.
+  Chemins.ps1                Path rules shared by the module and the installer
+  Langue.ps1                 Key lookup, and the fallback that renders [the.key]
   Doctor.ps1                 ctx doctor — what works here, and on which account
   Jetons.ps1                 ctx doctor -Live — do the tokens work, on the right account
   Mcp.ps1                    ctx mcp — project-scoped MCP, any assistant
   Editors.ps1                ctx editors — find editors, measure what they support
   Shortcuts.ps1              ctx doctor / ctx shortcut — the launcher PATH cannot reach
-shims/
+
+shims/                       INVOKED BY PATH, by any shell.
   supabase.ps1               The guard. Decides, then delegates or refuses.
   supabase.cmd               Entry point for cmd.exe, PowerShell, npm  (CRLF)
   supabase                   Entry point for POSIX shells               (LF)
   editor.ps1                 Editor isolation, shared by every editor
   <editor>.cmd / <editor>    GENERATED per machine, from the editors found there
-lancer-editeur.ps1           Detached launch for shortcuts. Deduces the context.
-installer-shims.ps1          Puts shims/ first in PATH, writes the entry points.
+
+<root>/*.ps1                 INVOKED BY ABSOLUTE PATH, from outside PowerShell.
+  installer-shims.ps1        Puts shims/ in PATH, writes the entry points, poses the junction
+  installer-uri-router.ps1   Registers the vscode:// handler in HKCU
+  vscode-uri-router.ps1      What that registry key points AT
+  lancer-editeur.ps1         Detached launch for shortcuts. Deduces the context.
+  lancer-vscode.ps1          The 8 Aug 2026 launcher, named by shortcuts already on disk
+
+tools/Build-Package.ps1      Assembles the published package from git ls-files
 tests/                       See tests/README.md
 ```
 
@@ -53,6 +68,26 @@ Files under `src/` are **dot-sourced** into the module rather than declared as
 `NestedModules`. They therefore share module scope — they see `$script:CtxRoot`
 and the internal helpers — and a single `Export-ModuleMember` remains the one
 place that decides what leaves.
+
+### Why five scripts sit at the root
+
+Because each is named, by absolute path, by something that is not PowerShell: a
+human typing a command, `HKCU\Software\Classes\vscode\...`, or a `.lnk` file on
+somebody's desktop. Nothing dot-sources them and nothing resolves them through
+`PATH`, so they cannot live in `src/` or `shims/` — those two zones are defined
+by the opposite property.
+
+**Moving or renaming one is a breaking change with no deprecation path.** A
+registry value and a desktop shortcut hold a literal string; they do not follow.
+That is not theory: on 13 August 2026 the repository moved, the old folder was
+deleted, and every shortcut opened a terminal that closed instantly while the
+dangling `vscode://` handler brought back permanent GitHub re-authentication
+across every project. `INSTALLATION.md` lists the four consumers to repair after
+any move.
+
+The `lancer-*` names are French in an otherwise English-facing package. That is
+a wart, and it stays one: renaming them would break every shortcut already
+written, which is a real cost paid to fix an aesthetic one.
 
 ---
 

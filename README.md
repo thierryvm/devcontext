@@ -274,9 +274,10 @@ naive check blesses it.
 
 No token value is ever printed. Only the name of the key holding it.
 
-> **Language.** Command output currently ships in French; documentation is in
-> English. Making the output bilingual through `DEVCTX_LANG` is planned — see
-> [`ROADMAP.md`](ROADMAP.md).
+> **Language.** Command output is bilingual since 1.3.0 — 268 keys in English
+> and French, picked from your system language or forced with `DEVCTX_LANG`. The
+> whole suite runs under both in CI, because a translation is only real when
+> something checks it in the language that did not write the code.
 
 ---
 
@@ -324,10 +325,11 @@ Security tab.
 pwsh -NoProfile -File .\tests\RunTests.ps1
 ```
 
-250+ tests across unit, contract, integration, cross-shell (PowerShell, cmd,
-git-bash) and repository-security levels. Destructive commands are exercised
-against a **decoy binary** that announces itself: a guard tested against the real
-CLI would mean betting a database on the guard working.
+479 tests across unit, contract, integration, cross-shell (PowerShell, cmd,
+git-bash) and repository-security levels, run in **both languages** on every
+push. Destructive commands are exercised against a **decoy binary** that
+announces itself: a guard tested against the real CLI would mean betting a
+database on the guard working.
 
 What the suite does and does not guarantee: [`tests/README.md`](tests/README.md).
 

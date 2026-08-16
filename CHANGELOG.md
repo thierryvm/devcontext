@@ -1,3 +1,20 @@
+## [Unreleased]
+
+### Changed
+
+- **`supabase` resolution says what it excluded, instead of claiming an
+  absence.** Recognising a shims folder by its contents fails *closed* — it
+  raises, it never runs the wrong thing, which is the only acceptable direction
+  for a module guarding a production database. The message, however, lied about
+  its cause: a directory that happens to carry `editor.ps1` and `supabase.ps1`
+  produced "supabase not found" while the binary sat right there.
+
+  A user blocked by a false message does not file a report; they call the raw
+  binary to get moving — **without the guard**. So the error now names the
+  excluded directory, states the rule that excluded it, and says explicitly not
+  to bypass the wrapper. The "nothing in `PATH` at all" case keeps its original
+  message: two different failures, two different answers.
+
 ## [1.3.2] - 16 August 2026
 
 The same defect as yesterday, in the one place it had not been repaired.

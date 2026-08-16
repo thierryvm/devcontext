@@ -163,6 +163,41 @@ Describe 'Get-CtxSupabaseExe ecarte TOUS nos dossiers' {
         }
     }
 
+    It 'dit QUEL dossier a ete ecarte, au lieu d annoncer une absence' {
+        # POURQUOI. L'identification par contenu echoue fermee -- elle fait lever,
+        # jamais executer -- et c'est le bon sens pour un module qui garde une base
+        # de production. Mais le message, lui, mentait sur sa cause : un dossier qui
+        # porte par hasard editor.ps1 et supabase.ps1 rendait « supabase
+        # introuvable » alors que le binaire etait bien la.
+        #
+        # Un utilisateur bloque par un message faux contourne le wrapper et appelle
+        # le binaire brut -- donc SANS garde. Le message est donc le dernier endroit
+        # ou l'on a le droit d'etre imprecis.
+        #
+        # Assertion sur le CHEMIN et non sur du texte : la suite tourne en fr et en
+        # en, et comparer une phrase traduite est le defaut que ce depot a deja paye
+        # quatre fois.
+        $faux = Join-Path $TestDrive 'faux-positif'
+        New-Item -ItemType Directory -Path $faux | Out-Null
+        Set-Content -LiteralPath (Join-Path $faux 'editor.ps1')   -Value '# marqueur'
+        Set-Content -LiteralPath (Join-Path $faux 'supabase.ps1') -Value '# marqueur'
+
+        InModuleScope DevContext -Parameters @{ d = $faux } { param($d)
+            Mock Get-Command -ParameterFilter { $Name -eq 'supabase' } {
+                @([pscustomobject]@{ Source = (Join-Path $d 'supabase.exe') })
+            }
+            { Get-CtxSupabaseExe } | Should -Throw ("*" + $d + "*")
+        }
+    }
+
+    It 'garde le message d absence quand PATH ne propose vraiment rien' {
+        InModuleScope DevContext {
+            Mock Get-Command -ParameterFilter { $Name -eq 'supabase' } { @() }
+            # Aucun chemin a nommer : le message d origine est le bon.
+            { Get-CtxSupabaseExe } | Should -Throw (T 'bin.supabaseAbsent')
+        }
+    }
+
     It 'leve quand il ne reste que des shims, plutot que d en appeler un' {
         # Lever est le bon comportement : rendre un shim ici, c'est la boucle.
         InModuleScope DevContext {

@@ -113,6 +113,7 @@
     # --- wrapped binaries --------------------------------------------------------
     'bin.vercelAbsent'        = 'vercel not found in PATH.'
     'bin.supabaseAbsent'      = 'supabase not found in PATH (outside the shims).'
+    'bin.supabaseEcarte'      = 'supabase was found only in a directory recognised as a DevContext shims directory: {0}. A directory counts as one when it carries both editor.ps1 and supabase.ps1. If that is a real Supabase install, rename or remove those two files. Do NOT call the binary directly to work around this: the production guard would no longer apply.'
 
     # --- sb-index ---------------------------------------------------------------
     'index.aucunActif'        = "No active context. Run 'work <context>' first, or 'sb-index <context>'."

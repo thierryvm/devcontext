@@ -148,19 +148,24 @@ function Find-CtxEditorCli {
       Same exclusion as the supabase shim, for the same reason: once shims sit
       first in PATH, resolving a name by PATH finds OURSELVES, and an editor
       shim that delegates to an editor shim never reaches an editor.
+
+      Excluded through Test-CtxDossierEstShimDevContext, never against a single
+      path. Comparing one name is what broke every desktop shortcut on
+      16 Aug 2026: PATH named the junction, this function named the module, and
+      the two strings differ though the folder is the same one. Open-DevCode then
+      took our own shim for the editor CLI, found no Code.exe above it, and fell
+      back to its SYNCHRONOUS branch -- so the launcher window stayed open for
+      the whole editing session.
     #>
     param(
         [Parameter(Mandatory)][string]$Name,
-        [string]$ShimDir = (Join-Path $PSScriptRoot '..' 'shims')
+        [string[]]$Dossiers = (Get-CtxShimDirs)
     )
 
-    $shim = ''
-    if (Test-Path -LiteralPath $ShimDir) {
-        $shim = (Resolve-Path -LiteralPath $ShimDir).Path.TrimEnd('\', '/')
-    }
-
     Get-Command $Name -CommandType Application -All -ErrorAction SilentlyContinue |
-        Where-Object { -not $shim -or (Split-Path $_.Source -Parent).TrimEnd('\', '/') -ne $shim } |
+        Where-Object {
+            -not (Test-CtxDossierEstShimDevContext -Dossier (Split-Path $_.Source -Parent) -Dossiers $Dossiers)
+        } |
         Select-Object -First 1 -ExpandProperty Source
 }
 

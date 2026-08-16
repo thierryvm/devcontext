@@ -44,6 +44,12 @@ Set-StrictMode -Version Latest
 
 $script:CtxShimLienNom = 'current'
 
+# Ce qu'un dossier de shims DevContext porte toujours, et qui l'identifie quand
+# son NOM ne dit rien. Deux scripts PORTEURS, choisis pour cela : ils sont ce que
+# les shims executent, on ne peut pas les retirer sans supprimer la
+# fonctionnalite. Un marqueur inerte, lui, se perimerait en silence.
+$script:CtxShimMarqueurs = @('editor.ps1', 'supabase.ps1')
+
 function Get-CtxShimRacine {
     <#
       Sous LOCALAPPDATA : par utilisateur, sans droits administrateur, et hors de
@@ -90,6 +96,42 @@ function Test-CtxDossierEstShim {
         if ($d -and $d.TrimEnd('\', '/').ToLowerInvariant() -eq $cible) { return $true }
     }
     $false
+}
+
+function Test-CtxDossierEstShimDevContext {
+    <#
+      Ce dossier est-il un dossier de shims DevContext ? Deux epreuves, et il en
+      suffit d'une.
+
+      PAR LE NOM, contre la liste de nos dossiers connus. Pure, sans disque.
+
+      PAR LE CONTENU, quand le nom ne dit rien -- et c'est la l'essentiel. Un
+      meme dossier de shims porte TROIS noms sur une machine de developpement :
+      le depot, le lien symbolique des modules, la jonction posee dans PATH. Une
+      entree PATH ecrite a la main, un lecteur subst ou un chemin UNC en donnent
+      un quatrieme, qu'aucune liste ne peut prevoir.
+
+      Le 16 aout 2026, c'est exactement ce qui a casse les raccourcis du Bureau :
+      Find-CtxEditorCli comparait au nom du module, PATH designait la jonction,
+      et le shim -- non reconnu -- est devenu le CLI de VS Code.
+
+      Cette fonction touche le disque, contrairement a Test-CtxDossierEstShim qui
+      reste pure : c'est pourquoi elles sont deux et non une. La question de
+      savoir quel dossier c'est reellement ne se decide pas sans regarder.
+    #>
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Dossier,
+        [string[]]$Dossiers = @()
+    )
+
+    if (-not $Dossier) { return $false }
+    if (Test-CtxDossierEstShim -Dossier $Dossier -Dossiers @($Dossiers)) { return $true }
+
+    foreach ($marqueur in $script:CtxShimMarqueurs) {
+        $fichier = [System.IO.Path]::Combine($Dossier, $marqueur)
+        if (-not (Test-Path -LiteralPath $fichier -PathType Leaf)) { return $false }
+    }
+    $true
 }
 
 # ---------------------------------------------------------------------------

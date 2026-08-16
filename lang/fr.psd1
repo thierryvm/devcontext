@@ -103,6 +103,7 @@
     'code.editeurInconnu'     = "'{0}' introuvable sur cette machine. 'ctx-editors' dit ce qui a ete detecte. Pour VS Code : Ctrl+Shift+P > 'Shell Command: Install code command in PATH'."
     'code.sansCli'            = "'{0}' est installe mais n'expose aucun point d'entree en ligne de commande. Il ne peut pas etre lance par DevContext."
     'code.ouverture'          = '{0} [{1}] -> {2}'
+    'code.repliSynchrone'     = "Aucun executable trouve au-dessus de '{0}'. {1} est lance en avant-plan : cette fenetre restera ouverte tant qu'il tournera. 'ctx-editors' dit ce qui a ete detecte."
 
     # --- web-ctx ---------------------------------------------------------------
     'web.aucunActif'          = 'Aucun contexte actif.'

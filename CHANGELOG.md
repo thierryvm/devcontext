@@ -1,3 +1,38 @@
+## [1.3.2] - 16 August 2026
+
+The same defect as yesterday, in the one place it had not been repaired.
+
+### Fixed
+
+- **Every desktop shortcut left a terminal window open for the whole editing
+  session.** `Find-CtxEditorCli` skipped our own shims by comparing against ONE
+  path — the module's. Since `PATH` names the junction, that folder answers to
+  another name, the two strings differ, and the shim was no longer recognised as
+  ours. It became "the VS Code CLI": `Find-CtxEditorExecutable` walked up from
+  `...\current\shims` finding no `Code.exe`, and `Open-DevCode` fell through to
+  its **synchronous** fallback. The editor still opened, correctly isolated, so
+  the only visible symptom was a window that would not close.
+
+  This is exactly the defect fixed in `Get-CtxSupabaseExe` the day before, and
+  never carried over here — because this function, whose entire purpose is not
+  to mistake itself for the editor, **had no test at all**. It has three now.
+
+- **Shim identity no longer rests on a name.** `Test-CtxDossierEstShimDevContext`
+  recognises a shims folder by its **contents** when its name says nothing: a
+  directory carrying `editor.ps1` and `supabase.ps1` is ours, whatever path led
+  there. A development machine gives that one folder three names — the
+  repository, the modules symlink, the `PATH` junction — and a hand-written
+  `PATH` entry, a `subst` drive or a UNC path would give a fourth that no list
+  can anticipate. The markers are load-bearing on purpose: they are what the
+  shims execute, so they cannot be removed without removing the feature, and a
+  test asserts they exist in `shims/`. `Get-CtxSupabaseExe` uses the same
+  identity, so both callers now agree on what "ours" means.
+
+- **The synchronous fallback says so.** It was silent, and it fired wrongly on
+  every machine: a shortcut window stayed open for an entire session with
+  nothing explaining why, while the cause sat two levels up. It now warns, names
+  the launcher it could not resolve, and states the consequence.
+
 ## [1.3.1] - 15 August 2026
 
 The release that repairs what publishing revealed. Nothing here was visible

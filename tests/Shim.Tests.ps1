@@ -72,10 +72,15 @@ Describe 'shim — delegation' {
     }
 }
 
-Describe 'shim — refus de bout en bout' {
+Describe 'garde-fou de production — de bout en bout' {
     # Builds a whole fake world under $TestDrive: a context, an index with one
     # production project, a linked folder, a git repository on a side branch,
     # and a DECOY binary.
+    #
+    # Deux appelants sont exerces sur ce meme monde, et ce n'est pas une
+    # commodite : le shim PATH et l'alias PowerShell portent la MEME regle, donc
+    # ils doivent rendre le MEME verdict. Le 16 aout 2026, ils ne le rendaient
+    # pas -- voir le Describe des deux appelants plus bas.
     #
     # The decoy is the point. Testing a destructive command against the real
     # CLI would mean betting the database on the guard working. Here, a guard
@@ -119,6 +124,20 @@ echo LEURRE-APPELE
 exit /b 42
 "@ | Set-Content (Join-Path $script:decoy 'supabase.cmd') -Encoding ascii
 
+        # UN SECOND DEPOT, sur la branche par defaut, et hors de tout contexte.
+        # Il sert a prouver que le garde-fou juge la branche du dossier VISE et
+        # non celle d'ou la commande est tapee.
+        $script:ailleurs = Join-Path $TestDrive 'ailleurs'
+        New-Item -ItemType Directory -Path $script:ailleurs -Force | Out-Null
+        Push-Location $script:ailleurs
+        try {
+            git init -b main --quiet 2>$null | Out-Null
+            git -c user.email='t@exemple.com' -c user.name='T' commit --allow-empty -m 'init' --quiet 2>$null | Out-Null
+        }
+        finally { Pop-Location }
+
+        $script:Module = (Resolve-Path (Join-Path $PSScriptRoot '..' 'DevContext.psd1')).Path
+
         # NOT $Args: it is a PowerShell automatic variable, and a parameter of
         # that name is silently overwritten by the scriptblock's own argument
         # array. The module was bitten by exactly this on 5 Aug 2026 -- see the
@@ -144,6 +163,33 @@ $poseCtx
 `$env:PATH = '$Decoy;' + `$env:PATH
 Set-Location '$Proj'
 & '$ShimPath' $CliArgs
+exit `$LASTEXITCODE
+"@
+            $out = pwsh -NoProfile -Command $code 2>&1
+            [pscustomobject]@{ Output = ($out -join "`n"); Code = $LASTEXITCODE }
+        }
+
+        # LE MEME MONDE, PAR L'AUTRE APPELANT.
+        #
+        # Dans un shell PowerShell qui a importe le module -- c'est-a-dire tous
+        # ceux que `work` ouvre -- `supabase` ne resout PAS le shim du PATH :
+        # l'alias du module le precede. Ce runner exerce donc le chemin reel de
+        # l'utilisateur, pas celui que la suite avait teste jusqu'ici.
+        $script:RunAlias = {
+            param($Module, $Proj, $CtxRoot, $Decoy, $CliArgs, $Allow, $SansContexte)
+            $poseCtx = if ($SansContexte) {
+                'Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue'
+            } else {
+                "`$env:DEVCTX = 'demo'"
+            }
+            $code = @"
+`$env:DEVCTX_ROOT = '$CtxRoot'
+$poseCtx
+`$env:DEVCTX_ALLOW_PROD = '$Allow'
+`$env:PATH = '$Decoy;' + `$env:PATH
+Import-Module '$Module' -Force
+Set-Location '$Proj'
+supabase $CliArgs
 exit `$LASTEXITCODE
 "@
             $out = pwsh -NoProfile -Command $code 2>&1
@@ -240,5 +286,141 @@ exit `$LASTEXITCODE
             git checkout 'feat/chantier' --quiet 2>$null | Out-Null
             Pop-Location
         }
+    }
+
+    It 'juge la branche du dossier VISE par --workdir, pas celle d ou on tape' {
+        # Meme faute que l'alias, a un autre endroit : decider sur le mauvais
+        # sujet. Le shim resolvait bien la BASE depuis --workdir -- correction du
+        # 15 aout 2026 -- mais continuait de lire la BRANCHE dans le dossier
+        # courant. Depuis un depot pose sur sa branche par defaut, un `db push`
+        # vers un projet de production reste sur une branche laterale passait
+        # donc sans un mot, et le refus se declenchait sur des depots sans
+        # rapport.
+        $r = & $script:Run $script:Shim $script:ailleurs $script:ctxRoot $script:decoy `
+            "--workdir `"$($script:proj)`" db push" ''
+        $r.Output | Should -Match 'REFUSE'
+        $r.Output | Should -Not -Match 'LEURRE-APPELE'
+        $r.Code   | Should -Be 1
+    }
+}
+
+Describe 'garde-fou de production — les DEUX appelants' {
+    # LE TROU DU 16 AOUT 2026.
+    #
+    # Toute la suite ci-dessus appelle le shim par son chemin. Or dans un shell
+    # PowerShell ayant importe le module, `supabase` ne resout pas le shim :
+    #
+    #     Get-Command supabase -All
+    #     Alias        supabase        DevContext      <-- gagne
+    #     Application  supabase.cmd    ...\shims\
+    #
+    # L'alias mene a Invoke-DevSupabase, qui n'appelait pas Test-CtxSupabaseGuard.
+    # Mesure sur un leurre le 16 aout 2026 : `supabase db reset --linked` sur un
+    # projet marque prod, depuis un dossier lie, sur une branche laterale --
+    # binaire appele, code 42, aucun refus. Et `work` importe le module, donc
+    # c'etait le cas de TOUS les terminaux de l'auteur.
+    #
+    # Meme motif que l'incident du fichier de format (13 aout 2026) : deux
+    # mecanismes pour un seul travail, le plus faible gagne en silence.
+
+    BeforeAll {
+        $script:ctxRoot2  = Join-Path $TestDrive 'CTX2'
+        $script:projRoot2 = Join-Path $TestDrive 'PROJECTS2'
+        $ctxDir = Join-Path $script:ctxRoot2 'demo'
+        New-Item -ItemType Directory -Path $ctxDir -Force | Out-Null
+
+        @{
+            name = 'demo'; label = 'Demo'; email = 'demo@exemple.com'
+            root = $script:projRoot2
+        } | ConvertTo-Json | Set-Content (Join-Path $ctxDir 'context.json') -Encoding UTF8
+
+        @{
+            'refdeprod00000000000' = @{ key = 'supabase-token'; name = 'demo-prod'; env = 'prod'; envSource = 'auto' }
+        } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $ctxDir 'supabase-index.json') -Encoding UTF8
+
+        $script:proj2 = Join-Path $script:projRoot2 'appli'
+        New-Item -ItemType Directory -Path (Join-Path $script:proj2 'supabase' '.temp') -Force | Out-Null
+        Set-Content (Join-Path $script:proj2 'supabase' '.temp' 'project-ref') 'refdeprod00000000000' -NoNewline
+
+        Push-Location $script:proj2
+        try {
+            git init -b main --quiet 2>$null | Out-Null
+            git -c user.email='t@exemple.com' -c user.name='T' commit --allow-empty -m 'init' --quiet 2>$null | Out-Null
+            git checkout -b 'feat/chantier' --quiet 2>$null | Out-Null
+        }
+        finally { Pop-Location }
+
+        $script:decoy2 = Join-Path $TestDrive 'bin2'
+        New-Item -ItemType Directory -Path $script:decoy2 -Force | Out-Null
+        @"
+@echo off
+echo LEURRE-APPELE
+exit /b 42
+"@ | Set-Content (Join-Path $script:decoy2 'supabase.cmd') -Encoding ascii
+
+        $script:Module2 = (Resolve-Path (Join-Path $PSScriptRoot '..' 'DevContext.psd1')).Path
+
+        $script:ParAlias = {
+            param($Module, $Proj, $CtxRoot, $Decoy, $CliArgs, $Allow, $SansContexte)
+            # Sans contexte actif, Invoke-DevSupabase ne consulte pas le coffre.
+            # Les tests de passage l'utilisent pour rester hors de tout secret
+            # reel -- et cela exerce au passage la regle qui compte : c'est le
+            # DOSSIER qui decide, pas la session.
+            $poseCtx = if ($SansContexte) {
+                'Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue'
+            } else {
+                "`$env:DEVCTX = 'demo'"
+            }
+            $code = @"
+`$env:DEVCTX_ROOT = '$CtxRoot'
+$poseCtx
+`$env:DEVCTX_ALLOW_PROD = '$Allow'
+`$env:PATH = '$Decoy;' + `$env:PATH
+Import-Module '$Module' -Force
+Set-Location '$Proj'
+supabase $CliArgs
+exit `$LASTEXITCODE
+"@
+            $out = pwsh -NoProfile -Command $code 2>&1
+            [pscustomobject]@{ Output = ($out -join "`n"); Code = $LASTEXITCODE }
+        }
+    }
+
+    It 'l alias resout bien avant le shim du PATH' {
+        # La cause. Si un jour l'alias disparait, ce test rougit et rappelle
+        # pourquoi la regle doit vivre a un seul endroit.
+        $code = "Import-Module '$($script:Module2)' -Force; (Get-Command supabase).CommandType"
+        (pwsh -NoProfile -Command $code) | Should -Be 'Alias'
+    }
+
+    It 'ALIAS : refuse db reset et n appelle JAMAIS le binaire' {
+        $r = & $script:ParAlias $script:Module2 $script:proj2 $script:ctxRoot2 $script:decoy2 'db reset --linked' ''
+        $r.Output | Should -Match 'REFUSE'
+        $r.Output | Should -Match 'demo-prod'
+        $r.Output | Should -Not -Match 'LEURRE-APPELE'
+        $r.Code   | Should -Be 1
+    }
+
+    It 'ALIAS : refuse db push hors branche par defaut' {
+        $r = & $script:ParAlias $script:Module2 $script:proj2 $script:ctxRoot2 $script:decoy2 'db push' '' $true
+        $r.Output | Should -Match 'REFUSE'
+        $r.Output | Should -Not -Match 'LEURRE-APPELE'
+        $r.Code   | Should -Be 1
+    }
+
+    It 'ALIAS : laisse passer db pull et propage le code de sortie' {
+        # Le correctif ne doit pas transformer l'alias en obstacle : il ne
+        # refuse que ce que le shim refuse deja.
+        $r = & $script:ParAlias $script:Module2 $script:proj2 $script:ctxRoot2 $script:decoy2 'db pull' '' $true
+        $r.Output | Should -Match 'LEURRE-APPELE'
+        $r.Output | Should -Not -Match 'REFUSE'
+        $r.Code   | Should -Be 42
+    }
+
+    It 'ALIAS : laisse passer db reset quand le contournement explicite est pose' {
+        $r = & $script:ParAlias $script:Module2 $script:proj2 $script:ctxRoot2 $script:decoy2 'db reset' '1' $true
+        $r.Output | Should -Match 'LEURRE-APPELE'
+        $r.Output | Should -Not -Match 'REFUSE'
+        $r.Code   | Should -Be 42
     }
 }

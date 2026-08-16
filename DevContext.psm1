@@ -618,6 +618,13 @@ function Open-DevCode {
     else {
         # Chemin non standard (autre distribution, autre OS) : on retombe sur le
         # CLI, quitte a garder le terminal occupe.
+        #
+        # Et on le DIT. Ce repli a ete muet jusqu'au 16 aout 2026, ou il s'est
+        # declenche a tort sur toutes les machines : la fenetre d'un raccourci
+        # restait ouverte pour toute la session d'edition, sans un mot expliquant
+        # pourquoi. Un comportement degrade que rien n'annonce se lit comme une
+        # panne -- et la cause etait ailleurs, deux etages plus haut.
+        Write-Warning (T 'code.repliSynchrone' $codeCmd.Source $editeur.Label)
         & $codeCmd.Source @codeArgs
     }
 }
@@ -749,7 +756,7 @@ function Get-CtxSupabaseExe {
 
     $candidate = Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue |
         Where-Object {
-            -not (Test-CtxDossierEstShim -Dossier (Split-Path $_.Source -Parent) -Dossiers $exclus)
+            -not (Test-CtxDossierEstShimDevContext -Dossier (Split-Path $_.Source -Parent) -Dossiers $exclus)
         } | Select-Object -First 1
 
     if (-not $candidate) { throw (T 'bin.supabaseAbsent') }

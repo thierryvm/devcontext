@@ -13,6 +13,65 @@ BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force
 }
 
+Describe 'Find-CtxEditorCli ecarte nos shims sous TOUS leurs noms' {
+    # POURQUOI CE BLOC EXISTE. Le 16 aout 2026, chaque raccourci du Bureau
+    # laissait une fenetre PowerShell ouverte pour toute la session VS Code.
+    #
+    # Chaine complete : cette fonction ecartait les shims en comparant UN chemin,
+    # celui du module. Depuis que PATH designe la jonction, le meme dossier porte
+    # un autre nom -- les deux chaines different, le shim ne se reconnaissait plus
+    # et devenait « le CLI de VS Code ». Find-CtxEditorExecutable remontait alors
+    # depuis ...\current\shims sans y trouver de Code.exe, et Open-DevCode tombait
+    # sur sa branche de repli, SYNCHRONE.
+    #
+    # Exactement le defaut corrige la veille sur Get-CtxSupabaseExe, et jamais
+    # reporte ici : cette fonction n'avait aucun test, alors que sa seule raison
+    # d'etre est « ne pas se prendre pour l'editeur ».
+
+    It 'rend le vrai CLI quand les deux noms du dossier de shims sont dans PATH' {
+        InModuleScope DevContext {
+            Mock Get-Command -ParameterFilter { $Name -eq 'code' } {
+                @(
+                    [pscustomobject]@{ Source = (Join-Path (Get-CtxShimStable) 'code.cmd') }
+                    [pscustomobject]@{ Source = (Join-Path $script:ShimDir 'code.cmd') }
+                    [pscustomobject]@{ Source = 'C:\Programs\Microsoft VS Code\bin\code.cmd' }
+                )
+            }
+            Find-CtxEditorCli -Name 'code' | Should -Be 'C:\Programs\Microsoft VS Code\bin\code.cmd'
+        }
+    }
+
+    It 'ecarte un dossier de shims atteint sous un troisieme nom' {
+        # Celui qu'aucune liste ne peut prevoir : une entree PATH ecrite a la
+        # main, un lecteur subst, un chemin UNC vers le meme dossier.
+        $faux = Join-Path $TestDrive 'shims-par-un-autre-chemin'
+        New-Item -ItemType Directory -Path $faux | Out-Null
+        Set-Content -LiteralPath (Join-Path $faux 'editor.ps1')   -Value '# marqueur'
+        Set-Content -LiteralPath (Join-Path $faux 'supabase.ps1') -Value '# marqueur'
+
+        InModuleScope DevContext -Parameters @{ d = $faux } { param($d)
+            Mock Get-Command -ParameterFilter { $Name -eq 'code' } {
+                @(
+                    [pscustomobject]@{ Source = (Join-Path $d 'code.cmd') }
+                    [pscustomobject]@{ Source = 'C:\Programs\Microsoft VS Code\bin\code.cmd' }
+                )
+            }
+            Find-CtxEditorCli -Name 'code' | Should -Be 'C:\Programs\Microsoft VS Code\bin\code.cmd'
+        }
+    }
+
+    It 'ne rend rien plutot qu un shim quand il ne reste que les notres' {
+        # Rendre un shim ici, c'est Open-DevCode qui appelle son propre shim :
+        # l'editeur s'ouvre, mais la fenetre appelante ne se ferme plus.
+        InModuleScope DevContext {
+            Mock Get-Command -ParameterFilter { $Name -eq 'code' } {
+                @([pscustomobject]@{ Source = (Join-Path (Get-CtxShimStable) 'code.cmd') })
+            }
+            Find-CtxEditorCli -Name 'code' | Should -BeNullOrEmpty
+        }
+    }
+}
+
 Describe 'Resolve-CtxEditorTargetPath' {
     BeforeAll {
         # A fake filesystem. The function must never touch the real one, and a

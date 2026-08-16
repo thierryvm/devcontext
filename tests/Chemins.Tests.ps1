@@ -89,6 +89,59 @@ Describe 'Test-CtxDossierEstShim' {
     }
 }
 
+Describe 'Test-CtxDossierEstShimDevContext reconnait par le CONTENU' {
+    # POURQUOI CETTE SECONDE EPREUVE. Comparer des noms ne peut pas suffire, et
+    # ce fichier le disait deja plus bas sans que l'implementation l'honore :
+    # « les chemins mentent volontiers ». Un meme dossier de shims porte
+    # aujourd'hui TROIS noms sur cette machine -- le depot, le lien symbolique
+    # des modules, la jonction de PATH -- et une entree ecrite a la main dans
+    # PATH en donnerait un quatrieme.
+    #
+    # Les marqueurs sont PORTEURS : editor.ps1 et supabase.ps1 sont ce que les
+    # shims executent. On ne peut pas les retirer sans supprimer la
+    # fonctionnalite, donc l'identite ne peut pas se perimer en silence.
+
+    It 'reconnait un dossier de shims atteint sous un nom que personne ne liste' {
+        $faux = Join-Path $TestDrive 'un-quatrieme-nom'
+        New-Item -ItemType Directory -Path $faux | Out-Null
+        Set-Content -LiteralPath (Join-Path $faux 'editor.ps1')   -Value '# marqueur'
+        Set-Content -LiteralPath (Join-Path $faux 'supabase.ps1') -Value '# marqueur'
+
+        InModuleScope DevContext -Parameters @{ d = $faux } { param($d)
+            Test-CtxDossierEstShimDevContext -Dossier $d -Dossiers @('C:\a\shims') | Should -BeTrue
+        }
+    }
+
+    It 'ne prend pas pour un shim un dossier qui ne porte qu un seul marqueur' {
+        $presque = Join-Path $TestDrive 'presque'
+        New-Item -ItemType Directory -Path $presque | Out-Null
+        Set-Content -LiteralPath (Join-Path $presque 'editor.ps1') -Value '# marqueur'
+
+        InModuleScope DevContext -Parameters @{ d = $presque } { param($d)
+            Test-CtxDossierEstShimDevContext -Dossier $d -Dossiers @('C:\a\shims') | Should -BeFalse
+        }
+    }
+
+    It 'garde l epreuve par le nom, sans disque' {
+        InModuleScope DevContext {
+            Test-CtxDossierEstShimDevContext -Dossier 'C:\a\shims' -Dossiers @('C:\a\shims') | Should -BeTrue
+            Test-CtxDossierEstShimDevContext -Dossier 'C:\a\shims-autre' -Dossiers @('C:\a\shims') | Should -BeFalse
+            Test-CtxDossierEstShimDevContext -Dossier '' -Dossiers @('C:\a\shims') | Should -BeFalse
+        }
+    }
+
+    It 'les fichiers marqueurs existent reellement dans shims/' {
+        # LE GARDE-FOU DE L IDENTITE. Sans lui, renommer un shim desarmerait la
+        # reconnaissance par le contenu en silence -- et on repartirait pour un
+        # tour de « le shim se prend pour l editeur ».
+        InModuleScope DevContext {
+            foreach ($m in $script:CtxShimMarqueurs) {
+                Join-Path $script:ShimDir $m | Should -Exist
+            }
+        }
+    }
+}
+
 Describe 'Get-CtxSupabaseExe ecarte TOUS nos dossiers' {
     # LE TEST QUI COMPTE. L'exclusion comparait a UN chemin -- celui du module.
     # Des lors que PATH designe la jonction, Get-Command rend

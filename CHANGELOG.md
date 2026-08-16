@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.3.4] - 16 August 2026
 
 ### Fixed
 
@@ -29,6 +29,19 @@
   `Get-Help` prints to a stranger. Comments citing a real incident keep the real
   path — naming the machine where a bug happened is what makes the comment
   checkable — but user-facing help does not.
+
+- **The README contradicted itself about languages.** One section documented
+  `DEVCTX_LANG` as working; another announced bilingual output as *planned*. It
+  has shipped since 1.3.0. The test count was also two years behind reality —
+  250+ claimed, 479 actual.
+
+- **`docs/ARCHITECTURE.md` listed half the layout.** Two of the five root scripts
+  and none of `lang/`, `tools/` or the newer `src/` files. It now describes the
+  three zones and, more usefully, the rule that decides which one a file belongs
+  to: **who invokes it.** `src/` is dot-sourced, `shims/` is reached through
+  `PATH`, and the root holds what is named by absolute path from outside
+  PowerShell — a registry value, a `.lnk`, a human. That last zone is why moving
+  or renaming those five is a breaking change with no deprecation path.
 
 ## [1.3.3] - 16 August 2026
 

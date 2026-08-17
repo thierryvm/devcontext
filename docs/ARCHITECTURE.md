@@ -42,6 +42,7 @@ src/                         DOT-SOURCED. Never invoked directly.
   Langue.ps1                 Key lookup, and the fallback that renders [the.key]
   Ctx.ps1                    ctx — the subcommand table, and the dispatcher behind it
   Doctor.ps1                 ctx doctor — what works here, and on which account
+  Fix.ps1                    ctx doctor -Fix — the repairs, and what stays manual
   Jetons.ps1                 ctx doctor -Live — do the tokens work, on the right account
   Mcp.ps1                    ctx mcp — project-scoped MCP, any assistant
   Editors.ps1                ctx editors — find editors, measure what they support
@@ -339,6 +340,27 @@ optional:
    against a **decoy** binary — from PowerShell *and* from git-bash.
 
 ---
+
+## Adding a repair
+
+One line in `$script:CtxReparations` in `src/Fix.ps1`, keyed `<domaine>/<sujet>`,
+plus the `Repair-Ctx*` function it names. If the finding is **not** repairable,
+add it to `$script:CtxNonReparables` with a message key saying *why* — that half
+is not optional. A finding that is neither repaired nor explained reads as
+*nothing more to do*, which is the false reassurance this module exists to
+remove.
+
+Keying on `Domaine`/`Sujet` is safe because both are **literals** everywhere in
+`Doctor.ps1`, never a translated lookup. Only `Detail` and `Correctif` go
+through the language tables. The day someone passes a translated value as a
+`Sujet`, the fixer silently stops repairing anything in the other language —
+that class of defect has landed four times here, so a test pins the property.
+
+A repair must be able to be **proven and undone**. If it cannot — because it
+needs elevation, because it uninstalls software, or because the real fix is a
+variable in the *calling* shell that no child process can write — it belongs in
+the second table, not the first. **A fixer that overreaches is uninstalled the
+first time it surprises its owner, and it takes the useful two thirds with it.**
 
 ## Adding a subcommand
 

@@ -192,7 +192,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1', 'Gh.ps1', 'Vercel.ps1', 'Ctx.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1', 'Gh.ps1', 'Vercel.ps1', 'Ctx.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -2055,7 +2055,7 @@ $exportedFunctions = @(
     'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl',
     'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
     'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh',
-    'Invoke-DevCtx'
+    'Invoke-DevCtx', 'Resolve-CtxPathSansVides'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',

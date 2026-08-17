@@ -91,20 +91,15 @@ at once.
 
 ---
 
-## 1.6.1 — finish the fixer
+## 1.7.0 — shipped, 17 August 2026
 
-- **`ctx doctor -Fix`** — apply the correction a finding already spells out,
-  after confirmation. The diagnostic already knows the answer; making the human
-  retype it is friction for nothing.
+`ctx doctor -Fix`. The diagnostic already knew the answer; it now applies it —
+for the repairs it can prove and undo, and only those. Everything else is named
+with the reason, because an unexplained silence reads as *nothing more to do*.
 
-  Written, then held back: it repairs only what it can **prove and undo** —
-  empty `PATH` entries, shims missing from `PATH`, a stale junction — and names
-  everything else with the reason. Four families stay manual, and the first one
-  is not a limitation but an OS property: the fix for `gh/compte` is `work`,
-  which writes into the **calling** shell, and a child process cannot write to
-  its parent's environment.
+---
 
-## 1.7.0 — make it easy to start
+## 1.8.0 — make it easy to start
 
 Adoption dies at the first step. Today a new user must clone, symlink, run an
 installer, then create contexts by hand.
@@ -118,7 +113,7 @@ installer, then create contexts by hand.
 
 ---
 
-## 1.8.0 — macOS and Linux
+## 1.9.0 — macOS and Linux
 
 The decision layer is already portable and has been from the start; what is
 nailed to Windows is the **machine integration**, not the logic.

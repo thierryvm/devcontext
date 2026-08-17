@@ -403,15 +403,30 @@ function Get-DevContextDoctor {
     .EXAMPLE
         ctx-doctor -Live
 
+    .PARAMETER Fix
+        Applies the corrections this diagnostic already spells out, and NAMES the
+        ones it will not touch, with the reason. Read-only becomes read-write
+        only here, only on request, and only for repairs that can be proven and
+        undone. Emits nothing on the pipeline: a fixer is an action, not a query.
+
     .EXAMPLE
         ctx-doctor -Json | ConvertFrom-Json
+
+    .EXAMPLE
+        ctx doctor -Fix -WhatIf
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [string]$Path = (Get-Location).Path,
         [switch]$Live,
-        [switch]$Json
+        [switch]$Json,
+        [switch]$Fix
     )
+
+    # Refuse plutot que d'en ignorer un des deux en silence. -Json sert a un
+    # programme, -Fix parle a un humain ; les melanger ne peut que decevoir
+    # l'un des deux appelants, et le silence ferait croire que ca a marche.
+    if ($Fix -and $Json) { throw (T 'fix.jsonIncompatible') }
 
     $dossier = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path } catch { $Path }
     $checks  = [System.Collections.Generic.List[object]]::new()
@@ -611,6 +626,12 @@ function Get-DevContextDoctor {
     }
 
     if ($Json) { return ($checks | ConvertTo-Json -Depth 4) }
+
+    # -Fix agit sur les constats qui viennent d'etre etablis, jamais sur un
+    # diagnostic anterieur : reparer d'apres un etat perime est la facon la plus
+    # sure de reparer ce qui va bien.
+    if ($Fix) { return (Invoke-CtxDoctorFix -Checks @($checks)) }
+
     $checks
 }
 

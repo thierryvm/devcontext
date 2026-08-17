@@ -357,6 +357,32 @@
     'doc.editeur.profilSeul'  = 'profil par contexte, extensions communes'
     'doc.editeur.methode'     = '{0} ({1})'
     'doc.editeur.limiteFix'   = 'aucun ; limite de cet editeur, pas du module'
+    # --- ctx doctor -Fix ----------------------------------------------------
+    # Le diagnostic connait deja la reponse ; faire retaper la commande est une
+    # friction pour rien. Mais il ne repare que ce qu'il peut PROUVER et
+    # ANNULER, et il nomme le reste avec la raison -- un silence se lirait
+    # "il n'y a plus rien a faire".
+    'fix.jsonIncompatible'    = "-Json et -Fix ne vont pas ensemble : -Json sert a un programme, -Fix parle a un humain. Lancer 'ctx doctor -Json' pour l'etat, puis 'ctx doctor -Fix' pour agir."
+    'fix.rienAFaire'          = 'Rien a reparer.'
+    'fix.titreFaits'          = 'Reparations automatiques :'
+    'fix.titreManuels'        = 'A faire a la main :'
+    'fix.relancer'            = "Relancer 'ctx doctor' pour verifier."
+    'fix.ignore'              = 'ignore'
+    'fix.pathIllisible'       = "PATH utilisateur illisible dans le registre."
+    'fix.pathRien'            = 'PATH deja propre'
+    'fix.pathEntrees'         = 'entree(s) de PATH'
+    'fix.pathAction'          = 'retirer du PATH utilisateur'
+    'fix.pathFait'            = '{0} entree(s) retiree(s) du PATH utilisateur (sauvegarde ecrite)'
+    'fix.installateurAbsent'  = 'installateur introuvable : {0}'
+    'fix.shimsAction'         = 'relancer pour reposer les shims et la jonction'
+    'fix.shimsFait'           = 'shims et jonction reposes'
+    'fix.shimsEchec'          = "l'installateur a rendu le code {0}"
+    'fix.non.shell'           = "le correctif est 'work <contexte>', qui pose des variables dans le shell APPELANT. Un processus fils ne peut pas ecrire dans l'environnement de son parent -- c'est une propriete du systeme, pas une lacune."
+    'fix.non.index'           = "demande de reconstruire l'index Supabase : 'sb-index'. Il interroge le reseau, donc il ne part jamais tout seul."
+    'fix.non.admin'           = "modifie le PATH SYSTEME, donc exige les droits administrateur. Un outil qui reclame l'elevation en silence est un outil dont on se mefie ensuite."
+    'fix.non.wsl'             = "rien du cote Windows ne peut le fermer : une distribution porte son propre PATH."
+    'fix.non.paquet'          = "installer ou desinstaller un binaire n'est jamais le travail d'un diagnostic."
+
     'doc.garde.sansDossier'   = 'dossier shims introuvable'
     'doc.garde.horsPath'      = 'shims absents du PATH : la protection ne couvre que PowerShell'
     'doc.garde.horsPathFix'   = 'pwsh -File installer-shims.ps1'

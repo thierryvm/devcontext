@@ -357,6 +357,32 @@
     'doc.editeur.profilSeul'  = 'profile per context, extensions shared'
     'doc.editeur.methode'     = '{0} ({1})'
     'doc.editeur.limiteFix'   = 'none; a limit of this editor, not of the module'
+    # --- ctx doctor -Fix ----------------------------------------------------
+    # The diagnostic already knows the answer; making the human retype it is
+    # friction for nothing. But it repairs only what it can PROVE and UNDO, and
+    # names everything else with the reason -- silence would read as "nothing
+    # left to do".
+    'fix.jsonIncompatible'    = "-Json and -Fix do not go together: -Json is for a program, -Fix talks to a human. Run 'ctx doctor -Json' for the state, then 'ctx doctor -Fix' to act."
+    'fix.rienAFaire'          = 'Nothing to repair.'
+    'fix.titreFaits'          = 'Automatic repairs:'
+    'fix.titreManuels'        = 'Left to do by hand:'
+    'fix.relancer'            = "Run 'ctx doctor' again to check."
+    'fix.ignore'              = 'skipped'
+    'fix.pathIllisible'       = 'User PATH not readable in the registry.'
+    'fix.pathRien'            = 'PATH already clean'
+    'fix.pathEntrees'         = 'PATH entry(ies)'
+    'fix.pathAction'          = 'remove from the user PATH'
+    'fix.pathFait'            = '{0} entry(ies) removed from the user PATH (backup written)'
+    'fix.installateurAbsent'  = 'installer not found: {0}'
+    'fix.shimsAction'         = 'run again to lay the shims and the junction'
+    'fix.shimsFait'           = 'shims and junction laid again'
+    'fix.shimsEchec'          = 'the installer returned code {0}'
+    'fix.non.shell'           = "the fix is 'work <context>', which sets variables in the CALLING shell. A child process cannot write into its parent's environment -- that is an OS property, not a missing feature."
+    'fix.non.index'           = "needs the Supabase index rebuilt: 'sb-index'. It reaches the network, so it never runs on its own."
+    'fix.non.admin'           = 'changes the SYSTEM PATH, so it needs administrator rights. A tool that silently asks for elevation is a tool people stop trusting.'
+    'fix.non.wsl'             = 'nothing on the Windows side can close it: a distribution carries its own PATH.'
+    'fix.non.paquet'          = 'installing or uninstalling a binary is never a diagnostic job.'
+
     'doc.garde.sansDossier'   = 'shims folder not found'
     'doc.garde.horsPath'      = 'shims are absent from PATH: the protection covers PowerShell only'
     'doc.garde.horsPathFix'   = 'pwsh -File installer-shims.ps1'

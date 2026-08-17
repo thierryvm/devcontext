@@ -116,18 +116,44 @@ redirected, because a question nobody can answer is worse than no question.
 
 ## 1.8.1 — publishing from a tag
 
-- **A GitHub Actions workflow on `v*`**, gated by a manual-approval environment
-  so the API key never travels alone. The key is already scoped to this package
-  and to *Push* only.
-- Translate `INSTALLATION.md` and `POURQUOI.md`, the last two documents still in
-  French. They are prose rather than program output, which is why they waited.
+- ~~**A GitHub Actions workflow on `v*`**~~ — written. Split so that everything
+  provable happens *before* a human is asked to approve, and so the API key is
+  unreachable until they do. `tools/Assert-Release.ps1` holds the decisions,
+  because a rule living in YAML can only be tried by publishing.
+- ~~`INSTALLATION.md`~~ — the French section added with `ctx init` is translated.
+- **`POURQUOI.md`** stays in French for now. It is the only document written to
+  be *argued with* rather than followed, and translating it badly would be worse
+  than leaving it: the reader who needs it can read the language it is in, and
+  the reader who cannot is not missing an instruction.
+
+**One thing this workflow does not do: write the GitHub release notes.** They
+are composed by hand, and generating them from commit subjects would replace
+something considered with something merely produced. The intended order is
+therefore to write the release on GitHub — which creates the tag — and let the
+tag start the publish.
 
 ---
 
-## 1.9.0 — macOS and Linux
+## 1.9.0 — Linux (and macOS when it can be verified)
 
 The decision layer is already portable and has been from the start; what is
 nailed to Windows is the **machine integration**, not the logic.
+
+**Linux first, and macOS only when someone can verify it.** Not a preference —
+an admission. Nobody working on this repository has a Mac, and this project's
+own recorded lesson is that what breaks is what the author is not in a position
+to see. Shipping a macOS port verified only by CI would be claiming support for
+a platform nobody has run it on.
+
+Linux does not have that problem, because **WSL is already here**. It is on the
+development machine, `ctx doctor` already reports it as uncovered, and the port
+is what puts the shims on its own `PATH`. The gap and the feature close with the
+same work — and the test bench costs nothing.
+
+Most of the work is shared anyway: POSIX shims, `PATH` through a shell rc file,
+XDG paths. Verifying that on Linux de-risks the majority of macOS, leaving
+LaunchServices and the `.app` bundle — which will ship when they can be tried,
+and be described as untried until then.
 
 Already portable, and shipped as such:
 

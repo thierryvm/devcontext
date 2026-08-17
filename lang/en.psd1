@@ -13,6 +13,27 @@
 # know nothing about.
 
 @{
+    # --- ctx: subcommands ---------------------------------------------------
+    # `ctx-doctor` and `ctx doctor` are the same thing. The second is what
+    # fingers type, because git, docker, gh and npm all use it; the first
+    # tab-completes under PowerShell.
+    'ctx.sc.inconnue'        = "Unknown subcommand: '{0}'"
+    'ctx.sc.titre'           = 'Available commands:'
+    'ctx.sc.verdict'         = 'do folder, identity and account agree?'
+    'ctx.sc.tiret'           = 'Each also exists hyphenated: ctx-doctor, ctx-list, ...'
+    'ctx.sc.aide.check'      = 'same verdict, but throws (scripts, git hooks)'
+    'ctx.sc.aide.doctor'     = 'state of this machine: tools, accounts, guards'
+    'ctx.sc.aide.editors'    = 'which editors can isolate their profile'
+    'ctx.sc.aide.end'        = 'close the active context work session'
+    'ctx.sc.aide.list'       = 'list the contexts on this machine'
+    'ctx.sc.aide.mcp'        = 'write the current project MCP servers'
+    'ctx.sc.aide.new'        = 'create a context'
+    'ctx.sc.aide.off'        = 'deactivate the context in this shell'
+    'ctx.sc.aide.root'       = 'change where contexts are stored'
+    'ctx.sc.aide.sb'         = 'which Supabase project on which account'
+    'ctx.sc.aide.shortcut'   = 'create a Desktop shortcut to a project'
+    'ctx.sc.aide.who'        = 'which context owns this folder'
+
     # --- ctx: no context created yet ----------------------------------------
     'ctx.vide.titre'         = 'No context on this machine.'
     'ctx.vide.racine'        = 'Root: {0}'
@@ -329,6 +350,7 @@
     'doc.sb.sansJeton'        = 'no token loaded in this shell'
     'doc.vercel.sansSession'  = 'Vercel project linked, but no context session loaded'
     'doc.vercel.ok'           = 'project linked, session dedicated to the context'
+    'doc.editeur.connexions'  = 'one profile per context = one secret store per context: the GitHub / Copilot sign-in has to be done ONCE in each context, and signing in to one no longer signs you out of the other'
     'doc.editeur.complet'     = 'profile and extensions per context'
     'doc.editeur.profilSeul'  = 'profile per context, extensions shared'
     'doc.editeur.methode'     = '{0} ({1})'
@@ -341,7 +363,8 @@
     'doc.garde.jonctionFix'     = 'pwsh -File installer-shims.ps1   (run again after every module update)'
     'doc.garde.desarme'       = '{0}: guard disarmed in this shell'
     'doc.garde.masque'        = 'Shim shadowed: another binary resolves before ours -- {0}'
-    'doc.garde.masqueFix'     = 'The SYSTEM PATH always precedes the user PATH, which is where the installer writes. Reinstall that tool at user scope (winget install --scope user), or take its directory out of the system PATH. Under PowerShell the module alias covers this; from bash it does not.'
+    'doc.garde.masqueFix'     = 'The SYSTEM PATH always precedes the user PATH, which is where the installer writes. Take that directory out of the system PATH (admin rights), or reinstall the tool at user scope -- winget, scoop, npm and .msi installers all offer that choice. Under PowerShell the module alias already covers this; from bash it does not.'
+    'doc.garde.masqueFixRetrait' = "That directory is ALREADY in the user PATH, behind our shims: taking it out of the SYSTEM PATH is enough (admin rights). Nothing to reinstall, the binary stays reachable, and the change undoes by pasting the line back. Under PowerShell the module alias already covers this; from bash it does not."
     'doc.garde.ok'            = 'shims in PATH, therefore reachable from every shell'
     'doc.wsl.distros'         = '{0} distribution(s) installed ({1}): the Windows shim is not on them, the guard does not cover those shells'
     'doc.wsl.fix'             = 'install the Supabase CLI there separately, or do not target a production project from WSL'

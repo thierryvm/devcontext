@@ -317,7 +317,7 @@ Describe 'Test-CtxDoctorShimsDevant' {
     It 'ne dit rien quand nos shims sont bien en tete' {
         InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
             $faux = { param($n) @("$($d[0])\$n.cmd", "C:\Program Files\Truc\$n.exe") }
-            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux |
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -PathUtilisateur @() -Resolveur $faux |
                 Should -BeNullOrEmpty
         }
     }
@@ -325,7 +325,7 @@ Describe 'Test-CtxDoctorShimsDevant' {
     It 'SIGNALE un binaire systeme resolu avant le shim' {
         InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
             $faux = { param($n) @("C:\Program Files\GitHub CLI\$n.exe", "$($d[1])\$n.cmd") }
-            $c = Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux
+            $c = Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -PathUtilisateur @() -Resolveur $faux
             $c.Verdict | Should -Be 'PROBLEME'
             $c.Detail  | Should -Match 'gh'
             $c.Detail  | Should -Match 'GitHub CLI'
@@ -337,14 +337,14 @@ Describe 'Test-CtxDoctorShimsDevant' {
         # dossier du module. Cinquieme site du meme defaut si on l'oubliait ici.
         InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
             $faux = { param($n) @("$($d[1])\$n.cmd", "C:\Program Files\Truc\$n.exe") }
-            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux |
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -PathUtilisateur @() -Resolveur $faux |
                 Should -BeNullOrEmpty
         }
     }
 
     It 'se tait quand l outil n est pas installe du tout' {
         InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
-            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur { param($n) @() } |
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -PathUtilisateur @() -Resolveur { param($n) @() } |
                 Should -BeNullOrEmpty
         }
     }
@@ -354,7 +354,7 @@ Describe 'Test-CtxDoctorShimsDevant' {
         # qui le dit. Deux constats pour une cause apprennent a lire en diagonale.
         InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
             $faux = { param($n) @("C:\Program Files\GitHub CLI\$n.exe") }
-            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -Resolveur $faux |
+            Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d -PathUtilisateur @() -Resolveur $faux |
                 Should -BeNullOrEmpty
         }
     }
@@ -362,9 +362,110 @@ Describe 'Test-CtxDoctorShimsDevant' {
     It 'nomme TOUS les outils masques, pas seulement le premier' {
         InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
             $faux = { param($n) @("C:\Program Files\$n\$n.exe", "$($d[0])\$n.cmd") }
-            $c = Test-CtxDoctorShimsDevant -Outils @('gh', 'vercel') -Dossiers $d -Resolveur $faux
+            $c = Test-CtxDoctorShimsDevant -Outils @('gh', 'vercel') -Dossiers $d -PathUtilisateur @() -Resolveur $faux
             $c.Detail | Should -Match 'gh'
             $c.Detail | Should -Match 'vercel'
+        }
+    }
+
+    It 'propose le RETRAIT quand le dossier est deja dans le PATH utilisateur' {
+        # Le cas mesure le 17 aout 2026. Le diagnostic conseillait une
+        # reinstallation alors que le dossier figurait DEJA dans le PATH
+        # utilisateur, derriere les shims : retirer l'entree systeme redondante
+        # suffisait. Un correctif trop cher est un correctif qu'on n'applique pas.
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            $faux = { param($n) @("C:\Program Files\GitHub CLI\$n.exe", "$($d[1])\$n.cmd") }
+            $c = Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d `
+                -PathUtilisateur @($d[1], 'C:\Program Files\GitHub CLI\') -Resolveur $faux
+            $c.Verdict   | Should -Be 'PROBLEME'
+            $c.Correctif | Should -Match 'PATH SYSTEME|SYSTEM PATH'
+            # Sur le NOM D'UN GESTIONNAIRE DE PAQUETS, et non sur le mot
+            # "reinstaller" : le message leger dit justement "Rien a
+            # reinstaller", et une assertion sur le verbe rougissait sur la
+            # phrase qui rassure. Ce qui doit etre absent, c'est la CONSIGNE
+            # d'aller reinstaller quelque chose.
+            $c.Correctif | Should -Not -Match 'winget|scoop|npm install'
+        }
+    }
+
+    It 'propose la portee utilisateur quand le dossier n est QUE dans le PATH systeme' {
+        InModuleScope DevContext -Parameters @{ d = $script:NosDossiers } { param($d)
+            $faux = { param($n) @("C:\Program Files\GitHub CLI\$n.exe", "$($d[1])\$n.cmd") }
+            $c = Test-CtxDoctorShimsDevant -Outils @('gh') -Dossiers $d `
+                -PathUtilisateur @($d[1]) -Resolveur $faux
+            $c.Correctif | Should -Match 'portee utilisateur|user scope'
+        }
+    }
+}
+
+Describe 'Resolve-CtxMasqueCorrectif' {
+    It 'reconnait le dossier malgre la casse et la barre finale' -ForEach @(
+        @{ Dossier = 'C:\Program Files\GitHub CLI'; Entree = 'C:\Program Files\GitHub CLI\' }
+        @{ Dossier = 'C:\Program Files\GitHub CLI\'; Entree = 'c:\program files\github cli' }
+        @{ Dossier = 'C:\PROGRAM FILES\GITHUB CLI'; Entree = 'C:\Program Files\GitHub CLI' }
+    ) {
+        # Windows ecrit ces trois formes indifferemment, et les trois designent
+        # le meme dossier. Comparer les chaines brutes conseillerait une
+        # reinstallation a cause d'une barre obliques finale.
+        InModuleScope DevContext -Parameters @{ D = $Dossier; E = $Entree } { param($D, $E)
+            Resolve-CtxMasqueCorrectif -Dossier $D -PathUtilisateur @($E) | Should -Be 'retrait-systeme'
+        }
+    }
+
+    It 'rend portee-utilisateur quand le dossier est absent du PATH utilisateur' {
+        InModuleScope DevContext {
+            Resolve-CtxMasqueCorrectif -Dossier 'C:\Program Files\GitHub CLI' `
+                -PathUtilisateur @('C:\autre', 'D:\encore') | Should -Be 'portee-utilisateur'
+        }
+    }
+
+    It 'ne suppose rien sur un dossier vide ou un PATH utilisateur absent' {
+        InModuleScope DevContext {
+            Resolve-CtxMasqueCorrectif -Dossier '' -PathUtilisateur @('C:\x') | Should -Be 'portee-utilisateur'
+            Resolve-CtxMasqueCorrectif -Dossier 'C:\x' | Should -Be 'portee-utilisateur'
+            Resolve-CtxMasqueCorrectif -Dossier 'C:\x' -PathUtilisateur @($null, '') | Should -Be 'portee-utilisateur'
+        }
+    }
+}
+
+Describe 'Test-CtxDoctorEditeurConnexions' {
+    # Le rapport disait "profil par contexte -- OK", et VS Code demandait quand
+    # meme de se connecter. Les deux etaient vrais : un profil isole EST un
+    # magasin de secrets isole, donc une connexion a ouvrir dans chaque contexte.
+    # Ce que le rapport ne disait pas, c'est la seconde moitie.
+
+    It 'enonce la consequence des qu au moins un editeur est isole' {
+        InModuleScope DevContext {
+            $c = Test-CtxDoctorEditeurConnexions -Editeurs @(
+                [pscustomobject]@{ Isole = $true; Commande = 'code' }
+                [pscustomobject]@{ Isole = $false; Commande = 'trae' }
+            )
+            $c.Verdict | Should -Be 'INFO'
+            $c.Domaine | Should -Be 'editeur'
+            $c.Sujet   | Should -Be 'connexions'
+            $c.Detail  | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    It 'se tait quand AUCUN editeur n est isole -- la phrase serait fausse' {
+        InModuleScope DevContext {
+            Test-CtxDoctorEditeurConnexions -Editeurs @(
+                [pscustomobject]@{ Isole = $false; Commande = 'code' }
+            ) | Should -BeNullOrEmpty
+
+            Test-CtxDoctorEditeurConnexions -Editeurs @() | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'juge sur le booleen Isole, jamais sur un libelle traduit' {
+        # Quatre occurrences de ce defaut dans ce depot : du code qui compare un
+        # litteral francais a un champ devenu traduit, et qui devient faux des
+        # que la sortie passe en anglais.
+        InModuleScope DevContext {
+            $c = Test-CtxDoctorEditeurConnexions -Editeurs @(
+                [pscustomobject]@{ Isole = $true; Profil = 'isolated profile'; Commande = 'code' }
+            )
+            $c | Should -Not -BeNullOrEmpty
         }
     }
 }

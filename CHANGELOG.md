@@ -1,3 +1,63 @@
+## [1.5.0] - 17 August 2026
+
+### Added
+
+- **`ctx doctor` works, and so does every other subcommand written with a
+  space.** The module shipped twelve commands spelled `ctx-doctor`, `ctx-list`,
+  `ctx-new`. That hyphen is a PowerShell habit; git, docker, gh, npm and cargo
+  all use a space, so a space is what fingers type. Until now that answered:
+
+  ```
+  Test-DevContext: A positional parameter cannot be found that accepts argument 'doctor'.
+  ```
+
+  The sentence names `Test-DevContext` — an internal function the reader has
+  never typed and will not find in any document. **A first contact that names
+  your internals teaches the reader the tool is not for them.**
+
+  Both spellings now exist and, more importantly, cannot diverge: the twelve
+  hyphenated aliases are *derived* from the same table the dispatcher reads, so
+  adding a subcommand means touching one place. A test asserts the two forms
+  resolve to the same function, and that the help screen lists every entry
+  rather than a hand-copied list that would go stale on the first addition.
+
+  `ctx` alone is still the verdict, and `ctx -Quiet` still returns a boolean —
+  the dash is tested *before* the table, or the module's most-used command would
+  have printed a help screen instead of answering.
+
+- **`ctx help`, and a useful answer to a typo.** `ctx doctr` names the word it
+  did not recognise and lists what it accepts, instead of failing on parameter
+  binding.
+
+- **The report now states what an isolated profile means for sign-ins.** It said
+  `profile and extensions per context — OK`, which reads as *everything is set*,
+  while VS Code kept asking to sign in to GitHub in that window. Both were true:
+  a profile per context **is** a secret store per context, so the sign-in has to
+  be done once in each. The half that was missing is now printed.
+
+  The real state is deliberately not measured. VS Code encrypts sessions into a
+  SQLite `state.vscdb`, where the string `github-authentication` appears in both
+  a signed-in profile and one that never was — 10 occurrences against 11, so the
+  marker distinguishes nothing. Reading it properly would mean a SQLite
+  dependency, in a module that has none, loaded on every `ctx doctor` for one
+  informational line. **A diagnostic that is wrong half the time is worse than
+  an absent one: it teaches people to stop reading it.**
+
+### Changed
+
+- **The shadowed-shim fix now names the cheap repair when it applies.** The
+  advice was *reinstall that tool at user scope (winget install --scope user)*.
+  Measured on 17 August 2026, `gh` did not need reinstalling at all: its
+  directory was **already** in the user PATH behind the shims, and appeared a
+  second time in the system PATH. Removing that redundant system entry is
+  enough — nothing reinstalled, nothing uninstalled, undone by pasting a line
+  back.
+
+  The diagnostic now distinguishes the two cases instead of prescribing the
+  expensive one to everyone, and the general message no longer assumes winget:
+  scoop, npm and .msi installers all offer a user scope. **A fix that costs more
+  than it needs to is a fix people do not apply.**
+
 ## [1.4.0] - 16 August 2026
 
 ### Added

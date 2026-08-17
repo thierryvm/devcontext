@@ -199,6 +199,12 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx-shortcut` | Write a shortcut that opens a project in its own context |
 | `code-ctx` | Open an editor with this context's profile and environment |
 
+**Every `ctx-<name>` also works as `ctx <name>`** — `ctx doctor`, `ctx list`,
+`ctx new`. The hyphen tab-completes under PowerShell; the space is what every
+other CLI taught your fingers. They are the same command, derived from one
+table, so they cannot drift apart. `ctx help` lists them, and a typo gets the
+list rather than an error about a function you have never heard of.
+
 `ctx-doctor -Json` emits machine-readable output, for CI or for an AI agent.
 
 ---
@@ -225,6 +231,13 @@ $ code .          # opens on your own profile — both windows at once
 
 Set `DEVCTX_SHIM_TRACE=1` and it says, on stderr, which context it picked and
 why. "My editor opened on the wrong account" has no answer otherwise.
+
+**Expect to sign in once per context, and read that as the mechanism working.**
+A separate profile directory is a separate secret store, so the first window you
+open for a new context will ask for GitHub and Copilot. That one sign-in is the
+price of the thing you came for: signing in for a client no longer signs you out
+of your own account, and both windows stay live side by side. `ctx doctor` says
+so in the report rather than leaving you to guess it from a login prompt.
 
 **Discovered, not declared.** `ctx-editors` looks for editors and probes what
 each one supports:

@@ -40,6 +40,7 @@ lang/
 src/                         DOT-SOURCED. Never invoked directly.
   Chemins.ps1                Path rules shared by the module and the installer
   Langue.ps1                 Key lookup, and the fallback that renders [the.key]
+  Ctx.ps1                    ctx — the subcommand table, and the dispatcher behind it
   Doctor.ps1                 ctx doctor — what works here, and on which account
   Jetons.ps1                 ctx doctor -Live — do the tokens work, on the right account
   Mcp.ps1                    ctx mcp — project-scoped MCP, any assistant
@@ -336,6 +337,24 @@ optional:
    happened to type.
 6. **Tests at both ends**: the pure decision exhaustively, and end-to-end
    against a **decoy** binary — from PowerShell *and* from git-bash.
+
+---
+
+## Adding a subcommand
+
+One line in `$script:CtxSousCommandes` in `src/Ctx.ps1`, then the two help
+strings — `ctx.sc.aide.<name>` — in **both** language files. Nothing else.
+
+The hyphenated alias, the space-separated form and the help screen are all
+generated from that table. That is the point: they were originally three
+hand-maintained lists, and three lists that must agree are three lists that
+eventually do not. What goes stale is never the one you are looking at.
+
+Do not give the dispatcher a `param()` block. It would become an advanced
+function, claim `-Verbose`, `-Debug` and the rest, and every short option a
+subcommand accepts would turn ambiguous — the failure measured on `gh api -i
+user` in 1.4.0. `tests/Alias.Tests.ps1` asserts this on the AST, and asserts it
+actually inspected each wrapper, so a rename cannot quietly empty the check.
 
 ---
 

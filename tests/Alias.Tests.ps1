@@ -117,25 +117,39 @@ Describe 'les alias ne mangent pas les options courtes' {
         $vc | Should -Match 'a,b'
     }
 
-    It 'aucun des trois ne declare de bloc param' {
+    It 'aucun des quatre wrappers ne declare de bloc param' {
         # La cause, verifiee sur l'AST plutot que sur son symptome. Un bloc
         # param() qui reviendrait un jour rougirait ici, avec la raison ecrite
         # a cote, plutot que de casser une option courte six mois plus tard.
+        #
+        # Invoke-DevCtx a rejoint la liste en 1.5.0 : il transmet les switches
+        # des sous-commandes (`ctx doctor -Live`), donc il porte exactement le
+        # meme risque que les trois autres.
         $racine = Split-Path $PSScriptRoot -Parent
         $fichiers = @(
             (Join-Path $racine 'DevContext.psm1')
             (Join-Path $racine 'src' 'Gh.ps1')
+            (Join-Path $racine 'src' 'Ctx.ps1')
         )
+        $attendus = @('Invoke-DevGh', 'Invoke-DevSupabase', 'Invoke-DevVercel', 'Invoke-DevCtx')
+        $vus = @()
         foreach ($f in $fichiers) {
             $ast = [System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$null, [ref]$null)
             $fonctions = $ast.FindAll({
                     param($n)
                     $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-                    $n.Name -in @('Invoke-DevGh', 'Invoke-DevSupabase', 'Invoke-DevVercel')
+                    $n.Name -in $attendus
                 }, $true)
             foreach ($fn in $fonctions) {
+                $vus += $fn.Name
                 $fn.Body.ParamBlock | Should -BeNullOrEmpty -Because "$($fn.Name) doit recevoir ses arguments par `$args"
             }
+        }
+
+        # Sans ceci, renommer ou deplacer un wrapper rendrait le test vert en
+        # n'inspectant plus rien -- la panne la plus couteuse d'une suite.
+        foreach ($nom in $attendus) {
+            $vus | Should -Contain $nom -Because 'chaque wrapper doit avoir ete reellement inspecte'
         }
     }
 }

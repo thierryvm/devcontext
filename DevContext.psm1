@@ -192,7 +192,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1', 'Gh.ps1', 'Vercel.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1', 'Gh.ps1', 'Vercel.ps1', 'Ctx.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -2022,13 +2022,19 @@ function Assert-DevContext {
 # ---------------------------------------------------------------------------
 
 Set-Alias -Name work      -Value Use-DevContext
-Set-Alias -Name ctx       -Value Test-DevContext
-Set-Alias -Name ctx-check -Value Assert-DevContext
-Set-Alias -Name ctx-list  -Value Get-DevContextList
-Set-Alias -Name ctx-new   -Value New-DevContext
-Set-Alias -Name ctx-off   -Value Clear-DevContext
-Set-Alias -Name ctx-end   -Value Close-DevContext
-Set-Alias -Name ctx-who   -Value Resolve-DevContextForPath
+# `ctx` n'est plus un alias vers Test-DevContext mais vers un repartiteur : il
+# accepte `ctx doctor` en plus de `ctx-doctor`, et rend une aide utile sur un
+# mot inconnu au lieu d'une erreur de liaison de parametre nommant une fonction
+# interne. Le verdict reste le comportement de `ctx` sans argument. Voir src/Ctx.ps1.
+Set-Alias -Name ctx       -Value Invoke-DevCtx
+
+# Les douze alias ctx-<nom> sont derives de la table de src/Ctx.ps1, et non
+# recopies : les deux orthographes ne peuvent donc pas diverger, et ajouter une
+# sous-commande n'oblige a toucher qu'un seul endroit.
+foreach ($sc in (Get-CtxSousCommandes).GetEnumerator()) {
+    Set-Alias -Name "ctx-$($sc.Key)" -Value $sc.Value
+}
+
 Set-Alias -Name code-ctx  -Value Open-DevCode
 Set-Alias -Name web-ctx   -Value Open-DevBrowser
 Set-Alias -Name vercel    -Value Invoke-DevVercel
@@ -2039,12 +2045,6 @@ Set-Alias -Name supabase  -Value Invoke-DevSupabase
 # Invoke-DevGh.
 Set-Alias -Name gh        -Value Invoke-DevGh
 Set-Alias -Name sb-index  -Value Update-DevSupabaseIndex
-Set-Alias -Name ctx-sb    -Value Get-DevSupabaseMap
-Set-Alias -Name ctx-doctor -Value Get-DevContextDoctor
-Set-Alias -Name ctx-mcp    -Value New-DevProjectMcp
-Set-Alias -Name ctx-editors -Value Get-DevEditorList
-Set-Alias -Name ctx-shortcut -Value New-DevShortcut
-Set-Alias -Name ctx-root     -Value Set-DevContextRoot
 
 $exportedFunctions = @(
     'Use-DevContext', 'Clear-DevContext', 'Get-DevContextList', 'New-DevContext',
@@ -2054,7 +2054,8 @@ $exportedFunctions = @(
     'Get-DevSupabaseMap', 'Get-DevContextDoctor', 'New-DevProjectMcp',
     'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl',
     'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
-    'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh'
+    'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh',
+    'Invoke-DevCtx'
 )
 $exportedAliases = @(
     'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',

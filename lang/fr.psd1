@@ -13,6 +13,27 @@
 # sur une machine dont on ne sait rien.
 
 @{
+    # --- ctx : sous-commandes ----------------------------------------------
+    # `ctx-doctor` et `ctx doctor` designent la meme chose. La seconde forme est
+    # celle que tapent les doigts, parce que git, docker, gh et npm l'utilisent
+    # tous ; la premiere se complete a la tabulation sous PowerShell.
+    'ctx.sc.inconnue'        = "Sous-commande inconnue : '{0}'"
+    'ctx.sc.titre'           = 'Commandes disponibles :'
+    'ctx.sc.verdict'         = "dossier, identite et compte concordent-ils ?"
+    'ctx.sc.tiret'           = 'Chacune existe aussi avec un tiret : ctx-doctor, ctx-list, ...'
+    'ctx.sc.aide.check'      = 'meme verdict, mais leve une erreur (scripts, hooks git)'
+    'ctx.sc.aide.doctor'     = 'etat de la machine : outils, comptes, garde-fous'
+    'ctx.sc.aide.editors'    = 'quels editeurs savent isoler leur profil'
+    'ctx.sc.aide.end'        = 'fermer la session de travail du contexte actif'
+    'ctx.sc.aide.list'       = 'lister les contextes de cette machine'
+    'ctx.sc.aide.mcp'        = 'ecrire les serveurs MCP du projet courant'
+    'ctx.sc.aide.new'        = 'creer un contexte'
+    'ctx.sc.aide.off'        = 'desactiver le contexte de ce shell'
+    'ctx.sc.aide.root'       = 'changer le dossier ou vivent les contextes'
+    'ctx.sc.aide.sb'         = 'quel projet Supabase sur quel compte'
+    'ctx.sc.aide.shortcut'   = 'creer un raccourci Bureau vers un projet'
+    'ctx.sc.aide.who'        = 'a quel contexte appartient ce dossier'
+
     # --- ctx : aucun contexte encore cree -----------------------------------
     'ctx.vide.titre'         = 'Aucun contexte sur cette machine.'
     'ctx.vide.racine'        = 'Racine : {0}'
@@ -329,6 +350,7 @@
     'doc.sb.sansJeton'        = 'aucun jeton charge dans ce shell'
     'doc.vercel.sansSession'  = 'projet Vercel lie, mais aucune session de contexte chargee'
     'doc.vercel.ok'           = 'projet lie, session dediee au contexte'
+    'doc.editeur.connexions'  = "un profil par contexte = un magasin de secrets par contexte : la connexion GitHub / Copilot est a ouvrir UNE FOIS dans chaque contexte, et se connecter dans l'un ne deconnecte plus l'autre"
     'doc.editeur.complet'     = 'profil et extensions par contexte'
     'doc.editeur.profilSeul'  = 'profil par contexte, extensions communes'
     'doc.editeur.methode'     = '{0} ({1})'
@@ -341,7 +363,8 @@
     'doc.garde.jonctionFix'     = 'pwsh -File installer-shims.ps1   (a relancer apres chaque mise a jour du module)'
     'doc.garde.desarme'       = '{0} : garde-fou desarme dans ce shell'
     'doc.garde.masque'        = 'Shim masque : un binaire est resolu avant le notre -- {0}'
-    'doc.garde.masqueFix'     = "Le PATH SYSTEME precede toujours le PATH utilisateur, ou l'installateur ecrit. Reinstaller cet outil en portee utilisateur (winget install --scope user), ou sortir son dossier du PATH systeme. Sous PowerShell l'alias du module couvre le cas ; depuis bash, non."
+    'doc.garde.masqueFix'     = "Le PATH SYSTEME precede toujours le PATH utilisateur, ou l'installateur ecrit. Sortir ce dossier du PATH systeme (droits admin), ou reinstaller l'outil en portee utilisateur -- winget, scoop, npm et les installeurs .msi proposent tous ce choix. Sous PowerShell l'alias du module couvre deja le cas ; depuis bash, non."
+    'doc.garde.masqueFixRetrait' = "Ce dossier est DEJA dans le PATH utilisateur, derriere nos shims : le sortir du PATH SYSTEME suffit (droits admin). Rien a reinstaller, le binaire reste joignable, et la manoeuvre s'annule en recollant la ligne. Sous PowerShell l'alias du module couvre deja le cas ; depuis bash, non."
     # Dit ce qui a ete VERIFIE -- les shims sont joignables -- et non ce qui
     # serait agreable a conclure. Qu'ils gagnent reellement la resolution est une
     # autre question, et c'est le controle 'priorite' qui y repond : l'ancienne

@@ -566,7 +566,14 @@ function Get-DevContextDoctor {
     #
     # La question qu'un raccourci ne pose jamais : si j'ouvre ce projet avec cet
     # editeur, ai-je mes propres sessions, ou celles de tout le monde ?
-    foreach ($e in (Get-DevEditorList)) {
+    $editeurs = @(Get-DevEditorList)
+
+    # Dit AVANT la liste : c'est la ligne qui explique pourquoi les suivantes,
+    # toutes vertes, s'accompagnent quand meme d'une invite a se connecter.
+    $connexions = Test-CtxDoctorEditeurConnexions -Editeurs $editeurs
+    if ($connexions) { $checks.Add($connexions) }
+
+    foreach ($e in $editeurs) {
         # Sur le champ BOOLEEN, jamais sur le libelle affiche : celui-ci est
         # traduit, et le comparer a un litteral francais faisait rapporter
         # chaque editeur comme non isole des que la sortie passait en anglais.
@@ -690,6 +697,7 @@ function Test-CtxDoctorShimsDevant {
     param(
         [string[]]$Outils = @('supabase', 'gh', 'vercel'),
         [string[]]$Dossiers = (Get-CtxShimDirs),
+        [string[]]$PathUtilisateur = (Get-CtxPathUtilisateur),
         [scriptblock]$Resolveur = {
             param($nom)
             $trouves = Get-Command $nom -CommandType Application, ExternalScript -All -ErrorAction SilentlyContinue
@@ -715,15 +723,138 @@ function Test-CtxDoctorShimsDevant {
             }).Count -gt 0
         if (-not $nousSommesLa) { continue }
 
-        $masques += [pscustomobject]@{ Outil = $outil; Gagnant = (Split-Path $premier -Parent) }
+        $dossierGagnant = Split-Path $premier -Parent
+        $masques += [pscustomobject]@{
+            Outil     = $outil
+            Gagnant   = $dossierGagnant
+            Correctif = Resolve-CtxMasqueCorrectif -Dossier $dossierGagnant -PathUtilisateur $PathUtilisateur
+        }
     }
 
     if ($masques.Count -eq 0) { return }
 
     $detail = ($masques | ForEach-Object { "$($_.Outil) -> $($_.Gagnant)" }) -join ' ; '
+
+    # Nommer le correctif LEGER quand il suffit pour tous. Proposer une
+    # reinstallation la ou une ligne de PATH regle le probleme fait payer au
+    # lecteur un cout qu'il n'avait pas a payer -- et le decourage d'agir.
+    $texte = if (@($masques | Where-Object { $_.Correctif -ne 'retrait-systeme' }).Count -eq 0) {
+        T 'doc.garde.masqueFixRetrait'
+    }
+    else { T 'doc.garde.masqueFix' }
+
     New-CtxCheck -Domaine 'garde-fou' -Sujet 'priorite' -Verdict 'PROBLEME' `
         -Detail (T 'doc.garde.masque' $detail) `
-        -Correctif (T 'doc.garde.masqueFix')
+        -Correctif $texte
+}
+
+function Test-CtxDoctorEditeurConnexions {
+    <#
+      PURE. La CONSEQUENCE d'un profil isole sur les connexions, enoncee une
+      fois -- plutot que devinee editeur par editeur.
+
+      LE PROBLEME QU'ELLE REGLE
+
+      Le rapport disait "profil et extensions par contexte -- OK", ce qui se lit
+      "tout est en place". VS Code affichait pourtant "Sign in to GitHub" dans la
+      fenetre du contexte, et la conclusion naturelle etait que l'isolation avait
+      echoue. Elle avait au contraire parfaitement fonctionne : un profil par
+      contexte, c'est un magasin de secrets par contexte, donc une connexion a
+      ouvrir une fois dans chacun. Mesure le 17 aout 2026 sur le contexte
+      goldteam.
+
+      POURQUOI L'ETAT REEL N'EST PAS MESURE
+
+      Tentative faite le meme jour, et abandonnee sur mesure. VS Code chiffre ses
+      sessions (DPAPI) dans le state.vscdb du profil, une base SQLite. La chaine
+      'github-authentication' y apparait dans les DEUX cas -- profil connecte et
+      profil qui ne l'a jamais ete -- car l'extension ecrit ses cles quoi qu'il
+      arrive : 10 occurrences cote connecte, 11 cote non connecte. Le marqueur ne
+      distingue donc rien.
+
+      Lire la base pour de vrai demanderait un pilote SQLite, c'est-a-dire une
+      dependance, dans un module qui n'en a aucune -- et elle serait chargee a
+      chaque `ctx doctor` pour une ligne d'information.
+
+      Alors on enonce ce qui est VRAI SANS MESURE, au lieu d'afficher un verdict
+      auquel on ne pourrait pas se fier. Un diagnostic qui se trompe une fois sur
+      deux est pire qu'un diagnostic absent : il enseigne a ne plus le lire.
+
+      Rend $null quand aucun editeur n'est isole : la phrase serait alors fausse.
+    #>
+    [CmdletBinding()]
+    param([object[]]$Editeurs = @())
+
+    # Sur le champ BOOLEEN, jamais sur le libelle affiche : celui-ci est traduit.
+    # Meme piege que la boucle appelante, et il a deja frappe quatre fois.
+    if (@($Editeurs | Where-Object { $_.Isole }).Count -eq 0) { return }
+
+    New-CtxCheck -Domaine 'editeur' -Sujet 'connexions' -Verdict 'INFO' `
+        -Detail (T 'doc.editeur.connexions')
+}
+
+function Get-CtxPathUtilisateur {
+    <#
+      GATHERING. Les entrees du PATH UTILISATEUR, lues au registre.
+
+      $env:PATH ne convient pas : il est la CONCATENATION du systeme et de
+      l'utilisateur, et la question posee ici est precisement de savoir dans
+      laquelle des deux moities un dossier se trouve.
+
+      Lecture BRUTE (DoNotExpandEnvironmentNames) : un PATH utilisateur peut
+      etre un REG_EXPAND_SZ contenant %USERPROFILE%, et le developper ici
+      comparerait un chemin developpe a un chemin qui ne l'est pas.
+
+      Rend un tableau vide plutot que de lever : un diagnostic qui plante est
+      moins utile qu'un diagnostic qui repond "je ne sais pas".
+    #>
+    [CmdletBinding()]
+    param()
+    try {
+        $cle = Get-Item 'HKCU:\Environment' -ErrorAction Stop
+        $brut = $cle.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        @($brut -split ';' | Where-Object { $_.Trim() })
+    }
+    catch { @() }
+}
+
+function Resolve-CtxMasqueCorrectif {
+    <#
+      PURE. Quel correctif proposer pour un binaire qui masque notre shim ?
+
+      Deux situations, et leurs couts n'ont rien de comparable :
+
+        'retrait-systeme'    -- le dossier du binaire est AUSSI dans le PATH
+            utilisateur, apres nos shims. Le retirer du PATH SYSTEME suffit
+            alors : le shim passe premier, et le vrai binaire reste joignable
+            par l'entree utilisateur. Rien n'est reinstalle, rien n'est
+            desinstalle, et la manoeuvre s'annule en recollant une ligne.
+
+        'portee-utilisateur' -- il n'est QUE dans le PATH systeme. Il faut
+            alors reinstaller l'outil en portee utilisateur, ou ajouter son
+            dossier au PATH utilisateur derriere nos shims.
+
+      Le 17 aout 2026, `gh` etait dans le PREMIER cas et le diagnostic
+      conseillait le second : une reinstallation pour un probleme que le retrait
+      d'une entree redondante reglait. Un correctif trop cher est un correctif
+      qu'on ne applique pas.
+
+      Comparaison normalisee -- casse et barre oblique finale : Windows ecrit
+      indifferemment 'C:\Program Files\GitHub CLI' et 'C:\Program Files\GitHub CLI\',
+      et les deux designent le meme dossier.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Dossier,
+        [string[]]$PathUtilisateur = @()
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Dossier)) { return 'portee-utilisateur' }
+
+    $cible = $Dossier.Trim().TrimEnd('\').ToLowerInvariant()
+    $entrees = @($PathUtilisateur | Where-Object { $_ } | ForEach-Object { $_.Trim().TrimEnd('\').ToLowerInvariant() })
+
+    if ($entrees -contains $cible) { 'retrait-systeme' } else { 'portee-utilisateur' }
 }
 
 function Test-CtxDoctorWsl {

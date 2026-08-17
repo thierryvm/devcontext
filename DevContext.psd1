@@ -48,6 +48,7 @@
         'Get-CtxSupabasePaires'
         'Get-CtxSupabaseRefDepuisUrl'
         'Get-DevSupabaseMap'
+        'Invoke-DevCtx'
         'Invoke-DevGh'
         'Invoke-DevSupabase'
         'Invoke-DevVercel'

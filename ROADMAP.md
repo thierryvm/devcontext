@@ -64,18 +64,35 @@ cover.
 
 ---
 
-## 1.5.0 — make it easy to start
+## 1.5.0 — shipped, 17 August 2026
+
+Commands you can guess. `ctx doctor` used to fail on parameter binding and name
+an internal function in the error; both spellings now work, derived from one
+table so they cannot diverge. A typo gets the list instead of a stack trace.
+
+The report also stopped implying that an isolated editor profile was the end of
+the story: it **is** a separate secret store, so the GitHub sign-in has to be
+done once per context, and that is now said rather than discovered.
+
+The shadowed-shim advice learned to distinguish the cheap repair from the
+expensive one, instead of prescribing a reinstall to everyone.
+
+---
+
+## 1.6.0 — make it easy to start
 
 Adoption dies at the first step. Today a new user must clone, symlink, run an
 installer, then create contexts by hand.
 
 - **`ctx init`** — one interactive command that detects existing accounts,
   proposes contexts, and creates them.
-- **PowerShell Gallery** — `Install-Module DevContext`. The manifest is already
-  publishable; this is the single biggest change to how far the tool travels.
 - **`ctx doctor --fix`** — apply the correction a finding already spells out,
   after confirmation. The diagnostic already knows the answer; making the human
   retype it is friction for nothing.
+- **Publishing from a tag** — a GitHub Actions workflow on `v*`, gated by a
+  manual-approval environment so the API key never travels alone.
+
+~~**PowerShell Gallery**~~ — shipped in 1.3.0. `Install-Module DevContext`.
 
 ---
 

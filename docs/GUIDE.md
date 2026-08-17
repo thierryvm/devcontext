@@ -347,9 +347,12 @@ Full list with reasoning: [`SECURITY.md`](../SECURITY.md).
 **Start here, always:**
 
 ```powershell
-ctx-doctor          # what works in this folder, and on which account
-ctx-doctor -Live    # also checks the tokens still work, on the right account
+ctx doctor          # what works in this folder, and on which account
+ctx doctor -Live    # also checks the tokens still work, on the right account
 ```
+
+`ctx-doctor` with the hyphen does exactly the same thing — both spellings are the
+same command. `ctx help` lists everything available.
 
 `-Live` is opt-in because a diagnostic that reaches the network without being
 asked is one people stop running. It never prints a token — only the name of the
@@ -363,6 +366,7 @@ key holding it.
 | Push goes to the wrong account | The remote URL carries `login@`, which the `insteadOf` rule cannot match. `git remote set-url origin https://github.com/<org>/<repo>.git` |
 | `Access token not provided` from Supabase | Normal outside a context. Run `work <context>`. |
 | The editor opened on the wrong account | `$env:DEVCTX_SHIM_TRACE = 1` then reopen — it will say why. |
+| The editor asks me to sign in to GitHub again | Expected, once per context: a separate profile is a separate secret store. That is what stops a client sign-in from signing you out of your own account. |
 | A shortcut opens the shared profile | It targets the executable directly. `ctx-shortcut -Path <project> -Force` |
 | `ctx-new` seems to hang | It is waiting for a passphrase it cannot receive. Use `-NoKey`, or run it in a real terminal. |
 

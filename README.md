@@ -99,17 +99,24 @@ Requires **Windows** and **PowerShell 7+**.
 
 ```powershell
 Install-PSResource DevContext        # or: Install-Module DevContext
+ctx init                             # tells you what is left, and how
 ```
 
-Then one more command, which is not optional:
+**`ctx init` is the one command to remember.** It reports what is already in
+place and what is missing, then prints the exact command for each remaining
+step. It installs nothing on your behalf and creates no context for you — both
+are decisions, not chores — and it does not prompt at all when input is
+redirected, so an agent or a CI job gets the same list in a form it can act on.
+
+The step it will almost certainly name first:
 
 ```powershell
 pwsh -NoProfile -File (Join-Path (Get-Module DevContext -ListAvailable)[0].ModuleBase 'installer-shims.ps1')
 ```
 
-That second line is what puts the production guard in `PATH`. Without it the
-guard exists only inside a PowerShell session that imported the module — which
-covers neither git-bash, nor npm scripts, nor `execFileSync` from Node, nor an AI
+That line is what puts the production guard in `PATH`. Without it the guard
+exists only inside a PowerShell session that imported the module — which covers
+neither git-bash, nor npm scripts, nor `execFileSync` from Node, nor an AI
 agent's shell. That is, none of the callers most likely to make the mistake.
 
 **Run it again after every module update.** `PATH` names a stable path that never
@@ -185,6 +192,7 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 | Command | What it answers |
 |---|---|
+| `ctx init` | What is missing on this machine, and the exact command for each |
 | `work <ctx>` | Load an identity into this terminal |
 | `ctx` | Do the folder, the identity and the account agree? **GO / NO-GO** |
 | `ctx-doctor` | What works in this folder, and on which account? |

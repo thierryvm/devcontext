@@ -99,17 +99,28 @@ with the reason, because an unexplained silence reads as *nothing more to do*.
 
 ---
 
-## 1.8.0 — make it easy to start
+## 1.8.0 — shipped, 17 August 2026
 
-Adoption dies at the first step. Today a new user must clone, symlink, run an
-installer, then create contexts by hand.
+`ctx init`. Adoption used to die at the first step — clone, symlink, installer,
+then a five-parameter command to type by hand.
 
-- **`ctx init`** — one interactive command that detects existing accounts,
-  proposes contexts, and creates them.
-- **Publishing from a tag** — a GitHub Actions workflow on `v*`, gated by a
-  manual-approval environment so the API key never travels alone.
+It guides rather than takes over: it reports what is in place, walks what is
+missing in order, and prints every step it does not perform as the exact command
+that performs it. It installs no module and creates no context on your behalf —
+both are decisions, not chores. And it refuses to prompt when input is
+redirected, because a question nobody can answer is worse than no question.
 
 ~~**PowerShell Gallery**~~ — shipped in 1.3.0. `Install-Module DevContext`.
+
+---
+
+## 1.8.1 — publishing from a tag
+
+- **A GitHub Actions workflow on `v*`**, gated by a manual-approval environment
+  so the API key never travels alone. The key is already scoped to this package
+  and to *Push* only.
+- Translate `INSTALLATION.md` and `POURQUOI.md`, the last two documents still in
+  French. They are prose rather than program output, which is why they waited.
 
 ---
 

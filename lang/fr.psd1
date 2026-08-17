@@ -13,6 +13,23 @@
 # sur une machine dont on ne sait rien.
 
 @{
+    # --- ctx init -----------------------------------------------------------
+    # La premiere commande, celle ou l'adoption se gagne ou se perd. Elle GUIDE :
+    # elle demande avant chaque changement, et toute etape qu'elle n'execute pas
+    # est affichee sous forme de la commande exacte qui l'execute.
+    'init.titre'              = 'Mise en place de DevContext sur cette machine'
+    'init.etape.coffre'       = 'Coffre a secrets (SecretManagement + SecretStore)'
+    'init.etape.shims'        = 'Garde-fous joignables depuis tous les shells'
+    'init.etape.contexte'     = 'Au moins un contexte de travail'
+    'init.racine'             = 'Les contextes vivent dans : {0}'
+    'init.racineChanger'      = 'Pour les ranger ailleurs :   ctx root <dossier>'
+    'init.rienAFaire'         = 'Tout est en place. Rien a faire.'
+    'init.suite'              = "Pour l'etat detaille de la machine : ctx doctor"
+    'init.nonInteractif'      = "Entree redirigee : aucune question ne peut etre posee ici. Voici, dans l'ordre, ce qu'il reste a lancer."
+    'init.manuel'             = 'A lancer soi-meme (installer un module est une dependance nouvelle) :'
+    'init.action'             = 'mettre en place'
+    'init.contexteProposition' = 'Commande pre-remplie a partir de git et gh -- a relire, puis a lancer :'
+
     # --- ctx : sous-commandes ----------------------------------------------
     # `ctx-doctor` et `ctx doctor` designent la meme chose. La seconde forme est
     # celle que tapent les doigts, parce que git, docker, gh et npm l'utilisent
@@ -25,6 +42,7 @@
     'ctx.sc.aide.doctor'     = 'etat de la machine : outils, comptes, garde-fous'
     'ctx.sc.aide.editors'    = 'quels editeurs savent isoler leur profil'
     'ctx.sc.aide.end'        = 'fermer la session de travail du contexte actif'
+    'ctx.sc.aide.init'       = 'mettre en place DevContext sur cette machine'
     'ctx.sc.aide.list'       = 'lister les contextes de cette machine'
     'ctx.sc.aide.mcp'        = 'ecrire les serveurs MCP du projet courant'
     'ctx.sc.aide.new'        = 'creer un contexte'

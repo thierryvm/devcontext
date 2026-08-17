@@ -16,11 +16,11 @@ Stated honestly, because a coverage claim nobody can check is worth nothing.
 
 | Level | File | Guarantees |
 |---|---|---|
-| Decision | `Guard`, `Doctor`, `Jetons`, `Mcp`, `Installer`, `Editors`, `Shortcuts` | Every return path of every pure decision, exhaustively, without touching a machine |
-| Contract | `Manifest` | psd1 ↔ psm1 export parity, format file validity — **without importing the module** |
+| Decision | `Guard`, `Doctor`, `Jetons`, `Mcp`, `Installer`, `Editors`, `Shortcuts`, `Fix`, `Init`, `ProfilComptes` | Every return path of every pure decision, exhaustively, without touching a machine |
+| Contract | `Manifest`, `Ctx` | psd1 ↔ module export parity — read from the LOADED module, since a derived list is invisible to text analysis — plus format file validity, and that `ctx-<name>` and `ctx <name>` cannot diverge |
 | Resolution | `ContextResolution` | Which context owns a folder, including the prefix trap and nesting |
 | Integration | `Shim`, `SupabaseIndex`, `SupabaseMap` | A whole fake world under `$TestDrive`: context, index, git repository, decoy binary |
-| Cross-shell | `Shell` | The guard exercised from cmd.exe **and git-bash**, not only PowerShell |
+| Cross-shell | `Shell`, `Alias` | The guard exercised from cmd.exe **and git-bash**, not only PowerShell; and the four wrappers passing short options and comma lists through verbatim |
 | Repository security | `Securite` | No credential in any tracked file; the full diagnostic run with the machine's **real** tokens, asserting none appear |
 | Static analysis | `Analyse` | PSScriptAnalyzer, comment-based help on every exported command, verb-noun conformance |
 

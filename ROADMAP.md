@@ -186,6 +186,37 @@ suite already covers, never a second implementation of the same rules living in
 a UI. That is the whole reason the decisions were kept pure and separate from
 the gathering.
 
+**It runs commands, never a shell.** An embedded terminal was considered and
+deliberately rejected. Not for effort — for what it would undo.
+
+A shell inherits the environment of the window hosting it. Launch the dashboard
+without a context and that terminal has none, so `supabase db push` typed inside
+our own window runs unguarded — the tool failing its promise in its own
+interface. `work` also exports tokens as environment variables: today, seeing
+them means having deliberately opened a terminal; embedded, one `env` during a
+screen share does it by accident. And the day a repository name, a branch or a
+project label read from an API can reach that input, there is command injection
+in the tool that holds the keys.
+
+What ships instead is a **command console**, which is the same value without the
+shell:
+
+| | |
+|---|---|
+| Shows | the exact command behind every action — the CLI already prints them (`Correctif`, `ctx init` steps, `-Fix`) |
+| One click | copies it |
+| A second, explicit click | runs it — from the **module's own commands only**, never free text |
+| Output | read-only |
+| Every run | stamped with the context it ran under, and refused when none is active — the same `ctx` verdict the CLI applies |
+
+Verification, tests, discoverability and the teaching effect — *so that is the
+command* — without an arbitrary shell inside the credential tool. It also stays
+inside the rule above: a console that can only run the module's commands is a
+reading of the CLI, not a second implementation of it.
+
+If a real terminal is ever added, it is opt-in, launched **with** an explicit
+context, the context name in the tab title, and never the default view.
+
 **It stays local.** No account, no cloud, no telemetry. A tool whose whole
 purpose is to keep credentials apart cannot ask you to send your credential
 topology anywhere.
@@ -230,10 +261,7 @@ needs to live in the tray. The decision waits until the CLI surface has settled
 - **Storing secrets anywhere but the OS vault.**
 - **Being a Claude tool, a Cursor tool, or any vendor's tool.** MCP is an open
   standard and this module treats it as one.
-- **Linux and macOS as first-class targets** — for now. The core idea is
-  portable, but the current implementation is deeply Windows: registry, DPAPI,
-  `HKCU\Environment`, git-bash. A port is a rewrite of the plumbing, not a
-  flag. Worth doing, not worth pretending is close.
+- **An embedded shell in the dashboard.** Reasoning under 2.0.
 
 ---
 

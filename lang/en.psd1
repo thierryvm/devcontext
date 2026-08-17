@@ -351,6 +351,8 @@
     'doc.vercel.sansSession'  = 'Vercel project linked, but no context session loaded'
     'doc.vercel.ok'           = 'project linked, session dedicated to the context'
     'doc.editeur.connexions'  = 'one profile per context = one secret store per context: the GitHub / Copilot sign-in has to be done ONCE in each context, and signing in to one no longer signs you out of the other'
+    'doc.editeur.compteEtranger' = "the '{0}' context profile carries an identity from ANOTHER context: {1}. It only expects '{2}'. Copilot, the Pull Request extension and GitLens can act as that account in this context's windows."
+    'doc.editeur.compteEtrangerFix' = "In that context's window: Accounts menu (bottom left) > sign out of the foreign account. If it is there for Settings Sync, switch Sync to the MICROSOFT account instead -- VS Code accepts it too, and the GitHub account goes back to being one per context. One GitHub account living in several profiles also makes them compete for the same token."
     'doc.editeur.complet'     = 'profile and extensions per context'
     'doc.editeur.profilSeul'  = 'profile per context, extensions shared'
     'doc.editeur.methode'     = '{0} ({1})'

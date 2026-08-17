@@ -71,6 +71,15 @@ older lines receive no backports.
   — not only the launcher we wrote. What each editor actually supports is
   probed, never assumed, and probing a GUI-only editor is refused rather than
   attempted (see the limits below).
+- **A foreign identity inside a context profile is reported.** Isolation stops
+  sessions from overwriting each other; it never stopped anyone signing into the
+  *wrong account* inside the *right profile*. `ctx doctor` now names it when one
+  context's editor profile carries another context's GitHub account — the case
+  where Copilot, the Pull Request extension and GitLens act under a personal
+  identity in a client window. Detection matches key names by **exact search
+  over the closed set of logins the manifests declare**, bounded so that
+  `github-thier` cannot match `github-thierryvm`. Encrypted values are never
+  read.
 - **Diagnostics never echo a *credential*.** `ctx doctor` reports the *name* of
   a key, never its value. Messages that can carry data from elsewhere — API
   errors, the output of a binary found on `PATH` — pass through

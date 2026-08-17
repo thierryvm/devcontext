@@ -351,6 +351,8 @@
     'doc.vercel.sansSession'  = 'projet Vercel lie, mais aucune session de contexte chargee'
     'doc.vercel.ok'           = 'projet lie, session dediee au contexte'
     'doc.editeur.connexions'  = "un profil par contexte = un magasin de secrets par contexte : la connexion GitHub / Copilot est a ouvrir UNE FOIS dans chaque contexte, et se connecter dans l'un ne deconnecte plus l'autre"
+    'doc.editeur.compteEtranger' = "le profil du contexte '{0}' porte une identite d'un AUTRE contexte : {1}. Il n'attend que '{2}'. Copilot, l'extension Pull Request et GitLens peuvent agir sous ce compte dans les fenetres de ce contexte."
+    'doc.editeur.compteEtrangerFix' = "Dans la fenetre du contexte : menu Comptes (en bas a gauche) > se deconnecter du compte etranger. Si c'est pour la synchronisation des reglages, la basculer sur le compte MICROSOFT : VS Code l'accepte aussi, et le compte GitHub redevient propre a chaque contexte. Un meme compte GitHub vivant dans plusieurs profils les met aussi en concurrence sur le meme jeton."
     'doc.editeur.complet'     = 'profil et extensions par contexte'
     'doc.editeur.profilSeul'  = 'profil par contexte, extensions communes'
     'doc.editeur.methode'     = '{0} ({1})'

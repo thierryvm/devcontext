@@ -371,6 +371,14 @@
     'doc.editeur.connexions'  = "un profil par contexte = un magasin de secrets par contexte : la connexion GitHub / Copilot est a ouvrir UNE FOIS dans chaque contexte, et se connecter dans l'un ne deconnecte plus l'autre"
     'doc.editeur.compteEtranger' = "le profil du contexte '{0}' porte une identite d'un AUTRE contexte : {1}. Il n'attend que '{2}'. Copilot, l'extension Pull Request et GitLens peuvent agir sous ce compte dans les fenetres de ce contexte."
     'doc.editeur.compteEtrangerFix' = "Dans la fenetre du contexte : menu Comptes (en bas a gauche) > se deconnecter du compte etranger. Si c'est pour la synchronisation des reglages, la basculer sur le compte MICROSOFT : VS Code l'accepte aussi, et le compte GitHub redevient propre a chaque contexte. Un meme compte GitHub vivant dans plusieurs profils les met aussi en concurrence sur le meme jeton."
+    # Ces quatre messages ENSEIGNENT autant qu'ils signalent. Quelqu'un qui lit
+    # « dossier approuve hors contexte » sans savoir ce que ca coute referme le
+    # rapport ; le constat doit donc nommer la consequence, et le correctif la
+    # regle generale, pas seulement le geste.
+    'doc.agent.confianceEtrangere' = "un agent ouvert ici peut aussi ecrire dans le contexte '{1}' : {2} (approuve en portee {3}). Vous travaillez dans '{0}'. Le cloisonnement de DevContext porte sur l'IDENTITE, jamais sur les ecritures : rien n'empeche un fichier de ce projet d'atterrir dans l'arborescence d'un autre client."
+    'doc.agent.confianceEtrangereFix' = "Retirer ces dossiers de permissions.additionalDirectories du fichier de portee utilisateur, puis les rouvrir au cas par cas dans le .claude/settings.json DU PROJET concerne. La regle : une approbation ponctuelle enregistree globalement vaut pour toutes les sessions futures, y compris celles d'un autre client. C'est ainsi qu'une liste grossit sans que personne ne la relise."
+    'doc.agent.confianceHorsContexte' = "{0} dossier(s) approuve(s) en portee utilisateur hors de tout contexte : {1}. Ils sont actifs dans CHAQUE session, quel que soit le projet ouvert."
+    'doc.agent.confianceHorsContexteFix' = "Relire cette liste : chaque entree a ete approuvee pour un besoin d'un jour et n'a jamais expire. Ce qui ne sert qu'a un projet se declare dans le .claude/settings.json de ce projet ; la portee utilisateur ne devrait porter que ce qui vaut partout. Une liste qu'on n'a jamais relue n'est plus une decision, c'est un residu."
     'doc.editeur.complet'     = 'profil et extensions par contexte'
     'doc.editeur.profilSeul'  = 'profil par contexte, extensions communes'
     'doc.editeur.methode'     = '{0} ({1})'

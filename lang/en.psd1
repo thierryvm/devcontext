@@ -371,6 +371,14 @@
     'doc.editeur.connexions'  = 'one profile per context = one secret store per context: the GitHub / Copilot sign-in has to be done ONCE in each context, and signing in to one no longer signs you out of the other'
     'doc.editeur.compteEtranger' = "the '{0}' context profile carries an identity from ANOTHER context: {1}. It only expects '{2}'. Copilot, the Pull Request extension and GitLens can act as that account in this context's windows."
     'doc.editeur.compteEtrangerFix' = "In that context's window: Accounts menu (bottom left) > sign out of the foreign account. If it is there for Settings Sync, switch Sync to the MICROSOFT account instead -- VS Code accepts it too, and the GitHub account goes back to being one per context. One GitHub account living in several profiles also makes them compete for the same token."
+    # These four TEACH as much as they report. Someone reading "trusted folder
+    # outside any context" without knowing what it costs closes the report, so
+    # the finding names the consequence and the fix states the rule rather than
+    # only the gesture.
+    'doc.agent.confianceEtrangere' = "an agent opened here can also write into the '{1}' context: {2} (trusted at {3} scope). You are working in '{0}'. DevContext partitions IDENTITY, never writes: nothing stops a file from this project landing in another client's tree."
+    'doc.agent.confianceEtrangereFix' = "Remove those folders from permissions.additionalDirectories in the user-scope file, then grant them case by case in the .claude/settings.json OF THE PROJECT that needs them. The rule: a one-off approval recorded globally applies to every future session, including another client's. That is how such a list grows without anyone ever rereading it."
+    'doc.agent.confianceHorsContexte' = "{0} folder(s) trusted at user scope and outside every context: {1}. They are active in EVERY session, whichever project is open."
+    'doc.agent.confianceHorsContexteFix' = "Reread this list: each entry was approved for one day's need and never expired. What serves one project belongs in that project's .claude/settings.json; user scope should carry only what is true everywhere. A list nobody has reread is no longer a decision, it is a residue."
     'doc.editeur.complet'     = 'profile and extensions per context'
     'doc.editeur.profilSeul'  = 'profile per context, extensions shared'
     'doc.editeur.methode'     = '{0} ({1})'

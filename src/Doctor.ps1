@@ -610,6 +610,16 @@ function Get-DevContextDoctor {
         }
     }
 
+    # --- agents ------------------------------------------------------------
+    #
+    # Le reste du module cloisonne QUI ON EST. Rien n'y regardait OU CA ECRIT --
+    # alors que les agents portent deja une frontiere, et qu'elle s'elargit une
+    # approbation ponctuelle a la fois, en portee utilisateur, sans que personne
+    # ne relise jamais la liste.
+    foreach ($c in (Test-CtxDoctorAgentConfiance -Faits (Get-CtxAgentConfianceFacts -Dossier $dossier) -Contexte $proprio)) {
+        $checks.Add($c)
+    }
+
     # --- raccourcis --------------------------------------------------------
     #
     # Le seul lanceur que le PATH ne peut pas atteindre. Un raccourci qui vise

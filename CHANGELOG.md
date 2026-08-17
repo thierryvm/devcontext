@@ -2,6 +2,47 @@
 
 ### Added
 
+- **`ctx doctor` now reads where an agent is allowed to write.** Everything else
+  in this module partitions *who you are* — git identity, tokens, sessions.
+  Nothing looked at *where it writes*, and an agent running in a client folder
+  has the same filesystem rights as any process.
+
+  Agents already carry a boundary: the working directory, widened by a list of
+  trusted folders. The defect is not a missing mechanism — it is that the list
+  is written at **user scope**, one one-off approval at a time, and nobody ever
+  rereads it.
+
+  Measured on the author's machine on 17 Aug 2026: **14 folders trusted
+  globally**, including another context's root, the desktop, a notes vault, and
+  a session folder created for one day's need. All of them active in *every*
+  session, including one opened in a client folder. Zero deny rules.
+
+  That is precisely the failure this module exists to catch — *the folder
+  decides, never the session* — except here a session's decisions had become
+  permanent global state.
+
+  A trusted folder belonging to **another context** is a `PROBLEME`, the same
+  verdict and the same family as the foreign-identity check from 1.6.0: a client
+  folder whose session can write into another client's tree is a confidentiality
+  question, not untidiness. Folders outside every context, trusted globally, are
+  an `ATTENTION`. A folder trusted at **project** scope is never reported —
+  that is the practice being recommended, and flagging it would teach the
+  opposite of what the fix says.
+
+  Both messages state the consequence rather than only the fact, and both fixes
+  state the rule rather than only the gesture. A finding that says *this is
+  wrong* without saying what it costs teaches nothing, and gets skimmed.
+
+  The owner of each folder is resolved through `Resolve-DevContextForPath` — the
+  same function that arms `ctx`. Reusing it is not a saving of lines: it carries
+  the prefix trap (`Apps` must not match `Apps-Autre`) this repository has
+  already paid for three times.
+
+  **It reports; it does not confine.** A permission rule is honoured by the
+  agent, never enforced by the kernel. Real write confinement needs a filesystem
+  filter driver or a container. `SECURITY.md` says so in the table of what is
+  deliberately not protected, at the same length as the rest.
+
 - **Publishing from a tag, behind a manual approval.** Pushing `vX.Y.Z` now runs
   a release workflow, and the shape of that workflow is the point.
 

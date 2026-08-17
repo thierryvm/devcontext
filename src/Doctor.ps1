@@ -573,6 +573,11 @@ function Get-DevContextDoctor {
     $connexions = Test-CtxDoctorEditeurConnexions -Editeurs $editeurs
     if ($connexions) { $checks.Add($connexions) }
 
+    # Une identite d'un autre contexte s'est-elle installee dans ce profil ?
+    # L'isolation empeche les sessions de s'ecraser ; elle n'empeche pas de se
+    # connecter au mauvais compte DANS le bon profil.
+    foreach ($c in (Test-CtxDoctorProfilComptes -Faits (Get-CtxProfilComptesFacts))) { $checks.Add($c) }
+
     foreach ($e in $editeurs) {
         # Sur le champ BOOLEEN, jamais sur le libelle affiche : celui-ci est
         # traduit, et le comparer a un litteral francais faisait rapporter
@@ -746,6 +751,171 @@ function Test-CtxDoctorShimsDevant {
     New-CtxCheck -Domaine 'garde-fou' -Sujet 'priorite' -Verdict 'PROBLEME' `
         -Detail (T 'doc.garde.masque' $detail) `
         -Correctif $texte
+}
+
+function Test-CtxTexteContientCompte {
+    <#
+      PURE. Le texte contient-il la cle 'github-<login>', ce login EXACTEMENT ?
+
+      LE PIEGE DE PREFIXE, TROISIEME OCCURRENCE DANS CE DEPOT
+
+      Une recherche de sous-chaine repond OUI a 'github-thier' quand le texte
+      porte 'github-thierryvm'. Le contexte 'thier' serait alors accuse d'avoir
+      l'identite du contexte 'thierryvm' -- une fausse alerte sur la seule chose
+      que ce controle doit dire avec certitude.
+
+      C'est le meme defaut que la resolution de contexte a connu ('Apps' ne doit
+      pas matcher 'Apps-Autre'), et il porte ici plus loin : un garde-fou qui
+      crie au loup est un garde-fou qu'on desactive.
+
+      La suite est donc bornee a droite : un login GitHub est fait de lettres,
+      de chiffres et de tirets, donc le caractere suivant ne doit etre aucun des
+      trois. Pas de borne a GAUCHE : la cle commence par 'github-', qui joue ce
+      role.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()][string]$Texte,
+        [AllowNull()][AllowEmptyString()][string]$Login
+    )
+
+    if ([string]::IsNullOrEmpty($Texte) -or [string]::IsNullOrWhiteSpace($Login)) { return $false }
+    $motif = 'github-' + [regex]::Escape($Login.Trim()) + '(?![A-Za-z0-9-])'
+    [bool][regex]::IsMatch($Texte, $motif)
+}
+
+function Get-CtxProfilComptesFacts {
+    <#
+      GATHERING. Quels comptes GitHub CONNUS sont presents dans le profil
+      d'editeur de chaque contexte ?
+
+      POURQUOI CE CONTROLE EXISTE
+
+      Mesure le 17 aout 2026 sur cette machine : le profil du contexte client
+      portait le compte GitHub PERSONNEL, et le profil personnel portait celui
+      du client. Les deux profils etaient pourtant bien isoles -- l'isolation
+      empeche les sessions de s'ECRASER, elle n'empeche personne de se connecter
+      au mauvais compte DANS le bon profil.
+
+      C'est exactement la faute que ce module existe pour empecher, et rien ne
+      la signalait. Une fenetre ouverte sur un projet client dont Copilot,
+      l'extension Pull Request et GitLens agissent sous une identite perso est
+      un incident qui ne se voit qu'apres coup.
+
+      COMMENT, ET POURQUOI PAS AUTREMENT
+
+      VS Code range ses sessions dans state.vscdb, une base SQLite. PowerShell
+      n'a pas de pilote SQLite, et ce module n'a AUCUNE dependance -- en ajouter
+      une, chargee a chaque `ctx doctor` pour une ligne, serait un mauvais
+      echange.
+
+      Alors on cherche le NOM des cles, qui sont du texte clair dans le fichier,
+      par recherche EXACTE sur un ENSEMBLE FERME : les logins que les manifestes
+      declarent deja. C'est volontairement l'inverse d'une extraction.
+
+      L'extraction a ete essayee le meme jour, et jetee sur mesure : les pages
+      SQLite collent des octets binaires aux chaines, et elle rendait
+      'thierryvmn4', 'authenticationL', 'thie'. Chercher une chaine qu'on
+      connait deja n'a aucun de ces defauts.
+
+      Les VALEURS ne sont jamais lues : elles sont chiffrees, et un diagnostic
+      n'a rien a y faire.
+
+      Le fichier est ouvert en partage total : VS Code le tient ouvert, et un
+      diagnostic qui echoue parce que l'editeur tourne ne servirait a rien.
+    #>
+    [CmdletBinding()]
+    param(
+        # Injectables pour les tests : sans cela ce controle ne serait verifiable
+        # que sur une machine ayant exactement la configuration de l'auteur.
+        [object[]]$Manifestes,
+        [scriptblock]$LecteurProfil = {
+            param($Contexte)
+            [System.IO.Path]::Combine((Get-CtxPath $Contexte), 'vscode', 'User', 'globalStorage', 'state.vscdb')
+        }
+    )
+
+    if (-not $PSBoundParameters.ContainsKey('Manifestes')) { $Manifestes = @(Get-CtxManifests) }
+
+    # L'ensemble ferme : un login par contexte, ceux que les manifestes declarent.
+    $connus = @{}
+    foreach ($m in $Manifestes) {
+        $nom = Get-CtxProp $m 'name'
+        $gh = Get-CtxProp $m 'github'
+        $login = if ($gh) { Get-CtxProp $gh 'login' } else { $null }
+        if ($nom -and $login) { $connus[$nom] = $login }
+    }
+    if ($connus.Count -lt 2) { return @() }
+
+    # TRI OBLIGATOIRE. Les cles d'une Hashtable ne sortent PAS dans un ordre
+    # garanti, et le rapport en heritait : deux executions rendaient les memes
+    # constats dans un ordre different. Le test qui compare la sortie `fr` a la
+    # sortie `en` l'a attrape des la premiere execution -- il ne cherchait pas
+    # cela, mais toute difference entre les deux passages le fait rougir, et un
+    # ordre instable en est une.
+    $faits = @()
+    foreach ($nom in ($connus.Keys | Sort-Object)) {
+        $chemin = & $LecteurProfil $nom
+        if (-not $chemin -or -not (Test-Path -LiteralPath $chemin)) { continue }
+
+        $texte = $null
+        try {
+            $flux = [System.IO.File]::Open($chemin, [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            try {
+                $octets = New-Object byte[] $flux.Length
+                $null = $flux.Read($octets, 0, $octets.Length)
+                $texte = [System.Text.Encoding]::ASCII.GetString($octets)
+            }
+            finally { $flux.Dispose() }
+        }
+        catch { continue }   # illisible : on se tait plutot que d'accuser a tort
+
+        $etrangers = @()
+        foreach ($autre in ($connus.Keys | Sort-Object)) {
+            if ($autre -eq $nom) { continue }
+            if (Test-CtxTexteContientCompte -Texte $texte -Login $connus[$autre]) {
+                $etrangers += [pscustomobject]@{ Contexte = $autre; Login = $connus[$autre] }
+            }
+        }
+
+        $faits += [pscustomobject]@{
+            Contexte  = $nom
+            Attendu   = $connus[$nom]
+            Etrangers = @($etrangers)
+        }
+    }
+    @($faits)
+}
+
+function Test-CtxDoctorProfilComptes {
+    <#
+      PURE. Un profil d'editeur porte-t-il l'identite d'un AUTRE contexte ?
+
+      Un constat par contexte concerne, et rien du tout quand tout est propre --
+      un rapport qui felicite a chaque ligne finit lu en diagonale.
+
+      Verdict PROBLEME et non ATTENTION, meme quand c'est delibere : le cas le
+      plus courant est de se connecter avec son compte personnel pour la
+      synchronisation des reglages, et le cout de ce choix est qu'une fenetre
+      ouverte sur un projet client porte une identite perso authentifiee. Le
+      correctif nomme l'alternative -- synchroniser via le compte Microsoft, que
+      VS Code accepte aussi -- plutot que de demander de renoncer a la synchro.
+    #>
+    [CmdletBinding()]
+    param([object[]]$Faits = @())
+
+    $checks = @()
+    foreach ($f in $Faits) {
+        $etrangers = @(Get-CtxProp $f 'Etrangers')
+        if ($etrangers.Count -eq 0) { continue }
+
+        $liste = ($etrangers | ForEach-Object { "$($_.Login) ($($_.Contexte))" }) -join ', '
+        $checks += New-CtxCheck -Domaine 'editeur' -Sujet "comptes/$($f.Contexte)" -Verdict 'PROBLEME' `
+            -Detail (T 'doc.editeur.compteEtranger' $f.Contexte $liste $f.Attendu) `
+            -Correctif (T 'doc.editeur.compteEtrangerFix')
+    }
+    @($checks)
 }
 
 function Test-CtxDoctorEditeurConnexions {

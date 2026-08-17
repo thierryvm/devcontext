@@ -1,3 +1,49 @@
+## [1.6.0] - 17 August 2026
+
+### Added
+
+- **`ctx doctor` now catches an identity from one context living in another
+  context's editor profile.** Measured on the author's machine the day it was
+  written: the **client** profile carried the personal GitHub account, and the
+  personal profile carried the client's.
+
+  Both profiles were perfectly isolated. That is the point — **isolation stops
+  sessions from overwriting each other; it does not stop anyone from signing
+  into the wrong account inside the right profile.** A window opened on a client
+  project where Copilot, the Pull Request extension and GitLens act as a
+  personal identity is an incident that only shows up afterwards, and this is
+  precisely the class of error the module exists to prevent.
+
+  Nothing reported it. Now one finding per affected context names the foreign
+  account and the context it belongs to.
+
+  The fix text names the *alternative*, not just the problem: signing out breaks
+  Settings Sync, and nobody applies a repair that takes something away. VS Code
+  accepts a **Microsoft** account for Sync, which frees the GitHub account to be
+  one per context again.
+
+  **How it reads the profile, and why not otherwise.** VS Code keeps sessions in
+  `state.vscdb`, a SQLite database. PowerShell has no SQLite driver and this
+  module has no dependencies, so key names are matched as text — by **exact
+  search over a closed set**: the logins the manifests already declare. That is
+  deliberately the opposite of extraction. Extraction was tried the same day and
+  thrown away on measurement: SQLite pages glue binary bytes onto strings, and
+  it returned `thierryvmn4`, `authenticationL`, `thie`. Values are never read;
+  they are encrypted, and a diagnostic has no business there.
+
+  The match is bounded on the right, because a substring search answers *yes* to
+  `github-thier` when the text holds `github-thierryvm` — the third time this
+  repository has met the prefix trap, after `Apps` matching `Apps-Autre`. **A
+  guard that cries wolf is a guard people switch off.**
+
+### Fixed
+
+- **The report's order was not stable.** `Hashtable.Keys` enumerates in no
+  guaranteed order, so two runs could emit the same findings in a different
+  sequence. Caught on the first run by the test that compares `fr` output to
+  `en` output — it was not looking for this, but any difference between the two
+  passes turns it red, and an unstable order is one.
+
 ## [1.5.0] - 17 August 2026
 
 ### Added

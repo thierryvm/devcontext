@@ -79,20 +79,76 @@ expensive one, instead of prescribing a reinstall to everyone.
 
 ---
 
-## 1.6.0 — make it easy to start
+## 1.6.0 — shipped, 17 August 2026
+
+An identity from one context living in another context's editor profile is now
+reported. Isolation stops sessions from overwriting each other; it never stopped
+anyone signing into the wrong account inside the right profile — and that is the
+same class of error the whole module exists to prevent.
+
+Found on the author's machine the day the check was written, in both directions
+at once.
+
+---
+
+## 1.6.1 — finish the fixer
+
+- **`ctx doctor -Fix`** — apply the correction a finding already spells out,
+  after confirmation. The diagnostic already knows the answer; making the human
+  retype it is friction for nothing.
+
+  Written, then held back: it repairs only what it can **prove and undo** —
+  empty `PATH` entries, shims missing from `PATH`, a stale junction — and names
+  everything else with the reason. Four families stay manual, and the first one
+  is not a limitation but an OS property: the fix for `gh/compte` is `work`,
+  which writes into the **calling** shell, and a child process cannot write to
+  its parent's environment.
+
+## 1.7.0 — make it easy to start
 
 Adoption dies at the first step. Today a new user must clone, symlink, run an
 installer, then create contexts by hand.
 
 - **`ctx init`** — one interactive command that detects existing accounts,
   proposes contexts, and creates them.
-- **`ctx doctor --fix`** — apply the correction a finding already spells out,
-  after confirmation. The diagnostic already knows the answer; making the human
-  retype it is friction for nothing.
 - **Publishing from a tag** — a GitHub Actions workflow on `v*`, gated by a
   manual-approval environment so the API key never travels alone.
 
 ~~**PowerShell Gallery**~~ — shipped in 1.3.0. `Install-Module DevContext`.
+
+---
+
+## 1.8.0 — macOS and Linux
+
+The decision layer is already portable and has been from the start; what is
+nailed to Windows is the **machine integration**, not the logic.
+
+Already portable, and shipped as such:
+
+- `includeIf` and `insteadOf` — plain git config, read by the binary anywhere.
+- `GH_CONFIG_DIR`, `SUPABASE_ACCESS_TOKEN`, `vercel --global-config` —
+  environment variables.
+- The POSIX shims (`shims/gh`, `shims/supabase`, `shims/vercel`) already ship,
+  LF-pinned with a shebang, and already carry the guard.
+- Context resolution by path, and every pure decision function.
+- PowerShell 7 and SecretStore both run on macOS and Linux.
+
+What needs writing:
+
+| Windows today | Unix equivalent |
+|---|---|
+| `PATH` through the `HKCU` registry | `~/.zshrc` / `~/.profile`, or `~/.local/bin` |
+| `vscode://` router through `HKCU` | LaunchServices (macOS), `.desktop` (Linux) |
+| Desktop `.lnk` shortcuts | `.app` bundle / `.desktop` entry |
+| `.cmd` entry points | unused there, and harmless |
+
+A Linux port also closes the **WSL gap** that `ctx doctor` currently reports as
+uncovered — the shim is absent from a distribution's own `PATH`, and a native
+Linux install is what puts it there. Two problems, one piece of work.
+
+CI has to grow a macOS and a Linux job on the same day: a port with no matrix is
+a port that works only on the machine that wrote it, and this repository has
+already paid that lesson five times.
 
 ---
 

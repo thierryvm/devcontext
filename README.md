@@ -232,6 +232,14 @@ $ code .          # opens on your own profile — both windows at once
 Set `DEVCTX_SHIM_TRACE=1` and it says, on stderr, which context it picked and
 why. "My editor opened on the wrong account" has no answer otherwise.
 
+**Isolation is not the same as being signed into the right account.** A separate
+profile stops sessions from overwriting each other; nothing stops you signing
+into the wrong account inside the right profile — and a client window where
+Copilot and the Pull Request extension act as your personal identity is an
+incident you only notice afterwards. `ctx doctor` names it when one context's
+profile carries another context's GitHub account. It found exactly that on the
+author's machine, in both directions at once, the day the check was written.
+
 **Expect to sign in once per context, and read that as the mechanism working.**
 A separate profile directory is a separate secret store, so the first window you
 open for a new context will ask for GitHub and Copilot. That one sign-in is the

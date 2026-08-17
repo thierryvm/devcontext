@@ -1,3 +1,44 @@
+## [1.7.0] - 17 August 2026
+
+### Added
+
+- **`ctx doctor -Fix` applies the correction each finding already spells out.**
+  The diagnostic knew the answer all along; making the human retype it was
+  friction at the moment they are least willing to read carefully.
+
+  It repairs only what it can **prove and undo** — empty `PATH` entries and
+  exact duplicates, shims missing from `PATH`, a stale junction. The list is
+  short on purpose: **a fixer that overreaches is uninstalled the first time it
+  does something its owner did not expect, and it takes the useful two thirds
+  with it.**
+
+  Everything else is **named, with the reason**, and that half matters as much
+  as the repairs — an unexplained silence reads as *nothing more to do*, which
+  is precisely the false reassurance this module exists to remove. Four
+  families stay manual, for four different reasons:
+
+  | Finding | Why it stays manual |
+  |---|---|
+  | `gh/compte`, `supabase/compte`, `vercel/session` | the fix is `work <ctx>`, which sets variables in the **calling** shell — and a child process cannot write into its parent's environment. An OS property, not a missing feature. |
+  | `garde-fou/priorite` | writes to `HKLM`, so it needs elevation. A tool that silently asks for administrator rights is a tool people stop trusting. |
+  | a duplicated CLI | installing or uninstalling a binary is never a diagnostic's job. |
+  | `garde-fou/WSL` | nothing on the Windows side can close it. |
+
+  `-WhatIf` and `-Confirm` work, and land on the **precise gesture** — *remove 2
+  entries from the user PATH*, not *repair things*. The `PATH` repair writes a
+  backup before touching the registry, preserves the registry **value kind**
+  (writing `REG_SZ` over a `REG_EXPAND_SZ` disables every variable in the PATH,
+  silently and for good), and is idempotent. It is proved against a **scratch
+  registry key**, never the real PATH: a suite that modifies the machine running
+  it is a suite nobody dares run.
+
+  `-Fix` with `-Json` is **refused** rather than one of them silently ignored:
+  `-Json` is for a program, `-Fix` talks to a human, and silence would let the
+  caller believe it worked.
+
+  Dispatch keys on `Domaine/Sujet`, which are **literals** throughout — never a
+  translated lookup — so the table behaves identically under `fr` and `en`.
+
 ## [1.6.0] - 17 August 2026
 
 ### Added

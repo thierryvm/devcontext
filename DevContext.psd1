@@ -57,6 +57,7 @@
         'New-DevProjectMcp'
         'Open-DevBrowser'
         'Open-DevCode'
+        'Resolve-CtxPathSansVides'
         'Resolve-DevContextForPath'
         'Set-DevContextRoot'
         'Test-CtxGhEcriture'

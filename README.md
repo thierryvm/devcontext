@@ -207,6 +207,18 @@ list rather than an error about a function you have never heard of.
 
 `ctx-doctor -Json` emits machine-readable output, for CI or for an AI agent.
 
+**`ctx doctor -Fix` applies what the report already spells out** — and only what
+it can prove and undo: empty `PATH` entries, shims missing from `PATH`, a stale
+junction. Everything else is **named with the reason it stays manual**, because
+an unexplained silence reads as *nothing more to do*. `-WhatIf` shows the gesture
+without making it; the `PATH` repair writes a backup first and preserves the
+registry value kind.
+
+The most common finding it will *not* touch is `gh/compte`, and the reason is
+worth stating: the fix is `work <context>`, which sets variables in the
+**calling** shell — and a child process cannot write into its parent's
+environment. That is an operating-system property, not a missing feature.
+
 ---
 
 ## Editors

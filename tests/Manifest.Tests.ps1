@@ -50,19 +50,37 @@ Describe 'manifeste' {
     }
 
     It 'exporte les memes alias que le module' {
-        $m    = Import-PowerShellDataFile $script:Manifest
-        $psm1 = Get-Content (Join-Path $script:Root 'DevContext.psm1') -Raw
+        # LU SUR LE MODULE CHARGE, ET NON SUR LE TEXTE DU PSM1.
+        #
+        # Ce controle lisait `$exportedAliases = @(...)` a l'expression
+        # reguliere. Depuis la 1.8.0 la moitie de cette liste est DERIVEE de la
+        # table des sous-commandes -- justement pour que deux listes ne puissent
+        # plus diverger -- et l'analyse statique ne voyait donc plus rien.
+        #
+        # La lecture du texte source repondait de toute facon a cote : elle
+        # verifiait ce que le psm1 DIT exporter, pas ce qu'il exporte. Un
+        # Export-ModuleMember conditionnel, une liste construite, une faute de
+        # frappe dans un nom derive : rien de tout cela ne se voit dans le texte.
+        #
+        # C'est la seule exception a la regle d'en-tete de ce fichier. Elle est
+        # assumee : la question posee ici est "les deux cotes s'accordent-ils",
+        # et l'un des deux cotes n'existe qu'une fois le module charge. Si le
+        # manifeste est casse, ce test rougit -- ce qui est correct, et les
+        # autres controles du fichier restent independants.
+        $m = Import-PowerShellDataFile $script:Manifest
 
-        if ($psm1 -match '(?s)\$exportedAliases\s*=\s*@\((.*?)\)') {
-            $declares = ([regex]::Matches($Matches[1], "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+        $module = Import-Module (Join-Path $script:Root 'DevContext.psd1') -Force -PassThru -ErrorAction Stop
+        try {
+            $reels = @($module.ExportedAliases.Keys)
+
             foreach ($a in $m.AliasesToExport) {
-                $declares | Should -Contain $a -Because "$a est dans le manifeste"
+                $reels | Should -Contain $a -Because "$a est declare dans le manifeste"
             }
-            foreach ($a in $declares) {
-                $m.AliasesToExport | Should -Contain $a -Because "$a est dans le psm1"
+            foreach ($a in $reels) {
+                $m.AliasesToExport | Should -Contain $a -Because "$a sort du module"
             }
         }
-        else { throw "Bloc exportedAliases introuvable dans DevContext.psm1" }
+        finally { Remove-Module DevContext -Force -ErrorAction SilentlyContinue }
     }
 }
 

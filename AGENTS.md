@@ -75,6 +75,10 @@ value. Every message that can carry an exception passes through
 |---|---|
 | `param($Args)` | `$Args` is an automatic variable, silently overwritten. The shim received garbage and let everything through. Same for `$Input`, `$Host`, `$Matches`, `$profile`. |
 | Export in one list only | The real export is the **intersection** of psd1 and psm1. The command becomes invisible with no error. |
+| Deriving one list but hand-copying its twin | The `ctx-*` aliases were **created** from the subcommand table and **exported** from a hand list. The first subcommand added existed inside the module and was absent for the caller, while the space-separated form worked — two spellings, one dead. Derive both from the same table, or neither. |
+| Static analysis of a derived list | The manifest test read `$exportedAliases = @(…)` **as text** and saw nothing once half the list was computed. It answered "what the psm1 says it exports", never "what it exports". Read the loaded module's `ExportedAliases`. |
+| Indexing `[0]` without checking | `@(...)[0]` on an empty array throws *Index was outside the bounds*. `ctx init` did it on the gh account list — so the welcome command crashed on exactly the virgin machine it exists to welcome. |
+| `try`/`catch` inside a hashtable literal | It is a **statement**, not an expression: `@{ X = try {…} catch {…} }` is a parse error, while `$x = try {…} catch {…}` is fine. Compute into a variable first. |
 | `Get-CtxProp` on a Hashtable | It navigates `PSObject.Properties`, which sees nothing inside a Hashtable — and `ConvertFrom-Json -AsHashtable` returns one. Use `Get-CtxPaires`. |
 | StrictMode | Reading an absent property **throws**. Any field that may be missing goes through `Get-CtxProp`. |
 | `Update-TypeData` vs format file | `-DefaultDisplayPropertySet` wins over a `format.ps1xml` view. Two mechanisms, the weaker one wins in silence. |

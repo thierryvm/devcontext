@@ -50,6 +50,7 @@ $script:CtxSousCommandes = [ordered]@{
     'doctor'   = 'Get-DevContextDoctor'
     'editors'  = 'Get-DevEditorList'
     'end'      = 'Close-DevContext'
+    'init'     = 'Invoke-DevContextInit'
     'list'     = 'Get-DevContextList'
     'mcp'      = 'New-DevProjectMcp'
     'new'      = 'New-DevContext'

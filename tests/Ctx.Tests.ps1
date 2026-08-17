@@ -72,6 +72,22 @@ Describe 'ctx-<nom> et ctx <nom> ne peuvent pas diverger' {
         }
     }
 
+    It 'chaque alias ctx-<nom> est reellement EXPORTE par le module' {
+        # LE DEFAUT DU 17 AOUT 2026, ecrit apres l'avoir vu. Les alias etaient
+        # CREES depuis la table mais EXPORTES depuis une liste recopiee a la
+        # main. La premiere sous-commande ajoutee -- `init` -- a donc donne un
+        # `ctx-init` cree, jamais exporte, absent chez l'appelant, pendant que
+        # `ctx init` fonctionnait. Deux orthographes, une seule qui marche :
+        # exactement ce que la table etait censee rendre impossible.
+        #
+        # Cree n'est pas exporte, et seul l'objet module dit lequel des deux.
+        $table = InModuleScope DevContext { Get-CtxSousCommandes }
+        $exportes = (Get-Module DevContext).ExportedAliases.Keys
+        foreach ($cle in $table.Keys) {
+            $exportes | Should -Contain "ctx-$cle" -Because "ctx-$cle doit sortir du module"
+        }
+    }
+
     It 'l alias ctx vise le repartiteur, pas Test-DevContext' {
         (Get-Alias ctx).Definition | Should -Be 'Invoke-DevCtx'
     }

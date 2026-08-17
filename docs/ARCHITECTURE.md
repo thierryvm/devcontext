@@ -1,4 +1,4 @@
-﻿# Architecture
+# Architecture
 
 How DevContext is put together, and why each piece sits where it does. Written
 for whoever maintains it next — human or agent.
@@ -41,6 +41,7 @@ src/                         DOT-SOURCED. Never invoked directly.
   Chemins.ps1                Path rules shared by the module and the installer
   Langue.ps1                 Key lookup, and the fallback that renders [the.key]
   Ctx.ps1                    ctx — the subcommand table, and the dispatcher behind it
+  Init.ps1                   ctx init — what is missing here, and the command for each
   Doctor.ps1                 ctx doctor — what works here, and on which account
   Fix.ps1                    ctx doctor -Fix — the repairs, and what stays manual
   Jetons.ps1                 ctx doctor -Live — do the tokens work, on the right account

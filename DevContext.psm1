@@ -192,7 +192,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1', 'Gh.ps1', 'Vercel.ps1', 'Ctx.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Shortcuts.ps1', 'Gh.ps1', 'Vercel.ps1', 'Init.ps1', 'Ctx.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -2055,12 +2055,16 @@ $exportedFunctions = @(
     'Get-CtxSupabasePaires', 'Get-CtxArgumentValeur', 'Get-CtxSupabaseRefDepuisUrl',
     'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
     'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh',
-    'Invoke-DevCtx', 'Resolve-CtxPathSansVides'
+    'Invoke-DevCtx', 'Resolve-CtxPathSansVides', 'Invoke-DevContextInit'
 )
+# Les alias ctx-<nom> sont DERIVES de la meme table que les alias eux-memes.
+# Ils y etaient recopies a la main jusqu'a la 1.8.0, et le defaut a frappe des
+# la premiere sous-commande ajoutee : `ctx-init` etait cree, jamais exporte,
+# donc absent chez l'appelant -- pendant que `ctx init` fonctionnait. Deux
+# orthographes, une seule qui marche : exactement ce que la table etait censee
+# rendre impossible.
 $exportedAliases = @(
-    'work', 'ctx', 'ctx-check', 'ctx-list', 'ctx-new', 'ctx-off', 'ctx-end',
-    'ctx-who', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'gh', 'sb-index', 'ctx-sb',
-    'ctx-doctor', 'ctx-mcp', 'ctx-editors', 'ctx-shortcut', 'ctx-root'
-)
+    'work', 'ctx', 'code-ctx', 'web-ctx', 'vercel', 'supabase', 'gh', 'sb-index'
+) + @((Get-CtxSousCommandes).Keys | ForEach-Object { "ctx-$_" })
 
 Export-ModuleMember -Function $exportedFunctions -Alias $exportedAliases

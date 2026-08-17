@@ -13,6 +13,23 @@
 # know nothing about.
 
 @{
+    # --- ctx init -----------------------------------------------------------
+    # The first command, and where adoption is won or lost. It GUIDES: it asks
+    # before each change, and every step it does not perform is printed as the
+    # exact command that performs it.
+    'init.titre'              = 'Setting up DevContext on this machine'
+    'init.etape.coffre'       = 'Secret vault (SecretManagement + SecretStore)'
+    'init.etape.shims'        = 'Guards reachable from every shell'
+    'init.etape.contexte'     = 'At least one working context'
+    'init.racine'             = 'Contexts live in: {0}'
+    'init.racineChanger'      = 'To keep them elsewhere: ctx root <folder>'
+    'init.rienAFaire'         = 'Everything is in place. Nothing to do.'
+    'init.suite'              = 'For the full state of this machine: ctx doctor'
+    'init.nonInteractif'      = 'Input is redirected, so no question can be asked here. This is what is left to run, in order.'
+    'init.manuel'             = 'Run this yourself (installing a module is a new dependency):'
+    'init.action'             = 'set up'
+    'init.contexteProposition' = 'Command pre-filled from git and gh -- read it, then run it:'
+
     # --- ctx: subcommands ---------------------------------------------------
     # `ctx-doctor` and `ctx doctor` are the same thing. The second is what
     # fingers type, because git, docker, gh and npm all use it; the first
@@ -25,6 +42,7 @@
     'ctx.sc.aide.doctor'     = 'state of this machine: tools, accounts, guards'
     'ctx.sc.aide.editors'    = 'which editors can isolate their profile'
     'ctx.sc.aide.end'        = 'close the active context work session'
+    'ctx.sc.aide.init'       = 'set DevContext up on this machine'
     'ctx.sc.aide.list'       = 'list the contexts on this machine'
     'ctx.sc.aide.mcp'        = 'write the current project MCP servers'
     'ctx.sc.aide.new'        = 'create a context'

@@ -87,14 +87,39 @@ Check it landed:
 
 ```powershell
 Import-Module DevContext
-ctx-doctor
+ctx init
 ```
+
+`ctx init` is the shortest route through all of the above. It reports what is
+already in place and what is missing, and prints the exact command for each
+remaining step:
+
+```
+  Setting up DevContext on this machine
+
+    + Secret vault (SecretManagement + SecretStore)
+    - Guards reachable from every shell
+    - At least one working context
+
+  Contexts live in: C:\dev\contexts
+  To keep them elsewhere: ctx root <folder>
+```
+
+It installs nothing for you and creates no context on your behalf — both are
+decisions, not chores. And it does not prompt when input is redirected, so an
+agent or a CI job gets the same ordered list rather than a hung terminal.
+
+Run it again any time. It changes nothing on a machine that is already set up
+and says so, which makes it the right command for *something is off and I do not
+remember what I did*.
 
 ---
 
 ## 3. Your first context
 
-`ctx` tells you this itself when you have none:
+`ctx init` prints this command pre-filled from `git config --global` and
+`gh auth status`. You run it — creating a context lays an SSH key and a folder,
+and that is not done on a guess:
 
 ```powershell
 ctx-new -Name perso -Email you@example.com -Root C:\dev\perso

@@ -109,10 +109,23 @@ User scope only. No administrator rights, no machine-wide change.
 `PATH` changes land in the next terminal, never in the one that made them.
 
 ```powershell
+ctx init          # ce qui est en place, ce qui manque, et la commande pour chaque
 work perso -NoCd
 ctx
-ctx-doctor
+ctx doctor
 ```
+
+**`ctx init` est la commande à retenir si vous n'en retenez qu'une.** Elle
+n'installe rien à votre place et ne crée aucun contexte pour vous — dans les
+deux cas ce sont des décisions, pas des corvées — mais elle affiche la commande
+exacte de chaque étape restante, dans l'ordre où elles doivent être faites.
+
+Elle ne pose aucune question quand l'entrée est redirigée : un agent ou un job de
+CI reçoit la même liste, sous une forme exploitable, plutôt qu'un terminal bloqué.
+
+Elle est idempotente. Sur une machine déjà en place elle ne change rien et le
+dit, ce qui en fait aussi la bonne commande pour « quelque chose cloche et je ne
+sais plus ce que j'ai fait ».
 
 `ctx` must answer **GO**. Until it has, **delete nothing** — in particular not
 the `DevContext.before-link` folder, if the clone install renamed one:

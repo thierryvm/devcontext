@@ -1,3 +1,54 @@
+## [1.8.0] - 17 August 2026
+
+### Added
+
+- **`ctx init` — the first command, and where adoption is won or lost.** Until
+  now a new user had to clone the repository, create a symlink, run an
+  installer, then create a context by hand from a command line with five
+  parameters. Every one of those steps is a place to stop.
+
+  It reports what is already in place — including what is fine, because the
+  second most likely moment to run it is *something is off and I do not
+  remember what I did* — then walks the missing pieces in order.
+
+  **It is a guide, not a wizard that takes over.** Every step it does not
+  perform is printed as the exact command that performs it, so someone who
+  prefers to drive by hand loses nothing by running it first. Installing the
+  vault modules is never done for you: a new dependency is not a decision to
+  take in someone else's name.
+
+  It does not create the context either. The command is printed **pre-filled**
+  from `git config --global` and `gh auth status`, and you run it. Creating a
+  context lays an SSH key and a folder; doing that on a guess is the kind of
+  help one does without.
+
+  **And it refuses to ask a question it cannot hear the answer to.** With
+  redirected input — an agent, a CI job, a pipe — a prompt does not pause: it
+  reads EOF and takes a default nobody chose. This module already paid that
+  lesson when `ctx-new` hung on a passphrase prompt, which is why `-NoKey`
+  exists. So interactivity is **detected**, and the non-interactive path is a
+  full citizen rather than a degraded mode: the same ordered list of commands,
+  in a form a script can act on.
+
+  The proposed context name is sanitised to what `New-DevContext` actually
+  accepts — proposing a name it will then reject is the worst kind of help,
+  because the user believes they followed the instruction.
+
+### Fixed
+
+- **Half the `ctx-*` aliases were created but never exported.** They were built
+  from the subcommand table since 1.5.0, but *exported* from a hand-copied list
+  — and the defect landed on the very first subcommand added: `ctx-init`
+  existed inside the module, was absent for the caller, while `ctx init`
+  worked. Two spellings, one of them dead: exactly what the shared table was
+  meant to make impossible. The export list is now derived from the same table,
+  and a test asserts every subcommand alias actually leaves the module.
+
+  The manifest test that should have caught it was reading `$exportedAliases`
+  out of the psm1 **as text**. It now reads the loaded module's real
+  `ExportedAliases` — which is the only thing that answers the question it was
+  asking.
+
 ## [1.7.0] - 17 August 2026
 
 ### Added

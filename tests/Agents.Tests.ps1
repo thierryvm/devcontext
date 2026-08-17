@@ -231,3 +231,136 @@ Describe 'Confiance des agents — collecte' {
         }
     }
 }
+
+Describe 'ctx guard — le plan' {
+
+    It 'ne propose rien sur une liste vide' {
+        InModuleScope DevContext {
+            $p = Resolve-CtxGuardPlan -Faits @()
+            $p.ARetirer.Count | Should -Be 0
+            $p.ARelire.Count | Should -Be 0
+        }
+    }
+
+    It 'ignore la portee projet, qui est la bonne pratique' {
+        InModuleScope DevContext {
+            $faits = @(
+                [pscustomobject]@{ Portee = 'projet'; Fichier = 'p'; Dossier = 'F:\A'; Proprietaire = 'perso' }
+                [pscustomobject]@{ Portee = 'projet'; Fichier = 'p'; Dossier = 'C:\B'; Proprietaire = $null }
+            )
+            $p = Resolve-CtxGuardPlan -Faits $faits
+            $p.ARetirer.Count | Should -Be 0
+            $p.ARelire.Count | Should -Be 0
+        }
+    }
+
+    It 'retire ce qui appartient a un contexte, relit ce qui n appartient a personne' {
+        # La distinction est le coeur de la commande : le premier cas est une
+        # REGLE (un dossier de contexte n'a rien a faire en portee globale), le
+        # second un ARBITRAGE, qui appartient a l'utilisateur.
+        InModuleScope DevContext {
+            $faits = @(
+                [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'F:\A'; Proprietaire = 'perso' }
+                [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'C:\Bureau'; Proprietaire = $null }
+            )
+            $p = Resolve-CtxGuardPlan -Faits $faits
+            @($p.ARetirer | ForEach-Object { $_.Dossier }) | Should -Be @('F:\A')
+            @($p.ARelire | ForEach-Object { $_.Dossier }) | Should -Be @('C:\Bureau')
+        }
+    }
+
+    It 'ne nomme chaque fichier a modifier qu une fois' {
+        InModuleScope DevContext {
+            $faits = @(
+                [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'F:\B'; Proprietaire = 'perso' }
+                [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'F:\A'; Proprietaire = 'perso' }
+            )
+            $p = Resolve-CtxGuardPlan -Faits $faits
+            $p.Fichiers.Count | Should -Be 1
+            # Ordre stable : deux executions doivent se comparer.
+            @($p.ARetirer | ForEach-Object { $_.Dossier }) | Should -Be @('F:\A', 'F:\B')
+        }
+    }
+}
+
+Describe 'ctx guard — ecriture' {
+
+    BeforeEach {
+        $script:Fichier = Join-Path $TestDrive ('reglages-' + [guid]::NewGuid().ToString('N') + '.json')
+        @'
+{
+  "model": "opus",
+  "hooks": { "PreToolUse": [ { "matcher": "Bash" } ] },
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": [ "Bash(npm run lint)" ],
+    "additionalDirectories": [ "F:\\Garder", "F:\\Retirer", "C:\\Autre" ]
+  },
+  "statusLine": { "type": "command" }
+}
+'@ | Set-Content -LiteralPath $script:Fichier -Encoding UTF8
+    }
+
+    It 'ne touche a RIEN sans -Apply' {
+        InModuleScope DevContext -Parameters @{ F = $script:Fichier } {
+            param($F)
+            $avant = Get-Content -LiteralPath $F -Raw
+            $r = Set-CtxAgentDossiersApprouves -Fichier $F -Retirer @('F:\Retirer')
+
+            $r.Ecrit | Should -BeFalse
+            $r.Sauvegarde | Should -BeNullOrEmpty
+            $r.Retires | Should -Be @('F:\Retirer')
+            (Get-Content -LiteralPath $F -Raw) | Should -Be $avant
+        }
+    }
+
+    It 'ecrit, sauvegarde d abord, et ne perd aucune autre cle' {
+        InModuleScope DevContext -Parameters @{ F = $script:Fichier } {
+            param($F)
+            $r = Set-CtxAgentDossiersApprouves -Fichier $F -Retirer @('F:\Retirer') -Apply
+
+            $r.Ecrit | Should -BeTrue
+            Test-Path -LiteralPath $r.Sauvegarde | Should -BeTrue
+
+            $relu = Get-Content -LiteralPath $F -Raw | ConvertFrom-Json
+            @($relu.permissions.additionalDirectories) | Should -Be @('F:\Garder', 'C:\Autre')
+
+            # Le reste du fichier decide de beaucoup de choses. Le perdre serait
+            # une panne discrete dans le fichier le moins souvent relu.
+            $relu.model | Should -Be 'opus'
+            $relu.hooks.PreToolUse[0].matcher | Should -Be 'Bash'
+            $relu.statusLine.type | Should -Be 'command'
+            $relu.permissions.defaultMode | Should -Be 'auto'
+            @($relu.permissions.allow) | Should -Be @('Bash(npm run lint)')
+        }
+    }
+
+    It 'la sauvegarde contient bien l ETAT D AVANT' {
+        InModuleScope DevContext -Parameters @{ F = $script:Fichier } {
+            param($F)
+            $avant = Get-Content -LiteralPath $F -Raw
+            $r = Set-CtxAgentDossiersApprouves -Fichier $F -Retirer @('F:\Retirer') -Apply
+            # Une sauvegarde qui contient l'etat d'APRES ne sauvegarde rien.
+            (Get-Content -LiteralPath $r.Sauvegarde -Raw).Trim() | Should -Be $avant.Trim()
+        }
+    }
+
+    It 'ne retire rien quand la cible n est pas dans la liste' {
+        InModuleScope DevContext -Parameters @{ F = $script:Fichier } {
+            param($F)
+            $avant = Get-Content -LiteralPath $F -Raw
+            $r = Set-CtxAgentDossiersApprouves -Fichier $F -Retirer @('F:\Inexistant') -Apply
+            $r.Ecrit | Should -BeFalse
+            (Get-Content -LiteralPath $F -Raw) | Should -Be $avant
+        }
+    }
+
+    It 'refuse un fichier sans bloc permissions plutot que d en inventer un' {
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'sans-perm.json'
+            '{ "model": "opus" }' | Set-Content -LiteralPath $f -Encoding UTF8
+            { Set-CtxAgentDossiersApprouves -Fichier $f -Retirer @('X') -Apply } | Should -Throw
+            (Get-Content -LiteralPath $f -Raw) | Should -Match 'opus'
+        }
+    }
+}

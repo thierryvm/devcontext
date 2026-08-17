@@ -42,6 +42,7 @@
     'ctx.sc.aide.doctor'     = 'state of this machine: tools, accounts, guards'
     'ctx.sc.aide.editors'    = 'which editors can isolate their profile'
     'ctx.sc.aide.end'        = 'close the active context work session'
+    'ctx.sc.aide.guard'      = 'folders trusted for agents: what can they actually reach'
     'ctx.sc.aide.init'       = 'set DevContext up on this machine'
     'ctx.sc.aide.list'       = 'list the contexts on this machine'
     'ctx.sc.aide.mcp'        = 'write the current project MCP servers'
@@ -379,6 +380,21 @@
     'doc.agent.confianceEtrangereFix' = "Remove those folders from permissions.additionalDirectories in the user-scope file, then grant them case by case in the .claude/settings.json OF THE PROJECT that needs them. The rule: a one-off approval recorded globally applies to every future session, including another client's. That is how such a list grows without anyone ever rereading it."
     'doc.agent.confianceHorsContexte' = "{0} folder(s) trusted at user scope and outside every context: {1}. They are active in EVERY session, whichever project is open."
     'doc.agent.confianceHorsContexteFix' = "Reread this list: each entry was approved for one day's need and never expired. What serves one project belongs in that project's .claude/settings.json; user scope should carry only what is true everywhere. A list nobody has reread is no longer a decision, it is a residue."
+    # ctx guard
+    'guard.action'     = 'remove {0} trusted folder(s)'
+    'guard.titre'      = 'Folders trusted for agents, at user scope'
+    'guard.rien'       = 'Nothing to correct: no context folder is trusted globally.'
+    'guard.aRetirer'   = '{0} to remove from user scope:'
+    'guard.aRetirerLigne' = '{0}  ({1} context)'
+    'guard.pourquoi'   = 'Trusted globally, they apply to EVERY session -- including one opened in another client folder. What a project needs belongs in that project .claude/settings.json.'
+    'guard.aRelire'    = '{0} outside every context, for you to review (this is a judgement call, not a rule):'
+    'guard.denyInerte' = 'Worth knowing: on Windows, deny rules on absolute paths do NOT block writes (claude-code#67849, #34741). So this command only removes approvals -- it adds none that would be inert.'
+    'guard.apercu'     = 'Nothing was changed. To apply: ctx guard -Apply  (a backup is written before any change)'
+    'guard.ecrit'      = '{1} entry(ies) removed from {0}'
+    'guard.sauvegarde' = 'Backup: {0}'
+    'guard.sansPermissions' = "File '{0}' carries no permissions block: nothing to change."
+    'guard.transformationSuspecte' = 'REFUSING to write: the transformation touched something other than the announced folders ({0}). The file is left untouched.'
+    'guard.sauvegardeEchouee' = "Backup '{0}' could not be written. Nothing is changed: no backup, no write."
     'doc.editeur.complet'     = 'profile and extensions per context'
     'doc.editeur.profilSeul'  = 'profile per context, extensions shared'
     'doc.editeur.methode'     = '{0} ({1})'

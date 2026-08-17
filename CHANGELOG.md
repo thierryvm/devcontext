@@ -2,6 +2,38 @@
 
 ### Added
 
+- **`ctx guard` — the trusted-folder list, shown before it is changed.**
+  `ctx doctor` reports the problem; this corrects it.
+
+  **It was designed to do something else, and checking saved it.** The first
+  design wrote `deny` rules against other contexts' roots. Before a line was
+  written, the upstream tracker said those rules **never match on Windows**: the
+  write tool absolutizes the path before the check, and an absolute Windows path
+  matches no documented pattern form —
+  [#67849](https://github.com/anthropics/claude-code/issues/67849),
+  [#34741](https://github.com/anthropics/claude-code/issues/34741),
+  [#22907](https://github.com/anthropics/claude-code/issues/22907), and
+  [#36884](https://github.com/anthropics/claude-code/issues/36884) for the VS
+  Code extension.
+
+  A file of inert rules is worse than no file: it has the appearance of
+  protection. The same defect this repository already names for a silently
+  dropped flag — *isolation you do not have*.
+
+  So the command adds nothing. The mechanism that **works** is the positive one
+  — the working-directory boundary — and what breaks it is the trusted list
+  growing at user scope. `ctx guard` therefore removes from user scope every
+  folder that belongs to a context, and **only** those: a folder belonging to no
+  context is a judgement call, so it is listed for the operator rather than
+  decided for them.
+
+  **Preview by default.** This file decides what every agent may do; a command
+  that edits it without showing first asks for trust it has not yet earned.
+  `-Apply` writes, after a backup — *no backup, no write*, the rule already in
+  `Fix.ps1` — and the write is refused outright if the transformation touched a
+  single key beyond the folders it named. `-WhatIf` works, and `Ecrit` reports
+  what happened rather than what was asked.
+
 - **`ctx doctor` now reads where an agent is allowed to write.** Everything else
   in this module partitions *who you are* — git identity, tokens, sessions.
   Nothing looked at *where it writes*, and an agent running in a client folder

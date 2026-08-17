@@ -42,6 +42,7 @@
     'ctx.sc.aide.doctor'     = 'etat de la machine : outils, comptes, garde-fous'
     'ctx.sc.aide.editors'    = 'quels editeurs savent isoler leur profil'
     'ctx.sc.aide.end'        = 'fermer la session de travail du contexte actif'
+    'ctx.sc.aide.guard'      = 'dossiers approuves pour les agents : que voient-ils vraiment'
     'ctx.sc.aide.init'       = 'mettre en place DevContext sur cette machine'
     'ctx.sc.aide.list'       = 'lister les contextes de cette machine'
     'ctx.sc.aide.mcp'        = 'ecrire les serveurs MCP du projet courant'
@@ -379,6 +380,21 @@
     'doc.agent.confianceEtrangereFix' = "Retirer ces dossiers de permissions.additionalDirectories du fichier de portee utilisateur, puis les rouvrir au cas par cas dans le .claude/settings.json DU PROJET concerne. La regle : une approbation ponctuelle enregistree globalement vaut pour toutes les sessions futures, y compris celles d'un autre client. C'est ainsi qu'une liste grossit sans que personne ne la relise."
     'doc.agent.confianceHorsContexte' = "{0} dossier(s) approuve(s) en portee utilisateur hors de tout contexte : {1}. Ils sont actifs dans CHAQUE session, quel que soit le projet ouvert."
     'doc.agent.confianceHorsContexteFix' = "Relire cette liste : chaque entree a ete approuvee pour un besoin d'un jour et n'a jamais expire. Ce qui ne sert qu'a un projet se declare dans le .claude/settings.json de ce projet ; la portee utilisateur ne devrait porter que ce qui vaut partout. Une liste qu'on n'a jamais relue n'est plus une decision, c'est un residu."
+    # ctx guard
+    'guard.action'     = 'retirer {0} dossier(s) approuve(s)'
+    'guard.titre'      = 'Dossiers approuves pour les agents, en portee utilisateur'
+    'guard.rien'       = 'Rien a corriger : aucun dossier d un contexte n est approuve globalement.'
+    'guard.aRetirer'   = '{0} a retirer de la portee utilisateur :'
+    'guard.aRetirerLigne' = '{0}  (contexte {1})'
+    'guard.pourquoi'   = 'Approuves globalement, ils valent pour TOUTES les sessions -- y compris celles ouvertes dans le dossier d un autre client. Ce dont un projet a besoin se declare dans le .claude/settings.json de ce projet.'
+    'guard.aRelire'    = '{0} hors de tout contexte, a relire vous-meme (ce n est pas une regle, c est un arbitrage) :'
+    'guard.denyInerte' = 'A savoir : sous Windows, les regles deny sur chemins absolus NE bloquent PAS les ecritures (claude-code#67849, #34741). Cette commande ne fait donc que retirer des approbations -- elle n en pose aucune qui serait inerte.'
+    'guard.apercu'     = 'Rien n a ete modifie. Pour appliquer : ctx guard -Apply  (une sauvegarde est ecrite avant toute modification)'
+    'guard.ecrit'      = '{1} entree(s) retiree(s) de {0}'
+    'guard.sauvegarde' = 'Sauvegarde : {0}'
+    'guard.sansPermissions' = "Le fichier '{0}' ne porte pas de bloc permissions : rien a modifier."
+    'guard.transformationSuspecte' = 'REFUS d ecrire : la transformation a touche autre chose que les dossiers annonces ({0}). Le fichier est laisse intact.'
+    'guard.sauvegardeEchouee' = "La sauvegarde '{0}' n a pas pu etre ecrite. Rien n est modifie : pas de sauvegarde, pas d ecriture."
     'doc.editeur.complet'     = 'profil et extensions par contexte'
     'doc.editeur.profilSeul'  = 'profil par contexte, extensions communes'
     'doc.editeur.methode'     = '{0} ({1})'

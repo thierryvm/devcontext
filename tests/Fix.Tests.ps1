@@ -196,6 +196,49 @@ Describe 'Repair-CtxPathEntreesVides' {
         }
     }
 
+    It 'ne LEVE PAS quand la valeur Path n existe pas du tout' {
+        # RELEVE PAR LA REVUE AUTOMATIQUE, 17 aout 2026. GetValue rend son
+        # defaut sans broncher, mais GetValueKind LEVE sur une valeur absente --
+        # et une machine ou le PATH utilisateur n'a jamais ete pose est
+        # parfaitement normale. Invisible sur la machine de l'auteur, ou cette
+        # valeur existe depuis toujours ; ne casserait que chez quelqu'un
+        # d'autre. Encore la meme classe de defaut.
+        InModuleScope DevContext -Parameters @{ S = $script:Sauvegarde } { param($S)
+            $vide = 'Software\DevContextTests\Vide'
+            [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($vide, $true).Close()
+
+            # Appel DIRECT, et non dans un bloc passe a Should -Not -Throw : une
+            # affectation faite dans ce bloc reste locale a ce bloc, et la
+            # variable relue ensuite vaut $null. Si l'appel leve, le test echoue
+            # de toute facon -- c'est exactement l'assertion voulue.
+            $r = Repair-CtxPathEntreesVides -Cle $vide -DossierSauvegarde $S -Confirm:$false
+            $r.Applique | Should -BeFalse
+        }
+    }
+
+    It 'ANNULE la reparation si la sauvegarde ne peut pas etre ecrite' {
+        # Tout l'argument de surete est "reversible parce que sauvegardee". Une
+        # sauvegarde qui echoue en silence retire la reversibilite ET laisse
+        # croire qu'elle est la -- pire que pas de sauvegarde du tout, puisque
+        # personne ne le sait. Pas de sauvegarde, pas d'ecriture.
+        InModuleScope DevContext -Parameters @{ C = $script:CleTest } { param($C)
+            # Un FICHIER la ou on attend un dossier : la creation echouera.
+            $obstacle = Join-Path $TestDrive 'obstacle'
+            Set-Content -LiteralPath $obstacle -Value 'x' -Encoding ascii
+
+            $r = Repair-CtxPathEntreesVides -Cle $C -DossierSauvegarde $obstacle -Confirm:$false
+            $r.Applique | Should -BeFalse
+
+            # Et surtout : le registre est INTACT.
+            $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($C)
+            try {
+                $k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) |
+                    Should -Be 'C:\a;;C:\b;C:\a'
+            }
+            finally { $k.Close() }
+        }
+    }
+
     It 'ne modifie RIEN sous -WhatIf' {
         InModuleScope DevContext -Parameters @{ C = $script:CleTest; S = $script:Sauvegarde } { param($C, $S)
             Repair-CtxPathEntreesVides -Cle $C -DossierSauvegarde $S -WhatIf | Out-Null

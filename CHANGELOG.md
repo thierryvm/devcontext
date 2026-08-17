@@ -1,3 +1,67 @@
+## [Unreleased]
+
+### Added
+
+- **Publishing from a tag, behind a manual approval.** Pushing `vX.Y.Z` now runs
+  a release workflow, and the shape of that workflow is the point.
+
+  It is split in two. The first half has **no access to the API key** and does
+  everything a machine can prove: the suite in both languages, the tag against
+  the manifest, the version against what the Gallery already serves, and the
+  assembled package against what a package may contain. The second half is gated
+  behind an approval environment and does one thing.
+
+  Asking a human to approve *before* anything has been checked is asking them to
+  rubber-stamp. By the time the request arrives, the only question left is the
+  one a person should answer: whether this version should exist. The key is an
+  environment secret, so before that approval it is not merely unused — a job
+  that does not name the environment cannot read it.
+
+  The publish job takes the **artifact the first half audited**, not one it
+  assembles itself. Publishing bytes nobody looked at, because bytes that looked
+  the same were approved, is how an audit becomes decorative.
+
+  `workflow_dispatch` rehearses the whole file without spending a version
+  number, and a run that is not on a tag **cannot** publish whatever its input
+  says — there is no version to compare the manifest against, so there is
+  nothing to publish.
+
+- **`tools/Assert-Release.ps1`.** The checks live in a script rather than in the
+  workflow, and that is the whole reason the file exists. A rule written in YAML
+  can only be tried by running the workflow — which, for a publishing workflow,
+  means trying it by publishing. Written here, the deciding half is pure and the
+  suite exercises it on cases that must never reach a real release. 41 tests.
+
+  The check that matters is the tag against the manifest. The version is bumped
+  **by hand**, in a dedicated commit; tagging without bumping is silent
+  otherwise, because the Gallery would answer *this version already exists* — an
+  error naming the conflict and never the forgotten edit.
+
+### Fixed
+
+- **`Write-Host` does not keep stdout clean across `pwsh -File`.** Measured on
+  17 Aug 2026: `$d = pwsh -NoProfile -File .\tools\Build-Package.ps1` returned
+  **three lines**, not a path. The separation Write-Host provides is real inside
+  one process and absent across a process boundary, where the child's
+  information stream lands on the parent's stdout. The example in that script's
+  own documentation had been wrong since it was written.
+
+  Progress now goes to **stderr**, which stays separate across the boundary, and
+  a test asserts stdout carries exactly one line. Reintroducing the bug turns it
+  red — verified, not assumed. It matters twice over in `Assert-Release.ps1`,
+  where the returned value is a version, and a version contaminated by progress
+  lines is what would then be published.
+
+- **The secret patterns had become two lists.** The CI history scan kept its own
+  copy. Both now read `Get-CtxMotifsSecrets`, and a test asserts the workflow
+  sources it. Two scanners with different inputs and different allowlists is
+  fine; two copies of the patterns is the *derive one list, hand-copy its twin*
+  trap this repository already paid for on the `ctx-*` aliases.
+
+- `INSTALLATION.md` had a French section in an otherwise English document, added
+  with `ctx init` in 1.8.0. A document bilingual by accident is harder to read
+  than two documents.
+
 ## [1.8.0] - 17 August 2026
 
 ### Added

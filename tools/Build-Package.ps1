@@ -222,14 +222,27 @@ $dossier = New-CtxDossierPaquet -Racine $racine -Destination $Destination
 $fichiers = @(Get-ChildItem -LiteralPath $dossier -Recurse -File)
 $ko = [int](($fichiers | Measure-Object Length -Sum).Sum / 1kb)
 
-Write-Host ''
-Write-Host ("  Paquet assemble : {0}" -f $dossier)
-Write-Host ("  {0} fichiers, {1} Ko" -f $fichiers.Count, $ko)
-Write-Host ''
-Write-Host '  A verifier avant publication :'
-Write-Host ("    Get-ChildItem '{0}' -Recurse -File" -f $dossier)
-Write-Host ''
+# LES LIGNES DE PROGRESSION VONT SUR STDERR, ET C'EST UNE CORRECTION.
+#
+# Elles passaient par Write-Host, avec en commentaire l'idee que cela laissait
+# la sortie standard propre pour le chemin. C'est vrai DANS UN MEME PROCESSUS
+# et faux a travers `pwsh -File` : le flux d'information de l'enfant arrive sur
+# la sortie standard du parent. L'exemple documente juste en dessous rendait
+# donc trois lignes au lieu d'un chemin -- mesure du 17 aout 2026.
+#
+# stderr traverse la frontiere de processus en restant separe. Le chemin reste
+# seul sur stdout, et $d = pwsh -File ... redevient ce que la documentation
+# annonce.
+$progres = @(
+    ''
+    "  Paquet assemble : $dossier"
+    ("  {0} fichiers, {1} Ko" -f $fichiers.Count, $ko)
+    ''
+    '  A verifier avant publication :'
+    "    Get-ChildItem '$dossier' -Recurse -File"
+    ''
+)
+foreach ($ligne in $progres) { [Console]::Error.WriteLine($ligne) }
 
-# Rendu sur la sortie standard pour etre capturable ; les lignes ci-dessus
-# passent par Write-Host justement pour ne pas polluer ce rendu.
+# Seul rendu sur la sortie standard : le chemin, capturable tel quel.
 $dossier

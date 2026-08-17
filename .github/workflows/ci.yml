@@ -144,12 +144,14 @@ jobs:
           # A credential removed in a later commit is still published: the
           # working tree is clean and the history is not. This is the check
           # the local suite cannot perform on a shallow clone.
-          $motifs = @(
-            'sbp_[A-Za-z0-9]{30,}', 'sb_secret_[A-Za-z0-9]{30,}',
-            'gh[pousr]_[A-Za-z0-9]{36,}', 'github_pat_[A-Za-z0-9_]{40,}',
-            'sk-[A-Za-z0-9]{40,}', 'xox[baprs]-[A-Za-z0-9-]{30,}',
-            '(AKIA|ASIA)[A-Z0-9]{16}', 'BEGIN [A-Z ]*PRIVATE KEY'
-          )
+          #
+          # The patterns come from tools/Assert-Release.ps1 -- ONE list, read by
+          # both scanners. This job scans the HISTORY and the release audit scans
+          # the PACKAGE: different inputs, different allowlists, but keeping two
+          # copies of the patterns is the "derive one list, hand-copy its twin"
+          # trap this repository has already paid for once, on the ctx-* aliases.
+          . ./tools/Assert-Release.ps1 -AsLibrary
+          $motifs = Get-CtxMotifsSecrets
           $historique = git log --all -p
           $fautes = @()
           foreach ($m in $motifs) {

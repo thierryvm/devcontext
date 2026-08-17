@@ -1,0 +1,276 @@
+# Publishing DevContext to PowerShell Gallery, from a tag.
+#
+# WHY THIS FILE IS SHAPED THIS WAY
+#
+# A published version cannot be deleted. It can only be unlisted, and an
+# unlisted version stays downloadable by exact version number, forever. There is
+# no "we will fix it in the next release" here: what ships once has shipped.
+#
+# So the work is split in two, and the split is the whole design:
+#
+#   verifier  -- has NO access to the API key and does everything provable:
+#                the suite in both languages, tag against manifest, version not
+#                already on the Gallery, package assembled and audited.
+#
+#   publier   -- gated behind a manual-approval environment, and does one thing.
+#
+# Asking a human to approve BEFORE anything has been checked is asking them to
+# rubber-stamp. By the time the approval request arrives, every question that a
+# machine can answer has been answered -- so the human is deciding the only thing
+# left, which is whether this version should exist.
+#
+# The key is an environment secret, so it is not merely unused before approval:
+# it is unreachable. A job that does not name the environment cannot read it.
+#
+# The publish job takes the ARTIFACT the verify job audited, rather than
+# assembling its own. Publishing bytes nobody looked at, because bytes that
+# looked the same were approved, is how an audit becomes decorative.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Assemble and verify without publishing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # Deliberately NOT cancel-in-progress. Cancelling a publish half-way is the one
+  # thing worse than a slow publish.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # A tag can point at any commit, including one no branch ever carried -- and
+  # CI runs on branches, not tags. Without this job, "the tests passed" would be
+  # a statement about a different commit.
+  tests:
+    name: Suite (${{ matrix.langue }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        langue: [fr, en]
+    env:
+      DEVCTX_LANG: ${{ matrix.langue }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default -ErrorAction Stop
+          }
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.0.0 -Force -SkipPublisherCheck -Scope CurrentUser
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
+
+      - name: Run the suite
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/RunTests.ps1
+
+  verifier:
+    name: Prove it is publishable
+    runs-on: windows-latest
+    timeout-minutes: 15
+    needs: tests
+    outputs:
+      version: ${{ steps.audit.outputs.version }}
+      publier: ${{ steps.mode.outputs.publier }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default -ErrorAction Stop
+          }
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.PSResourceGet -Force -Scope CurrentUser
+
+      # Values reach PowerShell through env: rather than ${{ }} interpolated into
+      # the script body. Interpolation splices attacker-influenced text into the
+      # source before the shell parses it; an environment variable is data at
+      # every step. The refs here are collaborator-controlled, which is a reason
+      # to be careful and not a reason to skip it.
+      - name: Decide whether this run may publish
+        id: mode
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          $estTag = $env:REF_TYPE -eq 'tag'
+          $aBlanc = $env:DRY_RUN -eq 'true'
+
+          # A run that is not on a tag has no version to compare the manifest
+          # against, so it CANNOT publish -- whatever the input says. The forced
+          # dry run is what makes workflow_dispatch a safe way to rehearse this
+          # whole file without spending a version number.
+          $publier = $estTag -and -not $aBlanc
+
+          if ($estTag) { "tag=$($env:REF_NAME)" >> $env:GITHUB_OUTPUT }
+          else         { 'tag=' >> $env:GITHUB_OUTPUT }
+          "publier=$($publier.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
+          Write-Host ("  ref      : {0} ({1})" -f $env:REF_NAME, $env:REF_TYPE)
+          Write-Host ("  a blanc  : {0}" -f $aBlanc)
+          Write-Host ("  publiera : {0}" -f $publier)
+          if (-not $estTag) {
+            Write-Host '::notice::Not a tag -- dry run forced, nothing can be published.'
+          }
+
+      - name: The manifest is publishable as-is
+        shell: pwsh
+        run: |
+          # Test-ModuleManifest is what the Gallery runs on submission. Failing
+          # here beats failing after the key has been handed over.
+          $m = Test-ModuleManifest ./DevContext.psd1
+          "Module {0} version {1}" -f $m.Name, $m.Version
+          if (-not $m.Description) { throw 'Description is required to publish' }
+
+      - name: Assemble and audit the package
+        id: audit
+        shell: pwsh
+        env:
+          TAG: ${{ steps.mode.outputs.tag }}
+        run: |
+          # Both scripts print their progress to stderr and put ONE value on
+          # stdout, so these captures are the value and nothing else. The count
+          # is asserted rather than trusted: until 17 Aug 2026 the progress went
+          # through Write-Host, which crosses `pwsh -File` on stdout, and the
+          # capture was three lines wearing the shape of a path.
+          $dest = Join-Path $env:RUNNER_TEMP 'paquet'
+
+          $sortie = @(pwsh -NoProfile -File ./tools/Build-Package.ps1 -Destination $dest)
+          if ($LASTEXITCODE -ne 0) { throw 'Build-Package a echoue' }
+          if ($sortie.Count -ne 1) { throw "Build-Package a rendu $($sortie.Count) ligne(s) au lieu du seul chemin." }
+          $dossier = $sortie[0]
+
+          $sortie = @(pwsh -NoProfile -File ./tools/Assert-Release.ps1 -Dossier $dossier -Tag $env:TAG)
+          if ($LASTEXITCODE -ne 0) { throw 'Assert-Release a refuse le paquet -- rien ne sera publie.' }
+          if ($sortie.Count -ne 1) { throw "Assert-Release a rendu $($sortie.Count) ligne(s) au lieu de la seule version." }
+          $version = $sortie[0]
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "dossier=$dossier" >> $env:GITHUB_OUTPUT
+
+      - name: That version is not on the Gallery yet
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.audit.outputs.version }}
+        run: |
+          # Asked here rather than discovered during the publish. The Gallery
+          # would refuse a duplicate, but the error names a conflict and never
+          # the forgotten manifest bump that caused it.
+          #
+          # A bare version is EXACT here, and that is worth stating because it
+          # reads like a bug: -Version takes NuGet range syntax, where a bare
+          # number normally means "this or higher". PSResourceGet is the
+          # documented exception -- it supports every NuGet range EXCEPT the
+          # minimum-inclusive one, and treats a bare version as required. A range
+          # would make this check answer "is there anything newer", which is a
+          # different question with the same shape.
+          $v = $env:VERSION
+          $deja = $null
+          try {
+            $deja = Find-PSResource -Name DevContext -Version $v -Repository PSGallery -ErrorAction Stop
+          }
+          catch {
+            # Not found is the expected outcome and arrives as an error.
+            Write-Host "  Absente de la Gallery : $v"
+          }
+          if ($deja) {
+            throw "La version $v existe deja sur PowerShell Gallery. Un numero publie ne se reprend jamais."
+          }
+
+      - name: Keep the audited package
+        uses: actions/upload-artifact@v4
+        with:
+          name: devcontext-package
+          path: ${{ steps.audit.outputs.dossier }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publier:
+    name: Publish to PowerShell Gallery
+    runs-on: windows-latest
+    timeout-minutes: 15
+    needs: verifier
+    if: needs.verifier.outputs.publier == 'true'
+
+    # The gate. Configure "publication" in Settings > Environments with a
+    # required reviewer. Until someone approves, this job does not start -- so
+    # the key is not merely unused, it is unreachable.
+    environment:
+      name: publication
+      url: https://www.powershellgallery.com/packages/DevContext
+
+    steps:
+      - name: Take the package that was audited
+        uses: actions/download-artifact@v4
+        with:
+          name: devcontext-package
+          path: paquet/DevContext
+
+      - name: Install PSResourceGet
+        shell: pwsh
+        run: |
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default -ErrorAction Stop
+          }
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Microsoft.PowerShell.PSResourceGet -Force -Scope CurrentUser
+
+      - name: Publish
+        shell: pwsh
+        env:
+          # Scoped to this package and to Push only. It never appears in a
+          # command line -- an argument is visible in process listings and in the
+          # step's own echo; an environment variable is not.
+          PSGALLERY_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+          VERSION: ${{ needs.verifier.outputs.version }}
+        run: |
+          if (-not $env:PSGALLERY_KEY) {
+            throw "Le secret PSGALLERY_API_KEY est absent de l'environnement 'publication'."
+          }
+          Publish-PSResource -Path ./paquet/DevContext -ApiKey $env:PSGALLERY_KEY -Repository PSGallery -Verbose
+          Write-Host "::notice::DevContext $($env:VERSION) publie."
+
+      - name: Confirm the Gallery serves it
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.verifier.outputs.version }}
+        run: |
+          # Indexing is not instantaneous, so this is reported and never fatal:
+          # the publish has already happened, and failing the job afterwards
+          # would say "it did not work" about something that did.
+          $v = $env:VERSION
+          foreach ($essai in 1..6) {
+            Start-Sleep -Seconds 20
+            try {
+              $r = Find-PSResource -Name DevContext -Version $v -Repository PSGallery -ErrorAction Stop
+              if ($r) { Write-Host "  La Gallery sert $v."; return }
+            }
+            catch { Write-Host "  Essai $essai : pas encore indexee." }
+          }
+          Write-Host "::warning::$v n'est pas encore visible sur la Gallery. L'indexation prend parfois plusieurs minutes."

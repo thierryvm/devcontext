@@ -370,6 +370,9 @@
     'fix.ignore'              = 'ignore'
     'fix.pathIllisible'       = "PATH utilisateur illisible dans le registre."
     'fix.pathRien'            = 'PATH deja propre'
+    'fix.pathAbsent'          = "aucun PATH utilisateur dans le registre : rien a nettoyer"
+    'fix.sauvegardeSansDossier' = "aucun dossier de sauvegarde disponible : la reparation est annulee, elle ne serait pas reversible"
+    'fix.sauvegardeEchec'     = "sauvegarde impossible dans {0} : la reparation est annulee, elle ne serait pas reversible"
     'fix.pathEntrees'         = 'entree(s) de PATH'
     'fix.pathAction'          = 'retirer du PATH utilisateur'
     'fix.pathFait'            = '{0} entree(s) retiree(s) du PATH utilisateur (sauvegarde ecrite)'

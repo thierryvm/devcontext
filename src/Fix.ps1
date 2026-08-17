@@ -295,7 +295,16 @@ function Repair-CtxPathEntreesVides {
     if (-not $reg) { throw (T 'fix.pathIllisible') }
 
     try {
-        $brut = $reg.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        # LA VALEUR PEUT NE PAS EXISTER. GetValue rend son defaut sans broncher,
+        # mais GetValueKind LEVE -- et une machine ou le PATH utilisateur n'a
+        # jamais ete pose est parfaitement normale. Le defaut est invisible ici,
+        # ou cette valeur existe depuis toujours ; il ne casserait que chez
+        # quelqu'un d'autre. Releve par la revue automatique le 17 aout 2026.
+        $brut = $reg.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($null -eq $brut) {
+            return [pscustomobject]@{ Applique = $false; Detail = (T 'fix.pathAbsent') }
+        }
+
         $type = $reg.GetValueKind('Path')
         $calcul = Resolve-CtxPathSansVides -Path $brut
 
@@ -308,17 +317,30 @@ function Repair-CtxPathEntreesVides {
             return [pscustomobject]@{ Applique = $false; Detail = (T 'fix.ignore') }
         }
 
-        # Meme dossier que la sauvegarde posee par installer-shims.ps1 : un
-        # utilisateur qui cherche "ou est mon ancien PATH" ne doit avoir qu'un
-        # seul endroit a connaitre.
+        # LA SAUVEGARDE EST UNE CONDITION, PAS UN CONFORT.
+        #
+        # Tout l'argument de surete de cette reparation est "reversible parce
+        # que sauvegardee". Une ecriture de sauvegarde qui echoue en silence
+        # retire la reversibilite ET laisse croire qu'elle est la -- ce qui est
+        # pire que de ne pas sauvegarder du tout, puisque personne ne le sait.
+        #
+        # Donc : pas de sauvegarde, pas d'ecriture. Meme dossier que celle posee
+        # par installer-shims.ps1, pour que "ou est mon ancien PATH" n'ait qu'une
+        # seule reponse.
         if (-not $DossierSauvegarde) { $DossierSauvegarde = Get-CtxShimRacine }
-        $sauvegarde = $null
-        if ($DossierSauvegarde) {
+        if (-not $DossierSauvegarde) {
+            return [pscustomobject]@{ Applique = $false; Detail = (T 'fix.sauvegardeSansDossier') }
+        }
+
+        $sauvegarde = Join-Path $DossierSauvegarde 'path-utilisateur-avant-fix.txt'
+        try {
             if (-not (Test-Path -LiteralPath $DossierSauvegarde)) {
-                New-Item -ItemType Directory -Path $DossierSauvegarde -Force -ErrorAction SilentlyContinue | Out-Null
+                New-Item -ItemType Directory -Path $DossierSauvegarde -Force -ErrorAction Stop | Out-Null
             }
-            $sauvegarde = Join-Path $DossierSauvegarde 'path-utilisateur-avant-fix.txt'
-            Set-Content -LiteralPath $sauvegarde -Value $brut -Encoding UTF8 -ErrorAction SilentlyContinue
+            Set-Content -LiteralPath $sauvegarde -Value $brut -Encoding UTF8 -ErrorAction Stop
+        }
+        catch {
+            return [pscustomobject]@{ Applique = $false; Detail = (T 'fix.sauvegardeEchec' $sauvegarde) }
         }
 
         # Le type d'origine est repose explicitement. Voir precaution 2.

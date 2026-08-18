@@ -322,6 +322,14 @@ needs to live in the tray. The decision waits until the CLI surface has settled
   purpose and it reads like a typo, so it was checked rather than inferred:
   download-artifact's own README pairs `@v8` with `upload-artifact@v7` in its
   examples.
+- **The publishing job's first steps are never rehearsed.** A dry run stops at
+  the artifact upload: `publier` is skipped, so `download-artifact`, the
+  preparation read from the *package's own* manifest, and the version assertion
+  only ever run on a real tag. Two of the three failures of 18 August 2026 were
+  in that job — which is precisely the part a rehearsal does not reach. Closing
+  it means a job doing everything `publier` does except the publish, and it has
+  to **share** those steps rather than copy them, or it reintroduces the very
+  defect the shared suite just removed.
 - **WSL is not covered.** Its own `PATH`, its own filesystem view. `ctx doctor`
   reports it rather than closing it. This is the one gap that sits on the
   *author's own* machine — a distribution is used daily for Docker — and it is

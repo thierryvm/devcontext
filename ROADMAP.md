@@ -114,7 +114,19 @@ redirected, because a question nobody can answer is worse than no question.
 
 ---
 
-## 1.9.0 — publishing from a tag, and a look at where agents write
+## 1.9.0 — shipped, 18 August 2026
+
+Published from a tag, by the workflow, behind a human approval — the first
+release this project did not push by hand. Also `ctx guard`, and `ctx doctor`
+reporting where an agent is allowed to write.
+
+**It took three attempts, and that is the honest headline.** Each failure was the
+same defect wearing a different hat: a job written by copying a neighbour and
+losing one of its setup steps. The Supabase CLI missing from the test job, then
+the vault modules missing from the publishing job. Nothing reached the Gallery
+until it was right, which is exactly what the gate is for — but a gate that fires
+three times is telling you about the thing behind it, not about luck. The cure is
+under *Known gaps*: one `workflow_call`, not three hand-kept copies.
 
 - ~~**A GitHub Actions workflow on `v*`**~~ — written. Split so that everything
   provable happens *before* a human is asked to approve, and so the API key is

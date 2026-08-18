@@ -83,7 +83,14 @@ Describe 'Test-CtxDoctorProfilComptes' {
                     }
                 ))
             $c.Count | Should -Be 1
-            $c[0].Verdict | Should -Be 'PROBLEME'
+            # ATTENDU CORRIGE LE 18 AOUT 2026, ET DIT PLUTOT QUE CHANGE EN
+            # SILENCE. Ce test exigeait PROBLEME. La premisse etait fausse : le
+            # nom trouve dans state.vscdb ne prouve pas une SESSION, seulement
+            # que le profil a deja servi avec ce compte. Les autorisations
+            # d'extensions et les compteurs d'usage survivent a une
+            # deconnexion -- mesure le meme jour, menu Comptes vide a l'appui.
+            # Un verdict porte la confiance de sa preuve.
+            $c[0].Verdict | Should -Be 'ATTENTION'
             $c[0].Domaine | Should -Be 'editeur'
             $c[0].Sujet | Should -Be 'comptes/client'
             $c[0].Detail | Should -Match 'alice'

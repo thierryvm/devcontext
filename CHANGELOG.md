@@ -1,3 +1,36 @@
+## [Unreleased]
+
+### Changed
+
+- **The editor-account check says what it can prove, and no longer more.** It
+  reported `PROBLEME` — *this profile carries another context's identity* — on
+  the strength of finding that account's login inside the profile's
+  `state.vscdb`. The reasoning held; the premise did not. That file does not say
+  whether a session is open.
+
+  Measured on 18 August 2026, after the dead-bytes fix landed: the only *live*
+  occurrences of the foreign login in a profile were its **extension
+  authorisations** (`github-<login>` → `[{"id":"eamodio.gitlens", …,
+  "allowed":true}]`) and a **usage counter**. VS Code keeps both after a
+  sign-out, so that a later sign-in remembers the choices. The window's Accounts
+  menu listed nothing at all.
+
+  So the file supports *this profile has already been used with that account*,
+  never *that account is signed in here*. Two sentences that only resemble each
+  other from a distance — the second one sent someone hunting for a link that
+  did not exist.
+
+  The finding is kept, because it is real: those authorisations survive, so a
+  future sign-in would re-grant GitLens and Copilot **without asking**. But it
+  is now an `ATTENTION`, it says *trace* rather than *identity*, and the remedy
+  names the actual authority — the Accounts menu — instead of prescribing an
+  action that may already be done.
+
+  A verdict carries the confidence of its evidence. Not published on its own:
+  it travels with the next change.
+
+---
+
 ## [1.9.2] - 18 August 2026
 
 ### Fixed

@@ -95,6 +95,7 @@ value. Every message that can carry an exception passes through
 | `pwsh -Command` inherits the parent environment | Declining to *set* a variable does not *clear* it. A test meant to run without a context inherited one and never built the case it claimed to. |
 | Clearing a real env var in a test | Removing `SUPABASE_ACCESS_TOKEN` in a `finally` disarmed the leak test that ran later. **Restore, never remove.** |
 | `Join-Path` in a pure function | It is a **provider** cmdlet: it resolves the drive and fails with "Cannot find drive" when one is not mounted. Without `-ErrorAction Stop` it does not throw — it returns an **empty string**, and `--user-data-dir --extensions-dir .` ships, where the next flag is read as the previous one's value. Invisible on the machine that has the drive; red on a CI agent that does not. Use `[System.IO.Path]::Combine` wherever the path is data rather than a location. |
+| A local composite action inside a job that downloads instead of checking out | `uses: ./…` is read from the **workspace**, so the job has to check the repository out first — and `actions/checkout` **cleans its destination**, so a checkout placed after `download-artifact` takes the downloaded package with it. The publishing job therefore checks out sparsely, first, and then asserts that the package it downloaded carries the version the audit reported. Order is the whole fix, and nothing about it is visible in a diff. |
 | A hardcoded absolute path | `C:\Users\<name>\...` and `C:\Program Files\PowerShell\7\` sat in two shipped scripts. They worked on one machine and published a Windows username. Resolve, never assume. |
 | Running a GUI application to ask it a question | Probing Antigravity with CLI flags opened the editor, which self-updated, relaunched and crashed on `EPIPE` in a loop on the user's screen. Run a binary only when the install layout proves a command-line entry point exists; otherwise read its argument surface from disk. |
 | `[Parameter(Mandatory)]` on an array | Rejects `@()`. `installer-shims.ps1 -Restaurer` passes an empty list to mean "remove everything", and threw on parameter binding — removing the `PATH` entry but leaving the files. Add `[AllowEmptyCollection()]`. |
@@ -116,6 +117,15 @@ value. Every message that can carry an exception passes through
   does, change the line instead.
 - **Branches**: `feature/…`, `hotfix/…`. `main` is protected.
 - **Never push without a green suite.** `push done ≠ task done`: check CI too.
+- **CI: one suite, one setup.** The Pester matrix lives in
+  `.github/workflows/suite.yml` and is *called* by both `ci.yml` and
+  `release.yml`, with `fail-fast` and the timeout as its only inputs — the only
+  two differences that were ever deliberate. Preparing an environment lives in
+  `.github/actions/prepare-powershell`, which reads the required modules **from
+  the manifest** rather than from a list beside it. If you find yourself copying
+  a job or an install step from one workflow into the other, stop: that is the
+  defect that cost three release attempts on 18 August 2026, and it has been
+  fixed. `actionlint` checks these files and is worth running before a push.
 
 ---
 

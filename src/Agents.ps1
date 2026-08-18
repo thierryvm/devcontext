@@ -153,7 +153,12 @@ function Resolve-CtxGuardPlan {
       arbitrage, pas une regle. On le liste pour qu'il soit relu.
     #>
     [CmdletBinding()]
-    param([object[]]$Faits = @())
+    # AllowNull pour la meme raison que Test-CtxDoctorAgentConfiance : @() rendu
+    # par une fonction arrive ici en $null, et `$null | Where-Object` envoie un
+    # $null DANS le filtre, ou lire .Portee leve sous StrictMode.
+    param([AllowNull()][object[]]$Faits = @())
+
+    $Faits = @($Faits | Where-Object { $null -ne $_ })
 
     $utilisateur = @($Faits | Where-Object { $_.Portee -eq 'utilisateur' })
 
@@ -277,9 +282,16 @@ function Test-CtxDoctorAgentConfiance {
     #>
     [CmdletBinding()]
     param(
-        [object[]]$Faits = @(),
+        # AllowNull, parce que l'appelant NE PEUT PAS toujours donner un tableau :
+        # une fonction PowerShell qui rend @() rend en realite $null, le tableau
+        # vide se depliant en traversant la sortie. Refuser le null ferait lever
+        # ici une fonction PURE, sur l'entree la plus banale qui soit -- une
+        # machine ou aucun agent n'a jamais approuve quoi que ce soit.
+        [AllowNull()][object[]]$Faits = @(),
         [AllowNull()][AllowEmptyString()][string]$Contexte
     )
+
+    $Faits = @($Faits | Where-Object { $null -ne $_ })
 
     $checks = @()
     if ($Faits.Count -eq 0) { return @($checks) }

@@ -616,7 +616,15 @@ function Get-DevContextDoctor {
     # alors que les agents portent deja une frontiere, et qu'elle s'elargit une
     # approbation ponctuelle a la fois, en portee utilisateur, sans que personne
     # ne relise jamais la liste.
-    foreach ($c in (Test-CtxDoctorAgentConfiance -Faits (Get-CtxAgentConfianceFacts -Dossier $dossier) -Contexte $proprio)) {
+    # Le @() n'est pas decoratif. Une fonction PowerShell ne peut pas RENDRE un
+    # tableau vide : il se deplie en traversant la sortie, et l'appelant recoit
+    # $null. Sous StrictMode, le $Faits.Count d'en face leve alors. Invisible sur
+    # une machine de developpeur, qui a toujours un fichier de reglages quelque
+    # part ; rouge sur un agent de CI, qui n'en a aucun. Meme defaut que le
+    # $reste de Invoke-DevCtx et que Get-CtxVercelMots en 1.4.0 : un tableau qui
+    # traverse une expression se deplie, et il faut le redemander a chaque fois.
+    $faitsAgents = @(Get-CtxAgentConfianceFacts -Dossier $dossier)
+    foreach ($c in (Test-CtxDoctorAgentConfiance -Faits $faitsAgents -Contexte $proprio)) {
         $checks.Add($c)
     }
 

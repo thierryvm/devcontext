@@ -364,3 +364,58 @@ Describe 'ctx guard — ecriture' {
         }
     }
 }
+
+Describe 'Une machine sans le moindre reglage d agent' {
+    # La regression du 18 aout 2026, trouvee par la CI et par elle seule.
+    #
+    # Get-CtxAgentConfianceFacts finit par @($faits). Cela ne suffit PAS : une
+    # fonction PowerShell ne peut pas RENDRE un tableau vide, il se deplie en
+    # traversant la sortie et l'appelant recoit $null. Doctor.ps1 passait ce
+    # $null directement, et le $Faits.Count d'en face levait sous StrictMode.
+    #
+    # Invisible sur une machine de developpeur -- il y a toujours un fichier de
+    # reglages quelque part. Rouge sur un agent de CI, qui n'en a aucun.
+
+    It 'ne fait pas lever la decision pure quand la collecte n a rien trouve' {
+        InModuleScope DevContext {
+            # $null, pas @() : c'est ce que l'appelant recoit REELLEMENT.
+            { Test-CtxDoctorAgentConfiance -Faits $null -Contexte 'perso' } | Should -Not -Throw
+            @(Test-CtxDoctorAgentConfiance -Faits $null -Contexte 'perso').Count | Should -Be 0
+        }
+    }
+
+    It 'ne fait pas lever le plan de guard non plus' {
+        InModuleScope DevContext {
+            # $null | Where-Object envoie un $null DANS le filtre, ou lire
+            # .Portee leve. Une fonction pure ne doit pas mourir sur ca.
+            { Resolve-CtxGuardPlan -Faits $null } | Should -Not -Throw
+            $plan = Resolve-CtxGuardPlan -Faits $null
+            @($plan.ARetirer).Count | Should -Be 0
+            @($plan.ARelire).Count  | Should -Be 0
+            @($plan.Fichiers).Count | Should -Be 0
+        }
+    }
+
+    It 'traverse l expression EXACTE de ctx doctor sur un dossier vierge' {
+        # Reproduit la ligne de Doctor.ps1 telle qu'elle etait ecrite, sur un
+        # dossier sans .claude et avec une portee utilisateur vide. C'est la
+        # forme qui a casse ; la tester sous une autre forme ne prouverait rien.
+        $avant = $env:CLAUDE_CONFIG_DIR
+        $vide = Join-Path $TestDrive ('vierge-' + [guid]::NewGuid().ToString('N'))
+        $projet = Join-Path $TestDrive ('projet-' + [guid]::NewGuid().ToString('N'))
+        $null = New-Item -ItemType Directory -Path $vide, $projet -Force
+        try {
+            $env:CLAUDE_CONFIG_DIR = $vide
+            InModuleScope DevContext -Parameters @{ p = $projet } { param($p)
+                {
+                    Test-CtxDoctorAgentConfiance `
+                        -Faits (Get-CtxAgentConfianceFacts -Dossier $p) -Contexte 'perso'
+                } | Should -Not -Throw
+            }
+        }
+        finally {
+            if ($null -ne $avant) { $env:CLAUDE_CONFIG_DIR = $avant }
+            else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
+        }
+    }
+}

@@ -302,6 +302,14 @@ needs to live in the tray. The decision waits until the CLI surface has settled
   only differences that are *deliberate*. Left as its own change rather than
   smuggled into a release. It is the same defect this repository already names
   for the `ctx-*` aliases: **derive both from the same source, or neither**.
+- **The artifact actions are two majors behind.** `upload-artifact@v4` and
+  `download-artifact@v4` still run on Node 20, which GitHub has announced as
+  deprecated; the current majors are v7 and v8. Nothing is broken — it is a
+  warning — and the bump is deliberately **not** taken inside a release, because
+  the pairing between the two majors is exactly the kind of assumption that has
+  cost this project three round trips in a single day. It lands in its own change,
+  rehearsed through `workflow_dispatch` with `dry_run` before any tag depends on
+  it.
 - **WSL is not covered.** Its own `PATH`, its own filesystem. `ctx doctor`
   reports it. Closing it means a Linux-side install, which lands with the port.
 - **An absolute path bypasses the guard.** Inherent to a `PATH` shim.

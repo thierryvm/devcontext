@@ -1,5 +1,13 @@
 ﻿# DevContext
 
+<p align="center">
+  <a href="https://www.powershellgallery.com/packages/DevContext"><img alt="PowerShell Gallery" src="https://img.shields.io/powershellgallery/v/DevContext?style=flat-square&label=gallery&color=0b6cbf"></a>
+  <a href="https://www.powershellgallery.com/packages/DevContext"><img alt="Downloads" src="https://img.shields.io/powershellgallery/dt/DevContext?style=flat-square&label=downloads&color=0b6cbf"></a>
+  <a href="https://github.com/thierryvm/devcontext/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/thierryvm/devcontext/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-3da639?style=flat-square"></a>
+  <img alt="PowerShell 7+" src="https://img.shields.io/badge/PowerShell-7%2B-5391FE?style=flat-square&logo=powershell&logoColor=white">
+</p>
+
 **Your identity, your credentials and your AI tooling follow the folder you are
 standing in — not the account you last logged into.**
 

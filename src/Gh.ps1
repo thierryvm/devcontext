@@ -297,6 +297,80 @@ function Resolve-CtxGhVerdict {
         -Override:($env:DEVCTX_ALLOW_GH -eq '1')
 }
 
+function Resolve-CtxGhLoginObserve {
+    <#
+      PURE. Traduit une execution de `gh api user --jq .login` en ce qui a ete
+      OBSERVE -- question distincte de "quel est le compte".
+
+      Le 17 aout 2026, pendant une panne GitHub de niveau Critical (API Requests
+      en Major Outage), `ctx` a rendu NO-GO sur un dossier client parfaitement
+      sain. La CLI avait ecrit le corps d'erreur de l'API SUR SA SORTIE STANDARD,
+      le code de sortie n'etait pas lu, et cette phrase a ete comparee au compte
+      attendu comme si c'etait une identite :
+
+          Compte GitHub actif '{"message": "No server is currently available
+          to service your request..."}' - le contexte attend 'ovb-willemot'.
+
+      La meme question etait deja posee correctement a vingt lignes de la, dans
+      `ctx doctor -Live` (src/Jetons.ps1), qui teste $LASTEXITCODE depuis le
+      premier jour. Deux implementations d'une seule question, une seule juste.
+
+      Trois etats, jamais deux, parce que trois choses distinctes peuvent etre
+      vraies :
+
+        connu       le compte est mesure, la comparaison a un sens
+        nonAuth     aucun identifiant la ou `gh` regarde -- fait LOCAL et hors
+                    ligne, donc encore vrai pendant une panne
+        nonVerifie  un identifiant existe, on n'a pas pu le lire
+
+      Le troisieme n'est PAS un probleme, et ne doit produire aucun NO-GO. Un
+      reseau injoignable ne dit rien de l'identite, et un outil qui crie au loup
+      se fait desinstaller -- doctrine deja tenue par `-Live`, ou un reseau muet
+      est INFO et un 401 un PROBLEME. Elle manquait ici, c'est-a-dire dans la
+      commande que l'on tape vingt fois par jour.
+
+      Le doute penche vers `nonVerifie`, jamais vers `nonAuth` : annoncer "non
+      authentifie" a quelqu'un qui l'est parfaitement l'enverrait refaire un
+      `gh auth login` que la panne ferait echouer, pour reparer ce qui n'est pas
+      casse.
+
+      La FORME du compte est verifiee meme quand le code de sortie vaut zero. La
+      garantie ne doit pas dependre de la discipline de sortie d'un binaire
+      tiers : un nom de compte GitHub ne contient ni accolade, ni guillemet, ni
+      espace, ni saut de ligne.
+    #>
+    param(
+        # Ce que la commande a ecrit sur sa sortie standard.
+        [AllowNull()][AllowEmptyString()][string]$Sortie,
+
+        # Son code de sortie. Zero seul ne suffit pas, voir plus haut.
+        [int]$Code = 0,
+
+        # hosts.yml existe-t-il la ou `gh` lira ses identifiants ?
+        #
+        # Trois valeurs, et le $null porte du sens : $true un identifiant est
+        # present, $false il n'y en a pas, $null l'appelant n'a pas pu savoir ou
+        # regarder. Un [switch] confondrait les deux derniers, et cette confusion
+        # rendrait "non authentifie" sur une machine dont on ignore l'etat.
+        [AllowNull()][Nullable[bool]]$ConfigExiste
+    )
+
+    $texte = if ($null -eq $Sortie) { '' } else { $Sortie.Trim() }
+
+    # 1 a 39 caracteres, alphanumeriques ou tirets, ne commence ni ne finit par
+    # un tiret : les regles de GitHub. La classe de caracteres exclut le saut de
+    # ligne, donc une reponse multiligne echoue ici -- et c'est voulu.
+    $formeLogin = '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$'
+
+    if ($Code -eq 0 -and $texte -match $formeLogin) {
+        return [pscustomobject]@{ Login = $texte; Etat = 'connu' }
+    }
+    if ($ConfigExiste -eq $false) {
+        return [pscustomobject]@{ Login = $null; Etat = 'nonAuth' }
+    }
+    [pscustomobject]@{ Login = $null; Etat = 'nonVerifie' }
+}
+
 function Get-CtxGhExe {
     <#
       Le VRAI gh, en ecartant tous nos dossiers de shims -- sous chacun de leurs

@@ -382,3 +382,97 @@ exit `$LASTEXITCODE
         $r.Code   | Should -Be 42
     }
 }
+
+Describe 'Resolve-CtxGhLoginObserve' {
+    # La regression du 17 aout 2026, en entier et sans reseau.
+    #
+    # Pendant une panne GitHub de niveau Critical, `ctx` a rendu NO-GO sur un
+    # dossier client sain : la CLI avait ecrit le corps d'erreur de l'API sur sa
+    # sortie STANDARD, le code de sortie n'etait pas lu, et cette phrase a ete
+    # comparee au compte attendu comme si c'etait une identite.
+
+    It 'lit un compte quand la CLI a reussi' {
+        InModuleScope DevContext {
+            $r = Resolve-CtxGhLoginObserve -Sortie "ovb-willemot`n" -Code 0 -ConfigExiste $true
+            $r.Etat  | Should -Be 'connu'
+            $r.Login | Should -Be 'ovb-willemot'
+        }
+    }
+
+    It 'ne prend PAS un corps d erreur de l API pour une identite' {
+        InModuleScope DevContext {
+            # La chaine exacte affichee par ctx ce jour-la.
+            $panne = '{"message": "No server is currently available to service your request. Sorry about that. Please try resubmitting your request and contact us if the problem persists."}'
+            $r = Resolve-CtxGhLoginObserve -Sortie $panne -Code 1 -ConfigExiste $true
+            $r.Etat  | Should -Be 'nonVerifie'
+            $r.Login | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'refuse une reponse difforme MEME sur un code de sortie nul' {
+        InModuleScope DevContext {
+            # La garantie ne doit pas dependre de la discipline de sortie d un
+            # binaire tiers. Un compte GitHub ne ressemble a aucune de ces
+            # chaines, quoi qu en dise le code de retour.
+            foreach ($difforme in @(
+                    '{"message": "Bad gateway"}'
+                    'error connecting to api.github.com'
+                    "ovb-willemot`nwarning: a new release of gh is available"
+                    '-commence-par-un-tiret'
+                    'finit-par-un-tiret-'
+                    'a espace'
+                    ('x' * 40)
+                    '')) {
+                $r = Resolve-CtxGhLoginObserve -Sortie $difforme -Code 0 -ConfigExiste $true
+                $r.Etat  | Should -Not -Be 'connu' -Because "'$difforme' n est pas un compte GitHub"
+                $r.Login | Should -BeNullOrEmpty
+            }
+        }
+    }
+
+    It 'accepte les formes de compte GitHub reellement valides : <_>' -ForEach @(
+        'a', 'thierryvm', 'ovb-willemot', 'A1', 'x-y-z', ('a' * 39)
+    ) {
+        InModuleScope DevContext -Parameters @{ nom = $_ } { param($nom)
+            $r = Resolve-CtxGhLoginObserve -Sortie $nom -Code 0 -ConfigExiste $true
+            $r.Etat  | Should -Be 'connu'
+            $r.Login | Should -Be $nom
+        }
+    }
+
+    It 'dit « non authentifie » seulement quand l absence est un fait LOCAL' {
+        InModuleScope DevContext {
+            # hosts.yml absent la ou `gh` regarde : verifiable hors ligne, donc
+            # encore vrai pendant une panne.
+            $r = Resolve-CtxGhLoginObserve -Sortie '' -Code 1 -ConfigExiste $false
+            $r.Etat | Should -Be 'nonAuth'
+        }
+    }
+
+    It 'penche vers « non verifie » quand l appelant ignore ou regarder' {
+        InModuleScope DevContext {
+            # $null n est pas $false. Les confondre enverrait quelqu un de
+            # parfaitement authentifie refaire un `gh auth login` que la panne
+            # ferait echouer, pour reparer ce qui n est pas casse.
+            $r = Resolve-CtxGhLoginObserve -Sortie '' -Code 1 -ConfigExiste $null
+            $r.Etat | Should -Be 'nonVerifie'
+        }
+    }
+
+    It 'ne rend jamais un Login hors de l etat connu' {
+        InModuleScope DevContext {
+            # C est CETTE propriete que `ctx` utilise pour decider s il compare.
+            # Un Login non nul hors de 'connu' reproduirait la panne a l identique.
+            foreach ($cas in @(
+                    @{ S = '{"message":"down"}'; C = 1;  E = $true }
+                    @{ S = '{"message":"down"}'; C = 1;  E = $false }
+                    @{ S = '{"message":"down"}'; C = 0;  E = $null }
+                    @{ S = '';                   C = 1;  E = $false }
+                    @{ S = $null;                C = 1;  E = $null })) {
+                $r = Resolve-CtxGhLoginObserve -Sortie $cas.S -Code $cas.C -ConfigExiste $cas.E
+                $r.Etat  | Should -Not -Be 'connu'
+                $r.Login | Should -BeNullOrEmpty
+            }
+        }
+    }
+}

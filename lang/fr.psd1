@@ -70,10 +70,12 @@
     'ctx.git'                = 'git            : {0}'
     'ctx.gh'                 = 'gh             : {0}'
     'ctx.ghNonAuth'          = '(non authentifie)'
+    'ctx.ghNonVerifie'       = "(non verifie - la CLI gh n'a pas repondu)"
     'ctx.vercel'             = 'vercel         : {0}'
     'ctx.supabase'           = 'supabase       : {0}'
     'ctx.remote'             = 'remote (push)  : {0}'
     'ctx.go'                 = 'GO - identite, dossier et compte concordent.'
+    'ctx.goSansCompte'       = 'GO - identite et dossier concordent. Compte GitHub non verifie, voir ci-dessus.'
     'ctx.noGo'               = 'NO-GO'
     'ctx.correctif'          = 'Correctif : {0}'
     'ctx.detail'             = 'Detail complet : ctx-doctor'

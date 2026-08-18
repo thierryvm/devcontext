@@ -79,6 +79,24 @@ jobs:
           Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
           Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
 
+      # CETTE ETAPE MANQUAIT, et c'est ce qui a fait echouer la premiere release
+      # reelle (v1.9.0, 18 aout 2026). Ce job a ete ecrit en RECOPIANT celui de
+      # ci.yml, et la copie a perdu une etape -- le defaut que AGENTS.md nomme
+      # deja : deriver une liste et recopier sa jumelle a la main.
+      #
+      # Sans elle, la suite tourne SANS la CLI que le garde-fou enveloppe. Les
+      # tests de delegation declarent maintenant cette precondition, donc son
+      # absence ne rendrait plus rouge -- elle rendrait SILENCIEUX, ce qui est
+      # pire juste avant une publication irreversible.
+      #
+      # continue-on-error, comme dans ci.yml : une panne du registre npm ne doit
+      # pas bloquer une release sur une dependance dont les tests savent se
+      # passer en le disant.
+      - name: Install the Supabase CLI (best effort)
+        shell: pwsh
+        continue-on-error: true
+        run: npm install -g supabase
+
       - name: Run the suite
         shell: pwsh
         run: pwsh -NoProfile -File ./tests/RunTests.ps1

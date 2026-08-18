@@ -293,6 +293,15 @@ needs to live in the tray. The decision waits until the CLI surface has settled
 
 ## Known gaps, carried
 
+- **The two test jobs are hand-copied, not shared.** `ci.yml` and `release.yml`
+  each declare their own matrix, and on 18 August 2026 the release copy was found
+  missing the Supabase CLI step the CI copy had — so the first real release ran a
+  suite the CI never ran. Both were patched, and that is a treatment, not a cure:
+  the next divergence will be as silent as this one. The fix is a `workflow_call`
+  the two invoke, with `fail-fast` and the timeout as inputs, since those are the
+  only differences that are *deliberate*. Left as its own change rather than
+  smuggled into a release. It is the same defect this repository already names
+  for the `ctx-*` aliases: **derive both from the same source, or neither**.
 - **WSL is not covered.** Its own `PATH`, its own filesystem. `ctx doctor`
   reports it. Closing it means a Linux-side install, which lands with the port.
 - **An absolute path bypasses the guard.** Inherent to a `PATH` shim.

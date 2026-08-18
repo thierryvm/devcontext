@@ -146,26 +146,34 @@ tag start the publish.
 
 ---
 
-## 1.10.0 — Linux (and macOS when it can be verified)
+## Deferred — Linux and macOS
 
-The decision layer is already portable and has been from the start; what is
-nailed to Windows is the **machine integration**, not the logic.
+**Not scheduled, and that is a decision rather than a backlog accident.**
+Reviewed on 18 August 2026 and deliberately left without a version number:
+nobody has asked for it, the module has been public for three days, and nobody
+working on it has a Mac.
 
-**Linux first, and macOS only when someone can verify it.** Not a preference —
-an admission. Nobody working on this repository has a Mac, and this project's
-own recorded lesson is that what breaks is what the author is not in a position
-to see. Shipping a macOS port verified only by CI would be claiming support for
-a platform nobody has run it on.
+A port nobody can verify is not a feature, it is a promise. This project's whole
+argument is that an unverified guarantee is worse than an absent one — a `deny`
+rule that never matches, a test green for the wrong reason — and *supports
+macOS* written on the strength of a CI job would be the same mistake in the
+README instead of the code. It gets a number the day someone asks for it, or the
+day there is a Mac to try it on.
 
-Linux does not have that problem, because **WSL is already here**. It is on the
-development machine, `ctx doctor` already reports it as uncovered, and the port
-is what puts the shims on its own `PATH`. The gap and the feature close with the
-same work — and the test bench costs nothing.
+The decision layer has been portable from the start; what is nailed to Windows
+is the **machine integration**, not the logic. That groundwork is real, it
+already ships, and it stays true while this waits.
 
-Most of the work is shared anyway: POSIX shims, `PATH` through a shell rc file,
-XDG paths. Verifying that on Linux de-risks the majority of macOS, leaving
-LaunchServices and the `.app` bundle — which will ship when they can be tried,
-and be described as untried until then.
+**WSL was the one argument for doing it now, and it turns out to be
+separable.** The gap is on the development machine, `ctx doctor` already reports
+it, and what closes it is putting the POSIX shims on a distribution's own
+`PATH` — which needs no release for either platform. It is tracked on its own,
+under *Known gaps*.
+
+If this is ever picked up: Linux first, and macOS only when someone can verify
+it. Most of the work is shared — POSIX shims, `PATH` through a shell rc file,
+XDG paths — so Linux de-risks the majority of macOS, leaving LaunchServices and
+the `.app` bundle, which would ship described as untried until they are tried.
 
 Already portable, and shipped as such:
 
@@ -186,11 +194,7 @@ What needs writing:
 | Desktop `.lnk` shortcuts | `.app` bundle / `.desktop` entry |
 | `.cmd` entry points | unused there, and harmless |
 
-A Linux port also closes the **WSL gap** that `ctx doctor` currently reports as
-uncovered — the shim is absent from a distribution's own `PATH`, and a native
-Linux install is what puts it there. Two problems, one piece of work.
-
-CI has to grow a macOS and a Linux job on the same day: a port with no matrix is
+CI would have to grow a macOS and a Linux job on the same day: a port with no matrix is
 a port that works only on the machine that wrote it, and this repository has
 already paid that lesson five times.
 
@@ -305,24 +309,23 @@ needs to live in the tray. The decision waits until the CLI surface has settled
 
 ## Known gaps, carried
 
-- **The two test jobs are hand-copied, not shared.** `ci.yml` and `release.yml`
-  each declare their own matrix, and on 18 August 2026 the release copy was found
-  missing the Supabase CLI step the CI copy had — so the first real release ran a
-  suite the CI never ran. Both were patched, and that is a treatment, not a cure:
-  the next divergence will be as silent as this one. The fix is a `workflow_call`
-  the two invoke, with `fail-fast` and the timeout as inputs, since those are the
-  only differences that are *deliberate*. Left as its own change rather than
-  smuggled into a release. It is the same defect this repository already names
-  for the `ctx-*` aliases: **derive both from the same source, or neither**.
-- **The artifact actions are two majors behind.** `upload-artifact@v4` and
-  `download-artifact@v4` still run on Node 20, which GitHub has announced as
-  deprecated; the current majors are v7 and v8. Nothing is broken — it is a
-  warning — and the bump is deliberately **not** taken inside a release, because
-  the pairing between the two majors is exactly the kind of assumption that has
-  cost this project three round trips in a single day. It lands in its own change,
-  rehearsed through `workflow_dispatch` with `dry_run` before any tag depends on
-  it.
-- **WSL is not covered.** Its own `PATH`, its own filesystem. `ctx doctor`
-  reports it. Closing it means a Linux-side install, which lands with the port.
+- ~~**The two test jobs are hand-copied, not shared.**~~ **Closed, 18 August
+  2026.** The matrix lives once, in `.github/workflows/suite.yml`, called by both
+  workflows. Only the two differences that were *deliberate* survive as inputs:
+  `fail-fast` and the timeout. Everything else that differed was an accident of
+  copying, and an accident does not deserve a parameter. The setup moved the same
+  day into `.github/actions/prepare-powershell`, which reads the required modules
+  **from the manifest** — so the publishing job can no longer be one short of
+  what `Test-ModuleManifest` will resolve.
+- ~~**The artifact actions are two majors behind.**~~ **Closed, 18 August 2026.**
+  `upload-artifact@v7` and `download-artifact@v8`. The majors are offset on
+  purpose and it reads like a typo, so it was checked rather than inferred:
+  download-artifact's own README pairs `@v8` with `upload-artifact@v7` in its
+  examples.
+- **WSL is not covered.** Its own `PATH`, its own filesystem view. `ctx doctor`
+  reports it rather than closing it. This is the one gap that sits on the
+  *author's own* machine — a distribution is used daily for Docker — and it is
+  **separable from the port below**: what closes it is putting the POSIX shims on
+  a distribution's `PATH`, which needs neither a Linux release nor a macOS one.
 - **An absolute path bypasses the guard.** Inherent to a `PATH` shim.
 - Full list with reasoning: `SECURITY.md`.

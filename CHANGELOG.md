@@ -1,3 +1,33 @@
+## [Unreleased]
+
+### Changed
+
+- **The test suite and the environment setup now exist once each, and are
+  called.** `ci.yml` and `release.yml` carried hand-written copies of both, and
+  on 18 August 2026 that cost three release attempts: the release copy of the
+  test job was missing the step installing the Supabase CLI — so one delegation
+  test went red and two went green for the wrong reason — and the publishing job
+  was missing the two vault modules the manifest requires, which only surfaced
+  *after* a human had approved the release.
+
+  The matrix lives in `.github/workflows/suite.yml`, called by both workflows,
+  with `fail-fast` and the timeout as its only inputs: the two differences that
+  were deliberate. Preparation lives in `.github/actions/prepare-powershell`,
+  which reads the required modules **from the manifest** instead of from a list
+  kept beside it, so adding an entry to `RequiredModules` installs it everywhere
+  with nothing left to remember. The action ends on `Test-ModuleManifest`, so
+  each environment *proves* it can resolve the manifest rather than assuming it.
+
+  Nothing changes for anyone installing the module. It is recorded because the
+  failure it removes was invisible: a copy never announces that it has drifted.
+
+- `actions/upload-artifact` to v7 and `actions/download-artifact` to v8, off the
+  deprecated Node 20. The majors are offset on purpose, which reads like a typo
+  and was therefore checked in the actions' own documentation rather than
+  inferred from v4 having paired with v4.
+
+---
+
 ## [1.9.0] - 18 August 2026
 
 ### Added

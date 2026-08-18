@@ -823,6 +823,156 @@ function Test-CtxTexteContientCompte {
     [bool][regex]::IsMatch($Texte, $motif)
 }
 
+function Get-CtxSqliteTexteVivant {
+    <#
+      PURE. Rend le texte des seules zones VIVANTES d'un fichier SQLite.
+
+      POURQUOI CETTE FONCTION EXISTE
+
+      Le controle des comptes d'editeur cherche un login en clair dans
+      state.vscdb. Mesure le 18 aout 2026 : apres une deconnexion reelle --
+      confirmee dans le menu Comptes de la fenetre, capture a l'appui -- le nom
+      du compte etait TOUJOURS present dans le fichier, et le diagnostic
+      continuait d'accuser un profil propre.
+
+      SQLite ne reecrit pas ce qu'il libere. `secure_delete` est desactive par
+      defaut : une cle supprimee reste ecrite octet pour octet jusqu'a ce que sa
+      place serve a autre chose. Une recherche sur le fichier entier lit donc le
+      present ET le passe, sans pouvoir les distinguer.
+
+      Un controle qui reste rouge apres la bonne action est exactement le defaut
+      que ce depot reproche aux garde-fous ailleurs : celui qui crie au loup
+      finit ignore -- ou pire, il pousse a se reconnecter pour "reessayer".
+
+      CE QUI EST SAUTE, ET POURQUOI
+
+        - les pages de la LISTE LIBRE (entete offset 32 : premiere page tronc,
+          offset 36 : leur nombre). Elles sont mortes par definition ;
+        - dans chaque page b-tree, tout ce qui precede le DEBUT DE LA ZONE DE
+          CONTENU (entete de page offset 5). C'est l'espace non alloue ;
+        - les BLOCS LIBERES chaines a l'interieur de cette zone (entete de page
+          offset 1, puis 2 octets suivant + 2 octets taille).
+
+      CE QUI EST GARDE FAUTE DE MIEUX. Une page qui n'est pas une page b-tree
+      est une page de debordement : son premier octet est un numero de page, pas
+      un type, et rien n'y dit ou commence le vivant. Elle est gardee en entier.
+      Sur-inclure risque un faux positif ; sous-inclure raterait un vrai
+      croisement d'identites, et c'est la moitie qu'on ne verrait jamais.
+
+      SI CE N'EST PAS DU SQLITE, on rend le texte brut -- le comportement
+      d'avant. Un format qu'on ne reconnait plus doit degrader vers "trop
+      bavard", jamais vers "aveugle" : un faux positif se voit, un faux negatif
+      non.
+
+      Tous les entiers sont GROS-BOUTISTES, comme tout le format.
+    #>
+    [CmdletBinding()]
+    param([AllowNull()][byte[]]$Octets)
+
+    if ($null -eq $Octets -or $Octets.Length -eq 0) { return $null }
+
+    $brut = { [System.Text.Encoding]::ASCII.GetString($Octets) }
+
+    # LE REPLI D'ABORD, ET LA TAILLE ENSUITE. L'ordre inverse a fait rougir deux
+    # tests deja ecrits : une garde « moins de 512 octets, on rend rien »
+    # s'appliquait aussi a ce qui n'est PAS du SQLite, et le controle devenait
+    # aveugle sur toute fixture courte. Le minimum de 512 octets appartient au
+    # format, pas a la fonction.
+    $estSqlite = $false
+    if ($Octets.Length -ge 16) {
+        $estSqlite = [System.Text.Encoding]::ASCII.GetString($Octets, 0, 15) -eq 'SQLite format 3'
+    }
+    if (-not $estSqlite) { return (& $brut) }
+    if ($Octets.Length -lt 512) { return (& $brut) }
+
+    $be16 = { param([int]$i) (([int]$Octets[$i] -shl 8) -bor [int]$Octets[$i + 1]) }
+    $be32 = {
+        param([int]$i)
+        $haut = ([int]$Octets[$i] -shl 24) -bor ([int]$Octets[$i + 1] -shl 16)
+        $haut -bor ([int]$Octets[$i + 2] -shl 8) -bor [int]$Octets[$i + 3]
+    }
+
+    $taillePage = & $be16 16
+    if ($taillePage -eq 1) { $taillePage = 65536 }
+    # Puissance de deux entre 512 et 65536 : sinon ce n'est pas un fichier qu'on
+    # sait lire, et on retombe sur le texte brut plutot que d'inventer.
+    if ($taillePage -lt 512 -or $taillePage -gt 65536 -or ($taillePage -band ($taillePage - 1)) -ne 0) {
+        return (& $brut)
+    }
+
+    $nbPages = [int][math]::Floor($Octets.Length / $taillePage)
+    if ($nbPages -lt 1) { return (& $brut) }
+
+    # --- la liste libre ---
+    $libres = @{}
+    $tronc = & $be32 32
+    $vus = @{}
+    $maxEntrees = [int][math]::Floor(($taillePage - 8) / 4)
+    while ($tronc -gt 0 -and $tronc -le $nbPages -and -not $vus.ContainsKey($tronc)) {
+        $vus[$tronc] = $true
+        $libres[$tronc] = $true
+        $base = ($tronc - 1) * $taillePage
+        $suivant = & $be32 $base
+        $n = & $be32 ($base + 4)
+        if ($n -lt 0 -or $n -gt $maxEntrees) { break }
+        for ($i = 0; $i -lt $n; $i++) {
+            $f = & $be32 ($base + 8 + 4 * $i)
+            if ($f -gt 0 -and $f -le $nbPages) { $libres[$f] = $true }
+        }
+        $tronc = $suivant
+    }
+
+    $morceaux = New-Object System.Collections.Generic.List[string]
+    for ($p = 1; $p -le $nbPages; $p++) {
+        if ($libres.ContainsKey($p)) { continue }
+        $base = ($p - 1) * $taillePage
+        $entete = if ($p -eq 1) { 100 } else { 0 }
+        if (($base + $entete + 8) -gt $Octets.Length) { continue }
+
+        $type = $Octets[$base + $entete]
+        if ($type -ne 2 -and $type -ne 5 -and $type -ne 10 -and $type -ne 13) {
+            $morceaux.Add([System.Text.Encoding]::ASCII.GetString($Octets, $base, $taillePage))
+            continue
+        }
+
+        $debut = & $be16 ($base + $entete + 5)
+        if ($debut -eq 0) { $debut = 65536 }
+        if ($debut -ge $taillePage) { continue }   # page sans aucune cellule
+        if ($debut -lt ($entete + 8)) { $debut = $entete + 8 }
+
+        # Les blocs liberes, chaines. Bornes pour qu'un fichier abime ne fasse
+        # pas tourner un diagnostic en rond.
+        $blocs = @()
+        $bloc = & $be16 ($base + $entete + 1)
+        $garde = 0
+        while ($bloc -ge $debut -and $bloc -le ($taillePage - 4) -and $garde -lt 1024) {
+            $garde++
+            $suiv = & $be16 ($base + $bloc)
+            $taille = & $be16 ($base + $bloc + 2)
+            if ($taille -lt 4) { break }
+            $blocs += , @($bloc, [math]::Min($bloc + $taille, $taillePage))
+            if ($suiv -le $bloc) { break }
+            $bloc = $suiv
+        }
+        $blocs = @($blocs | Sort-Object { $_[0] })
+
+        $curseur = $debut
+        foreach ($b in $blocs) {
+            if ($b[0] -gt $curseur) {
+                $morceaux.Add([System.Text.Encoding]::ASCII.GetString($Octets, $base + $curseur, $b[0] - $curseur))
+            }
+            if ($b[1] -gt $curseur) { $curseur = $b[1] }
+        }
+        if ($curseur -lt $taillePage) {
+            $morceaux.Add([System.Text.Encoding]::ASCII.GetString($Octets, $base + $curseur, $taillePage - $curseur))
+        }
+    }
+
+    # Separateur entre tranches disjointes : sans lui, deux fragments voisins se
+    # recolleraient et pourraient former un login que personne n'a jamais ecrit.
+    ($morceaux -join "`n")
+}
+
 function Get-CtxProfilComptesFacts {
     <#
       GATHERING. Quels comptes GitHub CONNUS sont presents dans le profil
@@ -904,7 +1054,10 @@ function Get-CtxProfilComptesFacts {
             try {
                 $octets = New-Object byte[] $flux.Length
                 $null = $flux.Read($octets, 0, $octets.Length)
-                $texte = [System.Text.Encoding]::ASCII.GetString($octets)
+                # Les seules zones VIVANTES. SQLite ne reecrit pas ce qu'il
+                # libere, donc lire le fichier entier melange le present et le
+                # passe -- et le passe accusait un profil deja nettoye.
+                $texte = Get-CtxSqliteTexteVivant -Octets $octets
             }
             finally { $flux.Dispose() }
         }

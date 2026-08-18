@@ -1,3 +1,33 @@
+## [Unreleased]
+
+### Fixed
+
+- **`ctx doctor` kept accusing an editor profile that had already been cleaned,
+  and nothing the user did could clear it.** The check looks for a foreign
+  context's GitHub login in that profile's `state.vscdb`. It read the whole
+  file — and SQLite does not rewrite what it frees: `secure_delete` is off by
+  default, so a deleted key stays written byte for byte until its space is
+  reused. The check was reading the present and the past at once, with no way
+  to tell them apart.
+
+  Measured on 18 August 2026: a profile whose Accounts menu listed only its own
+  account was still reported as carrying a foreign identity. A verdict no action
+  can clear is the cry-wolf failure this project names elsewhere — worse here,
+  because it invites reconnecting and disconnecting again to "retry".
+
+  The reader now keeps only the **live** regions: freelist pages are skipped,
+  so is the unallocated gap before each page's cell content area, and so is the
+  freeblock chain inside it. On an unrecognised format it degrades to reading
+  the file whole — *too talkative*, never blind, because a false positive is
+  visible and a false negative is not.
+
+  Verified on the machine that produced the defect: the cleaned profile stopped
+  being reported, and the profile that genuinely still carries the other
+  account is still reported. A fix that silenced both would not be a fix, it
+  would be an off switch.
+
+---
+
 ## [1.9.1] - 18 August 2026
 
 ### Changed

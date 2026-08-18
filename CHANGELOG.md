@@ -112,6 +112,28 @@
 
 ### Fixed
 
+- **The release suite was not the CI suite.** The first real run of the publish
+  workflow went red on a test that had been green in CI minutes earlier, on the
+  same commit. `release.yml`'s test job was written by copying `ci.yml`'s, and
+  the copy had lost one step: the one installing the Supabase CLI. So the job
+  standing between a tag and an irreversible publish was running a suite nobody
+  had ever run.
+
+  Worse than the red: **two neighbouring tests were green for the wrong reason.**
+  All three invoke the real CLI, and none declared it as a precondition — unlike
+  their twins in `Executable.Tests.ps1`, which have declared it since day one. A
+  missing binary also returns non-zero, and its error text also lacks the word
+  `REFUSE`, so two assertions kept passing while measuring nothing at all.
+
+  The step is restored, and the three tests now state what they need: they skip
+  and say why on a machine without the CLI, and still bite on CI, which installs
+  it. Verified both ways — 24 passed with the CLI on `PATH`, 3 skipped and 0
+  failed with it removed.
+
+  The copy itself is the real defect and it is **not** fixed here: two hand-kept
+  twins will drift again. `ROADMAP.md` carries it as a known gap, to be closed by
+  a `workflow_call` both jobs invoke rather than smuggled into a release.
+
 - **`ctx doctor` threw on a machine with no agent settings at all.** The most
   ordinary input there is, and the one case no test built. `Get-CtxAgentConfianceFacts`
   ends with `@($faits)`, which does **not** make it return an empty array: an

@@ -50,18 +50,52 @@ Describe 'shim — les trois points d entree' {
 }
 
 Describe 'shim — delegation' {
+    # CES TROIS TESTS APPELLENT LA VRAIE CLI. Ils n'ont de sens que sur une
+    # machine qui la porte, et ils ne le disaient pas -- contrairement a leurs
+    # jumeaux d'Executable.Tests.ps1, qui declarent la meme precondition depuis
+    # toujours. Mesure le 18 aout 2026 sur le job de release, ou l'etape qui
+    # installe la CLI manquait :
+    #
+    #   - le premier tombait en ROUGE, sur "Expected 0, but got 1" ;
+    #   - les deux autres passaient POUR DE MAUVAISES RAISONS. Un binaire
+    #     introuvable rend bien un code non nul, et son message d'erreur ne
+    #     contient evidemment pas "REFUSE". Deux verts sur du code qui n'etait
+    #     plus exerce -- ce que tests/README.md nomme pire qu'un test absent.
+    #
+    # Declarer la precondition n'est PAS affaiblir le test : la CI installe la
+    # CLI, donc il mord la ou il compte. Il ne se tait que la ou il n'a rien a
+    # mesurer, et il dit pourquoi.
+    BeforeAll {
+        $script:CliReelle = [bool](
+            Get-Command supabase -CommandType Application -All -ErrorAction SilentlyContinue |
+                Where-Object { (Split-Path $_.Source -Parent) -notlike '*shims*' }
+        )
+    }
+
     It 'transmet une commande inoffensive et rend le code 0' {
+        if (-not $script:CliReelle) {
+            Set-ItResult -Skipped -Because 'aucune CLI supabase hors shims sur cette machine'
+            return
+        }
         $out = pwsh -NoProfile -File $script:Shim --version 2>&1
         $LASTEXITCODE   | Should -Be 0
         ($out -join ' ') | Should -Not -Match 'REFUSE'
     }
 
     It 'propage un echec du binaire reel' {
+        if (-not $script:CliReelle) {
+            Set-ItResult -Skipped -Because 'aucune CLI supabase hors shims sur cette machine'
+            return
+        }
         pwsh -NoProfile -File $script:Shim 'sous-commande-inexistante' 2>&1 | Out-Null
         $LASTEXITCODE | Should -Not -Be 0
     }
 
     It 'delegue quand aucun contexte n est actif' {
+        if (-not $script:CliReelle) {
+            Set-ItResult -Skipped -Because 'aucune CLI supabase hors shims sur cette machine'
+            return
+        }
         $avant = $env:DEVCTX
         try {
             Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue

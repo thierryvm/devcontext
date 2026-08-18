@@ -112,6 +112,31 @@
 
 ### Fixed
 
+- **The publishing job could not read its own manifest.** `Publish-PSResource`
+  calls `Test-ModuleManifest`, which *resolves* every `RequiredModules` entry
+  against the modules available. The manifest declares two — SecretManagement and
+  SecretStore, the vault the tokens live in — and the publish job installed only
+  PSResourceGet:
+
+  ```
+  The specified RequiredModules entry 'Microsoft.PowerShell.SecretManagement'
+  in the module manifest '...\DevContext.psd1' is invalid.
+  ```
+
+  So the audit declared the package publishable in an environment that carried
+  them, and the publisher failed in one that did not. Reproduced away from CI by
+  removing those modules from `PSModulePath` — the same message, word for word.
+
+  The modules are installed there now, and a step ahead of the publish asserts
+  that **this** environment resolves the manifest. The audit job proves the
+  package; it runs somewhere else, so it can prove nothing about the machine that
+  publishes. Asking the question before touching the key turns a failed
+  publication into a failed check.
+
+  Third occurrence in one day of the same defect: a job written by hand with one
+  precondition fewer than its neighbours. `ROADMAP.md` carries the cure; this is
+  the dressing.
+
 - **The release suite was not the CI suite.** The first real run of the publish
   workflow went red on a test that had been green in CI minutes earlier, on the
   same commit. `release.yml`'s test job was written by copying `ci.yml`'s, and

@@ -250,7 +250,26 @@ jobs:
           name: devcontext-package
           path: paquet/DevContext
 
-      - name: Install PSResourceGet
+      # LES MODULES REQUIS DOIVENT ETRE INSTALLES *ICI*, et pas seulement dans
+      # les jobs qui testent.
+      #
+      # Publish-PSResource appelle Test-ModuleManifest, qui RESOUT chaque entree
+      # de RequiredModules contre les modules disponibles. Le manifeste en
+      # declare deux -- SecretManagement et SecretStore, le coffre ou vivent les
+      # jetons -- et ce job n'installait que PSResourceGet.
+      #
+      # Mesure le 18 aout 2026, sur la premiere publication reelle : l'audit a
+      # declare le paquet publiable dans un environnement qui les portait, et le
+      # publieur a echoue dans un qui ne les portait pas.
+      #
+      #   The specified RequiredModules entry 'Microsoft.PowerShell.SecretManagement'
+      #   in the module manifest '...\DevContext.psd1' is invalid.
+      #
+      # Reproduit hors CI en retirant simplement ces modules du PSModulePath :
+      # meme message, au mot pres. Troisieme occurrence en un jour du meme
+      # defaut -- un job ecrit a la main avec une precondition de moins que ses
+      # voisins. La cure est en ROADMAP.md ; ceci en est le pansement.
+      - name: Install PSResourceGet and the manifest's required modules
         shell: pwsh
         run: |
           if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
@@ -258,6 +277,19 @@ jobs:
           }
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module Microsoft.PowerShell.PSResourceGet -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
+          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
+
+      # Ce que le job d'audit ne pouvait pas voir. Il prouve que le PAQUET est
+      # publiable ; il tourne dans un autre environnement que celui qui publie,
+      # donc il ne prouve rien de CELUI-LA. Poser la question ici, avant de
+      # toucher a la cle, transforme un echec de publication en un echec de
+      # verification -- et un message d'erreur clair en tient lieu.
+      - name: The manifest resolves in THIS environment
+        shell: pwsh
+        run: |
+          $m = Test-ModuleManifest -Path ./paquet/DevContext/DevContext.psd1 -ErrorAction Stop
+          Write-Host "  Manifeste resolu ici : $($m.Name) $($m.Version)"
 
       - name: Publish
         shell: pwsh

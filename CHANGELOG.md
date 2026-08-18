@@ -28,6 +28,26 @@
 
 ### Fixed
 
+- **Every single-argument call through the `gh`, `supabase` and `vercel`
+  aliases was broken, in shipped 1.9.0.** `vercel whoami` reached the CLI as
+  `w h o a m i`; `gh --version` as `- - v e r s i o n`. Anything with two or
+  more arguments worked, which is why it went unnoticed — and why every test in
+  `Alias.Tests.ps1` passed: not one of them built the one-argument case, the
+  most ordinary form there is.
+
+  `Get-CtxArgumentsBruts` ends on `@(...)`, but a PowerShell function **unrolls
+  its output**: a one-element array reaches the caller as a bare string, and
+  `& $exe @arguments` then splats a string, which enumerates its characters.
+  The same mechanism as the empty-array trap this repository already records,
+  one notch along — and worse, because the empty case at least throws.
+
+  Fixed by wrapping at the three **call sites**, which is the rule `AGENTS.md`
+  already stated. A test now reads the source and fails on a bare assignment,
+  so the symptom and its cause are both held.
+
+  **The shims were never affected.** They are reached as external programs, so
+  a shell that had not imported the module always behaved correctly.
+
 - **The release rehearsal was unusable, and had been since the first real
   publication.** `workflow_dispatch` with `dry_run` exists so `release.yml` can
   be tried without spending a version number. The check *this version is not on

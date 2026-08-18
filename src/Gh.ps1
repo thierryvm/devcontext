@@ -423,7 +423,11 @@ function Invoke-DevGh {
       C'est le piege que shims/gh.ps1 documente en tete, et il vaut pour une
       FONCTION autant que pour un script. $args transmet tout verbatim.
     #>
-    $arguments = Get-CtxArgumentsBruts $args
+    # @() OBLIGATOIRE. Une fonction ne RENVOIE pas un tableau : PowerShell le
+    # deroule sur le flux de sortie, donc un seul argument revient en CHAINE --
+    # et `& $exe @arguments` splatte alors ses CARACTERES. Mesure le 18 aout
+    # 2026 : `vercel whoami` partait en `w h o a m i`.
+    $arguments = @(Get-CtxArgumentsBruts $args)
 
     $verdict = $null
     try { $verdict = Resolve-CtxGhVerdict -Arguments $arguments }

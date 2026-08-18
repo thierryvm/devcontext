@@ -175,6 +175,31 @@ function Test-CtxDoctorIdentiteGit {
             -Detail (T 'doc.git.mauvaisEmail' $EmailReel $EmailAttendu $Origine) `
             -Correctif (T 'doc.git.mauvaisEmailFix')
     }
+    # LA BONNE VALEUR N'EST PAS LA BONNE RAISON.
+    #
+    # Un `user.email` ecrit en dur dans le .git/config du depot PRIME sur la
+    # regle `includeIf` par chemin. Tant qu'il porte la bonne adresse, rien ne
+    # se voit -- et c'est exactement le probleme : ce qui protege ce depot est
+    # alors une ligne recopiee a la main, pas le mecanisme.
+    #
+    # Mesure le 18 aout 2026 sur la machine de l'auteur : SIX depots dans ce
+    # cas. Cinq portaient la bonne valeur, un portait une adresse d'un autre
+    # compte -- et `ctx` repondait GO sur les six, puisqu'il ne compare que la
+    # valeur. La regle par dossier etait morte dans un quart des depots sans que
+    # rien ne le dise.
+    #
+    # ATTENTION et non PROBLEME : aujourd'hui la valeur est juste, il n'y a
+    # aucun degat. Ce qui est signale est la FRAGILITE, pas une faute.
+    # Les separateurs sont normalises plutot que decrits dans le motif : git
+    # rend des slashes sur Windows aujourd'hui, et faire dependre un controle
+    # de cette habitude est exactement le genre d'hypothese qui casse ailleurs.
+    $chemin = "$Origine".Replace([char]92, '/')
+    if ($chemin -match '(?i)(^|/)\.git/config$') {
+        return New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict 'ATTENTION' `
+            -Detail (T 'doc.git.emailEnDur' $EmailReel) `
+            -Correctif (T 'doc.git.emailEnDurFix')
+    }
+
     New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict 'OK' -Detail $EmailReel
 }
 

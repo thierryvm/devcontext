@@ -25,6 +25,13 @@
 # The publish job takes the ARTIFACT the verify job audited, rather than
 # assembling its own. Publishing bytes nobody looked at, because bytes that
 # looked the same were approved, is how an audit becomes decorative.
+#
+# Nothing here repeats a step another workflow already owns. The suite is
+# suite.yml, called; preparing an environment is the composite action under
+# .github/actions/prepare-powershell, used. On 18 August 2026 this file carried
+# hand-written copies of both, and both copies were missing a piece -- which is
+# how a release failed twice in one morning, the second time on a question no
+# test had asked, after a human had already approved it.
 
 name: Release
 
@@ -52,54 +59,15 @@ jobs:
   # CI runs on branches, not tags. Without this job, "the tests passed" would be
   # a statement about a different commit.
   tests:
-    name: Suite (${{ matrix.langue }})
-    runs-on: windows-latest
-    timeout-minutes: 20
-    strategy:
+    name: Suite
+    uses: ./.github/workflows/suite.yml
+    with:
+      # A release stops at the first red: the next question is whether to
+      # publish, and one failure has already answered it. CI makes the opposite
+      # choice on purpose, and these two lines are the entire difference between
+      # the two callers.
       fail-fast: true
-      matrix:
-        langue: [fr, en]
-    env:
-      DEVCTX_LANG: ${{ matrix.langue }}
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Install test dependencies
-        shell: pwsh
-        run: |
-          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSRepository -Default -ErrorAction Stop
-          }
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module Pester -MinimumVersion 5.0.0 -Force -SkipPublisherCheck -Scope CurrentUser
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
-
-      # CETTE ETAPE MANQUAIT, et c'est ce qui a fait echouer la premiere release
-      # reelle (v1.9.0, 18 aout 2026). Ce job a ete ecrit en RECOPIANT celui de
-      # ci.yml, et la copie a perdu une etape -- le defaut que AGENTS.md nomme
-      # deja : deriver une liste et recopier sa jumelle a la main.
-      #
-      # Sans elle, la suite tourne SANS la CLI que le garde-fou enveloppe. Les
-      # tests de delegation declarent maintenant cette precondition, donc son
-      # absence ne rendrait plus rouge -- elle rendrait SILENCIEUX, ce qui est
-      # pire juste avant une publication irreversible.
-      #
-      # continue-on-error, comme dans ci.yml : une panne du registre npm ne doit
-      # pas bloquer une release sur une dependance dont les tests savent se
-      # passer en le disant.
-      - name: Install the Supabase CLI (best effort)
-        shell: pwsh
-        continue-on-error: true
-        run: npm install -g supabase
-
-      - name: Run the suite
-        shell: pwsh
-        run: pwsh -NoProfile -File ./tests/RunTests.ps1
+      timeout-minutes: 20
 
   verifier:
     name: Prove it is publishable
@@ -113,16 +81,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install dependencies
-        shell: pwsh
-        run: |
-          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSRepository -Default -ErrorAction Stop
-          }
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.PSResourceGet -Force -Scope CurrentUser
+      - uses: ./.github/actions/prepare-powershell
+        with:
+          gallery: true
 
       # Values reach PowerShell through env: rather than ${{ }} interpolated into
       # the script body. Interpolation splices attacker-influenced text into the
@@ -157,11 +118,13 @@ jobs:
             Write-Host '::notice::Not a tag -- dry run forced, nothing can be published.'
           }
 
-      - name: The manifest is publishable as-is
+      - name: The manifest carries what the Gallery demands
         shell: pwsh
         run: |
-          # Test-ModuleManifest is what the Gallery runs on submission. Failing
-          # here beats failing after the key has been handed over.
+          # Resolution is settled by the preparation step above. Publishability
+          # is a different question, and Assert-Release deliberately does not ask
+          # it: it reads the manifest with Import-PowerShellDataFile, which never
+          # resolves a dependency and never looks at the description.
           $m = Test-ModuleManifest ./DevContext.psd1
           "Module {0} version {1}" -f $m.Name, $m.Version
           if (-not $m.Description) { throw 'Description is required to publish' }
@@ -175,7 +138,7 @@ jobs:
           # Both scripts print their progress to stderr and put ONE value on
           # stdout, so these captures are the value and nothing else. The count
           # is asserted rather than trusted: until 17 Aug 2026 the progress went
-          # through Write-Host, which crosses `pwsh -File` on stdout, and the
+          # through Write-Host, which crosses "pwsh -File" on stdout, and the
           # capture was three lines wearing the shape of a path.
           $dest = Join-Path $env:RUNNER_TEMP 'paquet'
 
@@ -244,52 +207,56 @@ jobs:
       url: https://www.powershellgallery.com/packages/DevContext
 
     steps:
+      # This job publishes the artifact, not the tree, so it checks out only what
+      # it cannot download: the composite action. Sparse cone mode brings the
+      # repository's root files along too, which is why the guarantee below is an
+      # assertion rather than this checkout.
+      #
+      # First, and deliberately: actions/checkout cleans its destination, so a
+      # checkout placed AFTER the download would take the package with it.
+      - name: Take the composite action, not the source
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+
       - name: Take the package that was audited
         uses: actions/download-artifact@v4
         with:
           name: devcontext-package
           path: paquet/DevContext
 
-      # LES MODULES REQUIS DOIVENT ETRE INSTALLES *ICI*, et pas seulement dans
-      # les jobs qui testent.
+      # The modules the manifest requires are installed HERE, and read from the
+      # manifest that is about to be submitted -- not from the source tree, and
+      # not from a list somebody had to remember to keep in step.
       #
-      # Publish-PSResource appelle Test-ModuleManifest, qui RESOUT chaque entree
-      # de RequiredModules contre les modules disponibles. Le manifeste en
-      # declare deux -- SecretManagement et SecretStore, le coffre ou vivent les
-      # jetons -- et ce job n'installait que PSResourceGet.
-      #
-      # Mesure le 18 aout 2026, sur la premiere publication reelle : l'audit a
-      # declare le paquet publiable dans un environnement qui les portait, et le
-      # publieur a echoue dans un qui ne les portait pas.
+      # Measured on the first real publication, 18 August 2026: the audit
+      # declared the package publishable in an environment that carried them, and
+      # the publisher failed in one that did not.
       #
       #   The specified RequiredModules entry 'Microsoft.PowerShell.SecretManagement'
       #   in the module manifest '...\DevContext.psd1' is invalid.
       #
-      # Reproduit hors CI en retirant simplement ces modules du PSModulePath :
-      # meme message, au mot pres. Troisieme occurrence en un jour du meme
-      # defaut -- un job ecrit a la main avec une precondition de moins que ses
-      # voisins. La cure est en ROADMAP.md ; ceci en est le pansement.
-      - name: Install PSResourceGet and the manifest's required modules
-        shell: pwsh
-        run: |
-          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSRepository -Default -ErrorAction Stop
-          }
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module Microsoft.PowerShell.PSResourceGet -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
+      # Reproduced outside CI by simply removing those modules from PSModulePath:
+      # the same message, word for word.
+      - uses: ./.github/actions/prepare-powershell
+        with:
+          manifest: ./paquet/DevContext/DevContext.psd1
+          gallery: true
 
-      # Ce que le job d'audit ne pouvait pas voir. Il prouve que le PAQUET est
-      # publiable ; il tourne dans un autre environnement que celui qui publie,
-      # donc il ne prouve rien de CELUI-LA. Poser la question ici, avant de
-      # toucher a la cle, transforme un echec de publication en un echec de
-      # verification -- et un message d'erreur clair en tient lieu.
-      - name: The manifest resolves in THIS environment
+      - name: These are the bytes that were audited
         shell: pwsh
+        env:
+          VERSION: ${{ needs.verifier.outputs.version }}
         run: |
-          $m = Test-ModuleManifest -Path ./paquet/DevContext/DevContext.psd1 -ErrorAction Stop
-          Write-Host "  Manifeste resolu ici : $($m.Name) $($m.Version)"
+          # The package travelled between two jobs as an artifact. Reading its
+          # version back and comparing it against the one the audit reported
+          # turns "presumably the same bytes" into something checked, at the last
+          # boundary where checking is still free.
+          $v = (Import-PowerShellDataFile -LiteralPath ./paquet/DevContext/DevContext.psd1).ModuleVersion
+          if ("$v" -ne $env:VERSION) {
+            throw "Le paquet telecharge porte la version $v, alors que l'audit a valide $($env:VERSION)."
+          }
+          Write-Host "  Paquet $v : conforme a ce qui a ete audite."
 
       - name: Publish
         shell: pwsh

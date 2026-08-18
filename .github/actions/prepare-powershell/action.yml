@@ -1,0 +1,116 @@
+# Every job that touches this module needs the same preparation, and on 18
+# August 2026 three release attempts failed on one defect wearing three coats:
+# a job written by copying its neighbour and losing a piece of it on the way.
+#
+# The modules the manifest REQUIRES are read FROM the manifest. They are not
+# listed here, because a hand-copied twin of a derived list is exactly what this
+# repository has already paid for twice -- once on the ctx-* aliases, and once
+# on the publishing job, which installed PSResourceGet and nothing else.
+# Publish-PSResource calls Test-ModuleManifest, which RESOLVES every
+# RequiredModules entry against the installed modules, so the publish died
+# AFTER the human approval on a question no test had asked.
+#
+# Adding an entry to RequiredModules now installs it everywhere, with nothing
+# left to remember.
+
+name: Prepare PowerShell
+description: Register PSGallery, install what the manifest requires, and prove the manifest resolves here.
+
+inputs:
+  manifest:
+    description: >
+      The manifest whose RequiredModules must resolve in this environment. The
+      publishing job passes the one inside the downloaded package, because that
+      is the manifest that will actually be submitted -- not a copy of it.
+    required: false
+    default: ./DevContext.psd1
+  suite:
+    description: Also install Pester and PSScriptAnalyzer, for a job that runs the test suite.
+    required: false
+    default: 'false'
+  gallery:
+    description: Also install PSResourceGet, for a job that queries or publishes to the Gallery.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Report the PowerShell in use
+      shell: pwsh
+      run: $PSVersionTable | Format-List
+
+    - name: Install what this environment needs
+      shell: pwsh
+      env:
+        # Values reach the script through env: rather than being interpolated
+        # into its body. An input is data at every step that way; interpolation
+        # splices it into the source before the shell parses it.
+        MANIFESTE: ${{ inputs.manifest }}
+        SUITE: ${{ inputs.suite }}
+        GALLERY: ${{ inputs.gallery }}
+      run: |
+        # PSGallery is not guaranteed registered on a fresh agent. Assuming it
+        # was dropped one matrix job on "No repository with the name 'PSGallery'
+        # was found" while its twin passed -- an assumed precondition is a CI
+        # that fails at random.
+        if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+          Register-PSRepository -Default -ErrorAction Stop
+        }
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+
+        if (-not (Test-Path -LiteralPath $env:MANIFESTE)) {
+          throw "Manifeste introuvable : $($env:MANIFESTE)"
+        }
+
+        # Import-PowerShellDataFile and not Test-ModuleManifest: the latter is
+        # what we are preparing FOR, and asking it now -- before the modules are
+        # installed -- would fail on the very question this step exists to make
+        # answerable.
+        $donnees = Import-PowerShellDataFile -LiteralPath $env:MANIFESTE -ErrorAction Stop
+        if (-not $donnees.ContainsKey('RequiredModules')) {
+          throw "Aucun RequiredModules dans $($env:MANIFESTE) -- le manifeste n'a pas ete compris."
+        }
+
+        $requis = @()
+        foreach ($entree in @($donnees['RequiredModules'])) {
+          if ($null -eq $entree) { continue }
+          # An entry is a bare name, or a hashtable naming a version. Only the
+          # first shape exists today; handling one shape is how the other
+          # arrives later as a silent no-op.
+          if ($entree -is [string]) { $requis += $entree }
+          elseif ($entree -is [hashtable] -and $entree.ContainsKey('ModuleName')) { $requis += [string]$entree['ModuleName'] }
+          else { throw "Entree RequiredModules de forme inattendue : $($entree.GetType().FullName)" }
+        }
+        if ($requis.Count -eq 0) {
+          throw "RequiredModules est vide dans $($env:MANIFESTE) -- refus de preparer un environnement sur une lecture ratee."
+        }
+
+        $aPoser = @($requis)
+        if ($env:SUITE -eq 'true') { $aPoser += 'Pester'; $aPoser += 'PSScriptAnalyzer' }
+        if ($env:GALLERY -eq 'true') { $aPoser += 'Microsoft.PowerShell.PSResourceGet' }
+
+        foreach ($nom in ($aPoser | Sort-Object -Unique)) {
+          Write-Host "  installation : $nom"
+          if ($nom -eq 'Pester') {
+            # SkipPublisherCheck is Pester's alone: Windows ships an older
+            # signed copy, and installing over it fails without it.
+            Install-Module Pester -MinimumVersion 5.0.0 -Force -SkipPublisherCheck -Scope CurrentUser -ErrorAction Stop
+          }
+          else {
+            Install-Module $nom -Force -Scope CurrentUser -ErrorAction Stop
+          }
+        }
+
+    - name: The manifest resolves in THIS environment
+      shell: pwsh
+      env:
+        MANIFESTE: ${{ inputs.manifest }}
+      run: |
+        # Proof, not hope. Test-ModuleManifest is what the Gallery runs on
+        # submission and what Publish-PSResource runs before uploading, and it
+        # resolves every RequiredModules entry -- so this asks HERE the question
+        # that failed after the human approval on 18 August 2026, in the one
+        # environment that matters: this one.
+        $m = Test-ModuleManifest -Path $env:MANIFESTE -ErrorAction Stop
+        Write-Host ("  {0} {1} : le manifeste resout ici." -f $m.Name, $m.Version)

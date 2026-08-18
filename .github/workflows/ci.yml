@@ -7,6 +7,11 @@
 # The suite is split into three jobs rather than one, so a red build says WHICH
 # property broke. A single job reporting "tests failed" makes you read a log to
 # learn what a job name could have told you.
+#
+# The Pester job itself lives in suite.yml and is CALLED from here, because the
+# release needs the same suite and a second copy of it is what broke the first
+# release. Preparing an environment lives in .github/actions/prepare-powershell
+# for the same reason.
 
 name: CI
 
@@ -26,66 +31,13 @@ concurrency:
 
 jobs:
   tests:
-    # La suite tourne dans LES DEUX langues.
-    #
-    # Le 15 aout 2026, la CI est passee au rouge alors que tout etait vert en
-    # local : l'agent est anglophone, le poste francophone, et cinq assertions
-    # comparaient le TEXTE d'un message traduit. Une seule langue testee, c'est
-    # une moitie de logiciel testee -- et c'est toujours la moitie que l'auteur
-    # ne lit pas qui casse.
-    name: Pester suite (${{ matrix.langue }})
-    runs-on: windows-latest
-    timeout-minutes: 15
-    strategy:
+    name: Pester suite
+    uses: ./.github/workflows/suite.yml
+    with:
+      # CI reports on every language rather than stopping at the first: here the
+      # useful answer is the full extent of the breakage, not its existence.
       fail-fast: false
-      matrix:
-        langue: [fr, en]
-    env:
-      DEVCTX_LANG: ${{ matrix.langue }}
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # The security tests scan the whole history for credential patterns.
-          # A shallow clone would let them pass without having looked.
-          fetch-depth: 0
-
-      - name: Report the PowerShell in use
-        shell: pwsh
-        run: $PSVersionTable | Format-List
-
-      - name: Install test dependencies
-        shell: pwsh
-        run: |
-          # PSGallery n'est pas garanti enregistre sur un agent neuf. Le poser
-          # comme acquis a fait tomber un job de la matrice sur
-          # « No repository with the name 'PSGallery' was found » pendant que
-          # l'autre passait -- une precondition supposee, donc une CI qui echoue
-          # au hasard. On l'enregistre s'il manque.
-          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSRepository -Default -ErrorAction Stop
-          }
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module Pester -MinimumVersion 5.0.0 -Force -SkipPublisherCheck -Scope CurrentUser
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
-
-      # The Supabase CLI is what the guard delegates to, so resolving it is a
-      # property worth testing rather than skipping. Without it, two tests
-      # declare themselves skipped and that coverage exists nowhere.
-      #
-      # continue-on-error on purpose: an npm registry outage must not turn the
-      # whole suite red over a dependency the tests already know how to do
-      # without -- they skip, and say why.
-      - name: Install the Supabase CLI (best effort)
-        shell: pwsh
-        continue-on-error: true
-        run: npm install -g supabase
-
-      - name: Run the suite
-        shell: pwsh
-        run: pwsh -NoProfile -File ./tests/RunTests.ps1
+      timeout-minutes: 15
 
   manifest:
     name: Manifest and module load
@@ -95,26 +47,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install runtime dependencies
-        shell: pwsh
-        run: |
-          # PSGallery n'est pas garanti enregistre sur un agent neuf. Le poser
-          # comme acquis a fait tomber un job de la matrice sur
-          # « No repository with the name 'PSGallery' was found » pendant que
-          # l'autre passait -- une precondition supposee, donc une CI qui echoue
-          # au hasard. On l'enregistre s'il manque.
-          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSRepository -Default -ErrorAction Stop
-          }
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module Microsoft.PowerShell.SecretManagement -Force -Scope CurrentUser
-          Install-Module Microsoft.PowerShell.SecretStore -Force -Scope CurrentUser
+      # This also proves the manifest RESOLVES here, which is the half that
+      # Test-ModuleManifest performs and Import-PowerShellDataFile does not.
+      - uses: ./.github/actions/prepare-powershell
 
-      - name: The manifest is publishable as-is
+      - name: The manifest carries what the Gallery demands
         shell: pwsh
         run: |
-          # Test-ModuleManifest is what PowerShell Gallery runs on submission.
-          # Failing here beats failing on a release tag.
+          # Resolution is settled by the preparation above. What is left is
+          # publishability, which is a different question: the Gallery refuses a
+          # submission with no description, and that description is the first
+          # sentence someone reads who has never heard of this module.
           $m = Test-ModuleManifest ./DevContext.psd1
           "Module {0} version {1}" -f $m.Name, $m.Version
           if (-not $m.Description) { throw 'Description is required to publish' }

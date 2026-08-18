@@ -26,6 +26,23 @@
   and was therefore checked in the actions' own documentation rather than
   inferred from v4 having paired with v4.
 
+### Fixed
+
+- **The release rehearsal was unusable, and had been since the first real
+  publication.** `workflow_dispatch` with `dry_run` exists so `release.yml` can
+  be tried without spending a version number. The check *this version is not on
+  the Gallery yet* threw on every run — including runs that cannot publish
+  anything — so from the moment 1.9.0 shipped, the manifest named a version the
+  Gallery already served and every rehearsal died there. The facility built to
+  make a release safe to try was the one thing never tried after a release
+  succeeded.
+
+  The assertion is now scoped to the runs where its consequence exists: on a tag
+  that will publish it still refuses, exactly as before. Nothing is loosened
+  where it matters — what changes is that a run which publishes nothing can no
+  longer fail on a duplicate it could never have created.
+
+
 ---
 
 ## [1.9.0] - 18 August 2026

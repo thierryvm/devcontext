@@ -4,7 +4,12 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # Deux emplacements, parce que « / » ne couvre que .github/workflows. Une
+    # action composite vit ailleurs, et une dépendance que personne ne surveille
+    # est exactement celle qui vieillit sans le dire.
+    directories:
+      - /
+      - /.github/actions/prepare-powershell
     schedule:
       interval: monthly
     commit-message:

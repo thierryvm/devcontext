@@ -343,6 +343,8 @@
     'doc.git.sansEmailFix'    = 'check the includeIf in ~/.gitconfig'
     'doc.git.mauvaisEmail'    = '{0} instead of {1} (set by {2})'
     'doc.git.mauvaisEmailFix' = 'a user.email hardcoded in .git/config overrides the includeIf'
+    'doc.git.emailEnDur'      = '{0} -- but set in this repository .git/config, not by the context rule'
+    'doc.git.emailEnDurFix'   = "The value is right; the REASON is fragile. A user.email written in .git/config overrides the includeIf, so this repository is protected by a hand-copied line rather than by the mechanism. Were it wrong, nothing would catch it. To hand control back to the folder rule: git config --unset user.email (and --unset user.name)."
     'doc.git.pasDepot'        = 'not a git repository'
     'doc.remote.aucun'        = 'no origin remote'
     'doc.remote.login'        = 'the remote URL carries a login: the insteadOf rule does not match it'

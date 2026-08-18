@@ -343,6 +343,8 @@
     'doc.git.sansEmailFix'    = 'verifier le includeIf de ~/.gitconfig'
     'doc.git.mauvaisEmail'    = '{0} au lieu de {1} (defini par {2})'
     'doc.git.mauvaisEmailFix' = 'un user.email en dur dans .git/config prime sur le includeIf'
+    'doc.git.emailEnDur'      = '{0} -- mais defini en dur dans le .git/config de ce depot, pas par la regle de contexte'
+    'doc.git.emailEnDurFix'   = "La valeur est juste, c'est la RAISON qui est fragile : un user.email ecrit dans .git/config prime sur le includeIf, donc ce depot est protege par une ligne recopiee a la main et non par le mecanisme. Si elle etait fausse, rien ne la rattraperait. Pour rendre la main a la regle du dossier : git config --unset user.email (et --unset user.name)."
     'doc.git.pasDepot'        = 'pas un depot git'
     'doc.remote.aucun'        = 'aucun remote origin'
     'doc.remote.login'        = 'le remote porte un login dans son URL : la regle insteadOf ne matche pas'

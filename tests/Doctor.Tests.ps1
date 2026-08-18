@@ -491,3 +491,68 @@ Describe 'Test-CtxDoctorEditeurConnexions' {
         }
     }
 }
+
+Describe 'Test-CtxDoctorIdentiteGit, quand la BONNE valeur vient du mauvais endroit' {
+    # LA TROUVAILLE DU 18 AOUT 2026, remontee par l'agent d'un projet client.
+    #
+    # Un `user.email` ecrit dans le .git/config d'un depot PRIME sur la regle
+    # `includeIf` par chemin. Tant qu'il porte la bonne adresse, rien ne se voit
+    # -- et c'est le probleme : ce qui protege ce depot est une ligne recopiee a
+    # la main, pas le mecanisme dont ce module fait sa promesse.
+    #
+    # Mesure sur la machine de l'auteur le meme jour : SIX depots dans ce cas.
+    # Cinq portaient la bonne valeur, un portait l'adresse d'un autre compte --
+    # et `ctx` repondait GO sur les six, parce qu'il ne comparait que la valeur.
+    # La regle par dossier etait morte dans un quart des depots, en silence.
+
+    It 'rend ATTENTION quand l email est bon mais ecrit en dur dans le depot' {
+        InModuleScope DevContext {
+            $r = Test-CtxDoctorIdentiteGit -EmailAttendu 'a@b.c' -EmailReel 'a@b.c' `
+                -Origine '.git/config'
+            $r.Verdict | Should -Be 'ATTENTION'
+            $r.Detail  | Should -Match 'a@b\.c'
+            $r.Correctif | Should -Match 'unset'
+        }
+    }
+
+    It 'reconnait les deux separateurs de chemin' {
+        # git rend des slashes sur Windows aujourd'hui. Faire dependre un
+        # controle de cette habitude est le genre d'hypothese qui casse ailleurs.
+        InModuleScope DevContext {
+            foreach ($o in 'C:/projets/monapp/.git/config', 'C:\projets\monapp\.git\config', '.git\config') {
+                (Test-CtxDoctorIdentiteGit -EmailAttendu 'a@b.c' -EmailReel 'a@b.c' -Origine $o).Verdict |
+                    Should -Be 'ATTENTION' -Because "l origine '$o' designe le .git/config du depot"
+            }
+        }
+    }
+
+    It 'reste OK quand l email vient du fichier du contexte' {
+        # LE CONTROLE NEGATIF. Un correctif qui rendrait ATTENTION partout ne
+        # serait pas un correctif : ce serait un bruit de fond, et un bruit de
+        # fond finit ignore comme un verdict qu'on ne peut pas effacer.
+        InModuleScope DevContext {
+            foreach ($o in 'F:/CTX/perso/gitconfig', 'C:/Users/thier/.gitconfig', 'x') {
+                (Test-CtxDoctorIdentiteGit -EmailAttendu 'a@b.c' -EmailReel 'a@b.c' -Origine $o).Verdict |
+                    Should -Be 'OK' -Because "l origine '$o' n est pas le .git/config d un depot"
+            }
+        }
+    }
+
+    It 'ne se laisse pas prendre par un chemin qui RESSEMBLE au .git/config' {
+        InModuleScope DevContext {
+            foreach ($o in 'C:/x/.git/config.bak', 'C:/x/git/config', 'C:/x/.gitconfig') {
+                (Test-CtxDoctorIdentiteGit -EmailAttendu 'a@b.c' -EmailReel 'a@b.c' -Origine $o).Verdict |
+                    Should -Be 'OK' -Because "'$o' n est pas le .git/config d un depot"
+            }
+        }
+    }
+
+    It 'laisse PROBLEME l emporter quand la valeur est fausse' {
+        # L'ordre compte : une mauvaise valeur reste un PROBLEME, meme ecrite au
+        # meme endroit. Le nouveau verdict ne parle que du cas ou tout va bien.
+        InModuleScope DevContext {
+            (Test-CtxDoctorIdentiteGit -EmailAttendu 'perso@x.be' -EmailReel 'pro@client.com' `
+                -Origine '.git/config').Verdict | Should -Be 'PROBLEME'
+        }
+    }
+}

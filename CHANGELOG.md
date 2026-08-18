@@ -1,5 +1,29 @@
 ## [Unreleased]
 
+### Added
+
+- **`ctx doctor` now reports a git identity that is right for the wrong
+  reason.** A `user.email` written in a repository's own `.git/config`
+  **overrides** the `includeIf` rule that gives this module its whole promise —
+  *the folder decides*. As long as the hardcoded line carries the right address,
+  nothing shows, and that is precisely the problem: what protects the repository
+  is then a line someone typed, not the mechanism.
+
+  Found by the agent working on a client project, and confirmed by sweeping the
+  machine: **six repositories** in that state. Five carried the right value and
+  one carried another account's — and `ctx` answered `GO` on all six, because it
+  only ever compared the value. The folder rule was dead in a quarter of the
+  repositories, in silence.
+
+  `ATTENTION`, not `PROBLEME`, when the value is correct: there is no damage
+  today, and what is reported is the fragility. A wrong value stays `PROBLEME`,
+  as before. The remedy is one command — `git config --unset user.email` — which
+  hands control back to the folder rule.
+
+  Nothing new had to be gathered: `git config --show-origin` already answered the
+  question and the diagnostic already passed the origin around. It simply threw
+  it away whenever things looked fine.
+
 ### Changed
 
 - **The editor-account check says what it can prove, and no longer more.** It

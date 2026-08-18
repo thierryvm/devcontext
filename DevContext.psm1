@@ -1927,14 +1927,47 @@ function Test-DevContext {
     }
 
     # --- 2. Le compte GitHub actif est-il celui attendu ? ---
-    $ghLogin = $null
     # Le binaire REEL, jamais l'alias du module : celui-ci corrigerait
     # GH_CONFIG_DIR avant d'interroger l'API, et `ctx` repondrait GO en mesurant
     # une identite qu'il vient lui-meme de reparer. Voir src/Jetons.ps1.
     $ghExe = try { Get-CtxGhExe } catch { $null }
-    if ($ghExe) {
-        $ghLogin = & $ghExe api user --jq .login 2>$null
+
+    # Y a-t-il un identifiant la ou `gh` regardera ? Question LOCALE, donc encore
+    # repondable quand GitHub ne l'est pas -- c'est elle qui separe « jamais
+    # connecte » de « connecte, mais injoignable a l'instant ».
+    #
+    # Reste $null quand GH_CONFIG_DIR est absent : le dossier par defaut de la
+    # CLI depend de la plateforme, et le deviner ferait annoncer « non
+    # authentifie » sur la foi d'un chemin suppose. Ce cas est deja un probleme
+    # nomme plus bas (ctx.pb.ghConfigDir) ; il n'a pas besoin d'un second
+    # message, encore moins d'un faux.
+    $ghConfigExiste = $null
+    if ($env:GH_CONFIG_DIR) {
+        $ghHosts = [System.IO.Path]::Combine($env:GH_CONFIG_DIR, 'hosts.yml')
+        $ghConfigExiste = Test-Path -LiteralPath $ghHosts
     }
+
+    if ($ghExe) {
+        # 2>$null garde la sortie d'erreur hors de la valeur -- mais ce n'est PAS
+        # ce qui protege ici : le 17 aout 2026, la CLI a ecrit le corps d'erreur
+        # de l'API sur sa sortie STANDARD, malgre cette redirection. Ce qui
+        # protege est le couple code de sortie + forme du compte, dans
+        # Resolve-CtxGhLoginObserve.
+        $ghBrut = & $ghExe api user --jq .login 2>$null
+        $ghCode = $LASTEXITCODE
+        $ghObserve = Resolve-CtxGhLoginObserve -Sortie (@($ghBrut) -join "`n") `
+            -Code $ghCode -ConfigExiste $ghConfigExiste
+    }
+    else {
+        # `gh` absent n'est pas `gh` deconnecte. Rien n'a pu etre mesure, et
+        # c'est `ctx doctor` qui nomme le binaire manquant.
+        $ghObserve = Resolve-CtxGhLoginObserve -Sortie '' -Code 1 -ConfigExiste $null
+    }
+
+    # Null sauf si l'etat vaut 'connu' : la comparaison ci-dessous ne peut donc
+    # plus porter sur autre chose qu'un compte reellement mesure.
+    $ghLogin = $ghObserve.Login
+
     $expected = $env:DEVCTX_GH_LOGIN
     if ($expected -and $ghLogin -and ($ghLogin -ne $expected)) {
         $problems += T 'ctx.pb.compteGitHub' $ghLogin $expected
@@ -1962,7 +1995,16 @@ function Test-DevContext {
 
     if (-not $Quiet) {
         Write-Host "  $(T 'ctx.git' (git config user.email 2>$null))"
-        Write-Host "  $(T 'ctx.gh' $(if ($ghLogin) { $ghLogin } else { T 'ctx.ghNonAuth' }))"
+        # Trois etats, trois phrases. « (non authentifie) » servait aux trois, et
+        # c'est ce qui a fait passer une panne de GitHub pour un compte manquant.
+        $ghAffiche = if ($ghObserve.Etat -eq 'connu') {
+            $ghObserve.Login
+        } elseif ($ghObserve.Etat -eq 'nonAuth') {
+            T 'ctx.ghNonAuth'
+        } else {
+            T 'ctx.ghNonVerifie'
+        }
+        Write-Host "  $(T 'ctx.gh' $ghAffiche)"
         Write-Host "  $(T 'ctx.vercel' (Get-CtxVercelState))"
         $sbState = if ($env:SUPABASE_ACCESS_TOKEN) {
             if ($env:DEVCTX_SUPABASE_KEY) { T 'ctx.supabase.chargeCle' $env:DEVCTX_SUPABASE_KEY } else { T 'ctx.supabase.charge' }
@@ -1973,7 +2015,13 @@ function Test-DevContext {
         }
         Write-Host ""
         if ($problems.Count -eq 0) {
-            Write-Host "  $(T 'ctx.go')" -ForegroundColor Green
+            # Le GO habituel affirme que « identite, dossier et compte
+            # concordent ». Quand le compte n'a pas pu etre lu, cette phrase
+            # affirmerait une mesure qui n'a pas eu lieu -- deux lignes sous un
+            # « gh : (non verifie) » qui dit le contraire. Un GO reste un GO :
+            # les axes hors ligne, eux, ont bien ete verifies.
+            $go = if ($ghObserve.Etat -eq 'nonVerifie' -and $expected) { 'ctx.goSansCompte' } else { 'ctx.go' }
+            Write-Host "  $(T $go)" -ForegroundColor Green
         }
         else {
             Write-Host "  $(T 'ctx.noGo')" -ForegroundColor Red

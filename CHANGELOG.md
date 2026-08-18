@@ -112,6 +112,46 @@
 
 ### Fixed
 
+- **`ctx` read a GitHub outage as a stolen identity.** On 17 Aug 2026, with
+  GitHub's API in Major Outage, `ctx` returned **NO-GO** on a healthy client
+  folder:
+
+  ```
+  NO-GO
+    - Compte GitHub actif '{"message": "No server is currently available
+      to service your request..."}' - le contexte attend 'ovb-willemot'.
+  ```
+
+  `gh api user --jq .login` wrote the API's error body to its **standard
+  output**, the exit code was never read, and that sentence was compared to the
+  expected account as though it were an identity.
+
+  The same question was already asked correctly twenty lines away. `ctx doctor
+  -Live` has tested `$LASTEXITCODE` since the day it was written, under a stated
+  doctrine: *an unreachable network is INFO and says nothing about the token; a
+  401 is a PROBLEM; conflating them makes the tool cry wolf, and a tool that
+  cries wolf gets uninstalled.* Two implementations of one question, and the
+  wrong one was in the command people type twenty times a day.
+
+  `Resolve-CtxGhLoginObserve` now answers what was **observed**, in three states
+  rather than two: the account is known, there is provably no credential where
+  `gh` looks, or it could not be read. Only the first is compared, so an outage
+  can no longer produce a false NO-GO — and only the second says "not
+  authenticated", because that one is a **local** fact, still true while the
+  network is down. The doubt leans to *not verified*: telling someone perfectly
+  authenticated to run `gh auth login` sends them to repair what is not broken,
+  with a command the outage would fail anyway.
+
+  The account's **shape** is checked even on exit code zero. The guarantee must
+  not rest on a third-party binary's exit-code discipline, and a GitHub login
+  contains no brace, quote, space or newline.
+
+  A `GO` whose account was never measured no longer claims that "identity,
+  folder and account agree" — it says which axis went unverified, two lines
+  under the `gh :` line that already says so. Nine tests, replaying the outage
+  string verbatim; reintroducing the bug turns three of them red — verified,
+  not assumed.
+
 - **`Write-Host` does not keep stdout clean across `pwsh -File`.** Measured on
   17 Aug 2026: `$d = pwsh -NoProfile -File .\tools\Build-Package.ps1` returned
   **three lines**, not a path. The separation Write-Host provides is real inside

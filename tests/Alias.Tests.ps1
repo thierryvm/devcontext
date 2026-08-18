@@ -153,3 +153,70 @@ Describe 'les alias ne mangent pas les options courtes' {
         }
     }
 }
+
+Describe 'les alias transmettent UN argument unique sans le disloquer' {
+    # LE TROISIEME DEFAUT DE L'ALIAS, mesure le 18 aout 2026 depuis un projet
+    # perso :
+    #
+    #     vercel whoami   -> Error: "w" is not a valid target directory
+    #     gh --version    -> unknown command "v" for "gh"
+    #     supabase --version -> Unknown subcommand "-" for "supabase"
+    #
+    # Les shims, eux, repondaient correctement : le defaut vit dans l'alias.
+    #
+    # CAUSE. Get-CtxArgumentsBruts se termine par @(...), mais une fonction
+    # PowerShell DEROULE sa sortie -- un tableau d'UN element revient au
+    # collecteur en SCALAIRE. `& $exe @arguments` splatte alors une CHAINE, et
+    # splatter une chaine enumere ses CARACTERES. `whoami` partait en
+    # `w h o a m i`.
+    #
+    # Meme mecanique que le tableau VIDE deja consigne dans AGENTS.md, une case
+    # plus loin sur la meme regle : envelopper au SITE D'APPEL, jamais dans la
+    # fonction.
+    #
+    # POURQUOI PERSONNE NE L'A VU. Tous les tests de ce fichier passaient deux
+    # arguments ou plus, donc aucun ne construisait le cas qui casse -- et c'est
+    # la forme la plus ordinaire qui soit : `gh --version`, `vercel whoami`,
+    # `supabase login`. Le depot connait deja cette faute sous le nom
+    # « n'avoir jamais construit que le cas peuple ».
+
+    It 'gh --version arrive entier' {
+        $sortie = & $script:Appel $script:Module $script:ctxRoot $script:decoy 'gh --version'
+        $sortie | Should -Match 'ARGS='
+        $sortie | Should -Match '--version'
+    }
+
+    It 'vercel whoami arrive entier' {
+        $sortie = & $script:Appel $script:Module $script:ctxRoot $script:decoy 'vercel whoami'
+        $sortie | Should -Match 'ARGS='
+        $sortie | Should -Match 'whoami'
+    }
+
+    It 'supabase --version arrive entier' {
+        $sortie = & $script:Appel $script:Module $script:ctxRoot $script:decoy 'supabase --version'
+        $sortie | Should -Match 'ARGS='
+        $sortie | Should -Match '--version'
+    }
+
+    It 'les trois appelants enveloppent Get-CtxArgumentsBruts au site d appel' {
+        # La cause, lue dans le source plutot que dans son symptome -- meme
+        # demarche que le test du bloc param() plus haut. Une affectation nue
+        # rougit ici, avec la raison ecrite a cote, plutot que de casser une
+        # commande a un argument six mois plus tard.
+        $racine = Split-Path $PSScriptRoot -Parent
+        $fichiers = @(
+            (Join-Path $racine 'DevContext.psm1')
+            (Join-Path $racine 'src' 'Gh.ps1')
+        )
+        $nus = @()
+        foreach ($f in $fichiers) {
+            $texte = Get-Content -LiteralPath $f -Raw
+            foreach ($m in [regex]::Matches($texte, '(?m)^[^\r\n]*=\s*Get-CtxArgumentsBruts[^\r\n]*$')) {
+                if ($m.Value -notmatch '@\(\s*Get-CtxArgumentsBruts') {
+                    $nus += ('{0} : {1}' -f (Split-Path $f -Leaf), $m.Value.Trim())
+                }
+            }
+        }
+        $nus | Should -BeNullOrEmpty -Because 'une fonction ne peut pas RENDRE un tableau : elle le deroule. Envelopper au site d appel, @(Get-CtxArgumentsBruts $args), sinon un argument unique repart en caracteres.'
+    }
+}

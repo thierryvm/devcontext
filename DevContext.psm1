@@ -671,7 +671,11 @@ function Invoke-DevVercel {
     #>
     # PAS DE BLOC param() : voir Invoke-DevSupabase. `vercel -d` (debug) suffit a
     # declencher l'ambiguite avec -Debug.
-    $arguments = Get-CtxArgumentsBruts $args
+    # @() OBLIGATOIRE. Une fonction ne RENVOIE pas un tableau : PowerShell le
+    # deroule sur le flux de sortie, donc un seul argument revient en CHAINE --
+    # et `& $exe @arguments` splatte alors ses CARACTERES. Mesure le 18 aout
+    # 2026 : `vercel whoami` partait en `w h o a m i`.
+    $arguments = @(Get-CtxArgumentsBruts $args)
 
     # LE GARDE-FOU D'ABORD, et le dossier de config resolu DEPUIS LE DOSSIER.
     #
@@ -1514,7 +1518,11 @@ function Invoke-DevSupabase {
     # autant que pour un script. Releve le 16 aout 2026 sur `gh api -i user`,
     # corrige ici en meme temps : reparer une classe de defaut sur l'occurrence
     # rencontree seulement, c'est la laisser vivre chez son jumeau.
-    $arguments = Get-CtxArgumentsBruts $args
+    # @() OBLIGATOIRE. Une fonction ne RENVOIE pas un tableau : PowerShell le
+    # deroule sur le flux de sortie, donc un seul argument revient en CHAINE --
+    # et `& $exe @arguments` splatte alors ses CARACTERES. Mesure le 18 aout
+    # 2026 : `vercel whoami` partait en `w h o a m i`.
+    $arguments = @(Get-CtxArgumentsBruts $args)
 
     # LE GARDE-FOU D'ABORD, avant meme d'ouvrir le coffre.
     #

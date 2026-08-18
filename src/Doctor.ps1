@@ -1087,12 +1087,33 @@ function Test-CtxDoctorProfilComptes {
       Un constat par contexte concerne, et rien du tout quand tout est propre --
       un rapport qui felicite a chaque ligne finit lu en diagonale.
 
-      Verdict PROBLEME et non ATTENTION, meme quand c'est delibere : le cas le
-      plus courant est de se connecter avec son compte personnel pour la
-      synchronisation des reglages, et le cout de ce choix est qu'une fenetre
-      ouverte sur un projet client porte une identite perso authentifiee. Le
-      correctif nomme l'alternative -- synchroniser via le compte Microsoft, que
-      VS Code accepte aussi -- plutot que de demander de renoncer a la synchro.
+      ATTENTION ET NON PROBLEME, ET C'EST UN ATTENDU CORRIGE.
+
+      Ce controle a rendu PROBLEME jusqu'au 18 aout 2026, sur le raisonnement
+      qu'un compte etranger authentifie dans un profil client est une faute
+      grave. Le raisonnement tenait ; sa PREMISSE, non. Il supposait que le nom
+      trouve dans state.vscdb prouve une SESSION.
+
+      Mesure ce jour-la, apres le correctif des octets morts. Les seules
+      occurrences vivantes du login etranger dans un profil etaient :
+
+        github-<login>  -> [{"id":"eamodio.gitlens", ..., "allowed":true}, ...]
+        "github-<login>": 0
+
+      soit la liste des extensions autorisees pour ce compte et un compteur
+      d'usage. VS Code garde ces enregistrements APRES une deconnexion, pour se
+      souvenir des choix si l'on se reconnecte. Le menu Comptes de la fenetre
+      etait vide -- capture a l'appui.
+
+      Ce fichier permet donc de dire "ce profil a DEJA SERVI avec ce compte",
+      jamais "ce compte y est connecte". Deux phrases qui ne se ressemblent que
+      de loin : la seconde a envoye chercher un lien qui n'existait pas.
+
+      Le constat reste utile, et c'est pourquoi il n'est pas supprime : ces
+      autorisations survivent, donc une reconnexion re-accorderait GitLens et
+      Copilot SANS redemander. Mais un verdict doit porter la confiance de sa
+      preuve, et le correctif nomme desormais l'autorite reelle -- le menu
+      Comptes -- au lieu de prescrire une action peut-etre deja faite.
     #>
     [CmdletBinding()]
     param([object[]]$Faits = @())
@@ -1103,7 +1124,7 @@ function Test-CtxDoctorProfilComptes {
         if ($etrangers.Count -eq 0) { continue }
 
         $liste = ($etrangers | ForEach-Object { "$($_.Login) ($($_.Contexte))" }) -join ', '
-        $checks += New-CtxCheck -Domaine 'editeur' -Sujet "comptes/$($f.Contexte)" -Verdict 'PROBLEME' `
+        $checks += New-CtxCheck -Domaine 'editeur' -Sujet "comptes/$($f.Contexte)" -Verdict 'ATTENTION' `
             -Detail (T 'doc.editeur.compteEtranger' $f.Contexte $liste $f.Attendu) `
             -Correctif (T 'doc.editeur.compteEtrangerFix')
     }

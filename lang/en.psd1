@@ -372,8 +372,8 @@
     'doc.vercel.sansSession'  = 'Vercel project linked, but no context session loaded'
     'doc.vercel.ok'           = 'project linked, session dedicated to the context'
     'doc.editeur.connexions'  = 'one profile per context = one secret store per context: the GitHub / Copilot sign-in has to be done ONCE in each context, and signing in to one no longer signs you out of the other'
-    'doc.editeur.compteEtranger' = "the '{0}' context profile carries an identity from ANOTHER context: {1}. It only expects '{2}'. Copilot, the Pull Request extension and GitLens can act as that account in this context's windows."
-    'doc.editeur.compteEtrangerFix' = "In that context's window: Accounts menu (bottom left) > sign out of the foreign account. If it is there for Settings Sync, switch Sync to the MICROSOFT account instead -- VS Code accepts it too, and the GitHub account goes back to being one per context. One GitHub account living in several profiles also makes them compete for the same token."
+    'doc.editeur.compteEtranger' = "the '{0}' context profile keeps traces of account {1}, which belongs to ANOTHER context (extension authorisations, usage counters). This profile only expects '{2}'. That may be an ACTIVE session -- Copilot, the Pull Request extension and GitLens would then act as that account -- or a LEFTOVER: VS Code keeps these records after a sign-out, and they would re-grant access without asking on the next sign-in."
+    'doc.editeur.compteEtrangerFix' = "The window's Accounts menu is the authority here, not this diagnostic: the file does not say whether a session is open. Open a window of that context > Accounts menu (bottom left). If the foreign account is not listed, there is NOTHING to do. If it is, sign out -- and if it is there for Settings Sync, switch Sync to the MICROSOFT account instead: VS Code accepts it too, and the GitHub account goes back to being one per context."
     # These four TEACH as much as they report. Someone reading "trusted folder
     # outside any context" without knowing what it costs closes the report, so
     # the finding names the consequence and the fix states the rule rather than

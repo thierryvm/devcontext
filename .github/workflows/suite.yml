@@ -1,0 +1,80 @@
+# The test suite, in ONE place, called by CI and by the release.
+#
+# It used to be two jobs -- one in ci.yml, one in release.yml -- and the second
+# was written by copying the first. The copy lost the step that installs the
+# Supabase CLI, which is the binary the guard wraps. On the first real release
+# (v1.9.0, 18 August 2026) that cost one red test and, worse, TWO GREEN ONES
+# FOR THE WRONG REASON: a missing binary also exits non-zero, and its error text
+# also lacks the word REFUSE. A copy does not drift loudly.
+#
+# Only two things differed on purpose between the two jobs, so only those two
+# are inputs. Everything else was an accident of copying, and accidents do not
+# deserve a parameter.
+
+name: Suite
+
+on:
+  workflow_call:
+    inputs:
+      fail-fast:
+        description: >
+          Stop the whole matrix at the first failure. True for a release, where
+          the next question is whether to publish and one red answers it; false
+          for CI, where learning that BOTH languages broke is worth the minutes.
+        type: boolean
+        required: false
+        default: false
+      timeout-minutes:
+        description: Budget for one language.
+        type: number
+        required: false
+        default: 15
+
+permissions:
+  contents: read
+
+jobs:
+  pester:
+    # The suite runs in BOTH languages.
+    #
+    # On 15 August 2026 CI went red while everything was green locally: the
+    # agent is English, the workstation French, and five assertions compared the
+    # TEXT of a translated message. One language tested is half a piece of
+    # software tested -- and it is always the half the author does not read that
+    # breaks.
+    name: ${{ matrix.langue }}
+    runs-on: windows-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: ${{ inputs.fail-fast }}
+      matrix:
+        langue: [fr, en]
+    env:
+      DEVCTX_LANG: ${{ matrix.langue }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The security tests scan the whole history for credential patterns.
+          # A shallow clone would let them pass without having looked.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/prepare-powershell
+        with:
+          suite: true
+
+      # The Supabase CLI is what the guard delegates to, so resolving it is a
+      # property worth testing rather than skipping. Without it, three tests
+      # declare themselves skipped -- and that coverage then exists nowhere.
+      #
+      # continue-on-error on purpose: an npm registry outage must not turn a
+      # whole suite red over a dependency the tests already know how to do
+      # without, and say so when they do.
+      - name: Install the Supabase CLI (best effort)
+        shell: pwsh
+        continue-on-error: true
+        run: npm install -g supabase
+
+      - name: Run the suite
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/RunTests.ps1

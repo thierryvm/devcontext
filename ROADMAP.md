@@ -114,7 +114,7 @@ redirected, because a question nobody can answer is worse than no question.
 
 ---
 
-## 1.8.1 — publishing from a tag
+## 1.9.0 — publishing from a tag, and a look at where agents write
 
 - ~~**A GitHub Actions workflow on `v*`**~~ — written. Split so that everything
   provable happens *before* a human is asked to approve, and so the API key is
@@ -134,7 +134,7 @@ tag start the publish.
 
 ---
 
-## 1.9.0 — Linux (and macOS when it can be verified)
+## 1.10.0 — Linux (and macOS when it can be verified)
 
 The decision layer is already portable and has been from the start; what is
 nailed to Windows is the **machine integration**, not the logic.

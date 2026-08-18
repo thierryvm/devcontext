@@ -116,7 +116,16 @@ value. Every message that can carry an exception passes through
   bilingual through `DEVCTX_LANG` is planned.
 - **Comments explain why, never what.** If a comment describes what the line
   does, change the line instead.
-- **Branches**: `feature/…`, `hotfix/…`. `main` is protected.
+- **Branches**: `feature/…`, `hotfix/…`. `main` is protected, and the protection
+  was **tested rather than assumed** on 18 August 2026: a direct push is refused
+  with `GH006 — Changes must be made through a pull request`. Two consequences
+  worth knowing before they surprise you. Four checks are required **by name**
+  (`Pester suite / fr`, `Pester suite / en`, `Manifest and module load`, `No
+  credential in the repository`), so **renaming a CI job blocks every merge**
+  until the rule is updated with it. And administrators are included on
+  purpose — the incident this exists for was a direct push to `main` by someone
+  who had every right to make it. Lifting it in a real emergency means
+  disabling the rule explicitly, which is the point: visible, never silent.
 - **Never push without a green suite.** `push done ≠ task done`: check CI too.
 - **CI: one suite, one setup.** The Pester matrix lives in
   `.github/workflows/suite.yml` and is *called* by both `ci.yml` and

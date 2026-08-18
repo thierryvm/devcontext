@@ -112,6 +112,23 @@
 
 ### Fixed
 
+- **`ctx doctor` threw on a machine with no agent settings at all.** The most
+  ordinary input there is, and the one case no test built. `Get-CtxAgentConfianceFacts`
+  ends with `@($faits)`, which does **not** make it return an empty array: an
+  empty array unrolls crossing a function's output stream, so the caller gets
+  `$null`, and the `$Faits.Count` on the other side throws under StrictMode.
+
+  Green on every developer machine — they always carry a settings file
+  somewhere — and red on the first CI runner, which carries none. Eight tests
+  failed there and none here, which is the whole lesson: a test whose result
+  depends on the machine running it proves nothing anywhere else.
+
+  Fixed at the call site (`@(Get-CtxAgentConfianceFacts …)`), and the two pure
+  functions now accept `[AllowNull()]` rather than dying on the emptiest input
+  they will ever see. The `Get-DevContextDoctor` tests point `CLAUDE_CONFIG_DIR`
+  at an empty folder, so the virgin case is now built on every machine. Removing
+  the fix turns exactly those eight red again.
+
 - **`ctx` read a GitHub outage as a stolen identity.** On 17 Aug 2026, with
   GitHub's API in Major Outage, `ctx` returned **NO-GO** on a healthy client
   folder:

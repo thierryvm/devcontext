@@ -261,6 +261,28 @@ Describe 'Test-CtxDoctorMcpServeur' {
 }
 
 Describe 'Get-DevContextDoctor' {
+    # NEUTRALISE LA MACHINE QUI EXECUTE CES TESTS.
+    #
+    # Une machine de developpeur porte presque toujours un fichier de reglages
+    # d'agent quelque part ; une machine neuve n'en a aucun. Sans cette
+    # isolation, ces tests mesuraient la machine plutot que le code : verts ici
+    # depuis le premier jour, rouges le 18 aout 2026 sur l'agent de CI, ou
+    # l'absence totale de reglages faisait rendre $null la ou l'appelant lisait
+    # un .Count. Le cas vierge est le plus banal qui soit, et c'etait le seul
+    # que la suite ne construisait jamais.
+    BeforeEach {
+        $script:DoctorConfigAvant = $env:CLAUDE_CONFIG_DIR
+        $script:DoctorConfigVide = Join-Path $TestDrive ('cfg-' + [guid]::NewGuid().ToString('N'))
+        $null = New-Item -ItemType Directory -Path $script:DoctorConfigVide -Force
+        $env:CLAUDE_CONFIG_DIR = $script:DoctorConfigVide
+    }
+    AfterEach {
+        # Restaurer, jamais supprimer : effacer une vraie variable a deja
+        # desarme en silence un test de fuite dans ce depot.
+        if ($null -ne $script:DoctorConfigAvant) { $env:CLAUDE_CONFIG_DIR = $script:DoctorConfigAvant }
+        else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue }
+    }
+
     It 'rend des objets typés, affichables par le fichier de format' {
         (ctx-doctor)[0].PSObject.TypeNames | Should -Contain 'DevContext.DoctorCheck'
     }

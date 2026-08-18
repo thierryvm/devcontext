@@ -159,10 +159,20 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ steps.audit.outputs.version }}
+          PUBLIERA: ${{ steps.mode.outputs.publier }}
         run: |
           # Asked here rather than discovered during the publish. The Gallery
           # would refuse a duplicate, but the error names a conflict and never
           # the forgotten manifest bump that caused it.
+          #
+          # FATAL ONLY WHERE IT HAS A CONSEQUENCE. This threw on every run until
+          # 18 August 2026, including runs that cannot publish anything -- which
+          # made the rehearsal facility unusable from the moment the first
+          # version actually shipped, since the manifest then names a version
+          # the Gallery already serves. The dry run existed to make this file
+          # safe to try, and it was the one thing never tried after a real
+          # publish. Nothing is loosened where it matters: on a tag that will
+          # publish, this still refuses.
           #
           # A bare version is EXACT here, and that is worth stating because it
           # reads like a bug: -Version takes NuGet range syntax, where a bare
@@ -181,7 +191,9 @@ jobs:
             Write-Host "  Absente de la Gallery : $v"
           }
           if ($deja) {
-            throw "La version $v existe deja sur PowerShell Gallery. Un numero publie ne se reprend jamais."
+            $message = "La version $v existe deja sur PowerShell Gallery. Un numero publie ne se reprend jamais."
+            if ($env:PUBLIERA -eq 'true') { throw $message }
+            Write-Host "::warning::$message Cette course ne publie rien, donc la verification est reportee : sur un tag, elle serait fatale ici."
           }
 
       - name: Keep the audited package

@@ -1,4 +1,4 @@
-﻿## [Unreleased]
+﻿## [1.9.4] - 19 August 2026
 
 ### Added
 

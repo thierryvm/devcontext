@@ -1,6 +1,48 @@
-## [Unreleased]
+﻿## [Unreleased]
 
 ### Added
+
+- **The editor's shared store is now isolated per context.** `--user-data-dir`
+  had isolated everything an editor knows about you. It stopped on 19 August
+  2026: VS Code 1.133 moved *application* storage out of the profile and into
+  one machine-wide store.
+
+  ```
+  [shared storage] Creating shared storage database at
+     'c:\Users\<me>\.vscode-shared\sharedStorage\state.vscdb'
+  [shared storage] Initializing fallback application storage
+     (path: f:\CTX\goldteam\vscode\User\globalStorage\state.vscdb)
+  ```
+
+  What lives there: extension **secrets**, the recently-opened list, and the
+  trusted-folders list. The encryption stayed **per profile**, so two contexts
+  write the same entry under two different keys and each makes the other's
+  unreadable — the editor logs `Error while decrypting the ciphertext`, discards
+  the entry, and asks for a sign-in again. Six launches were measured on the
+  machine that found it: the six carrying that error are exactly the six that
+  read back zero sessions, and the one launch without it is the one where the
+  sign-ins survived.
+
+  The daily symptom was the sign-in loop. The cost that matters was quieter: a
+  **client** project path sitting in the recently-opened list of a **personal**
+  window, and a folder trusted in one context trusted in all of them.
+
+  `Open-DevCode` now passes `--shared-data-dir <context>\<profile>-shared`. The
+  flag is real — declared in the editor's own argument parser and, measured on
+  a throwaway profile, honoured by the running application within a second.
+
+- **`ctx doctor` measures whether that store is actually separate.** The
+  capability behind the flag can only be *declared*, never probed: the
+  command-line path never initialises the shared store, so
+  `code --user-data-dir X --extensions-dir Y --shared-data-dir Z
+  --list-extensions` exits 0, creates X and Y, and does not create Z. An absent
+  side effect proves nothing there, and answering "unsupported" would state more
+  than is known while wearing a measurement's authority.
+
+  So the support is read from the editor's files and labelled `declared`, and
+  the **outcome** is measured where it exists — on disk, after real use. The
+  check stays silent for an editor never opened in this context, since it has
+  shared nothing; it clears by reopening the editor from the context's shortcut.
 
 - **`ctx doctor` now reports a git identity that is right for the wrong
   reason.** A `user.email` written in a repository's own `.git/config`

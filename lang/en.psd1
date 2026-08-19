@@ -403,6 +403,10 @@
     'doc.editeur.profilSeul'  = 'profile per context, extensions shared'
     'doc.editeur.methode'     = '{0} ({1})'
     'doc.editeur.limiteFix'   = 'none; a limit of this editor, not of the module'
+    'doc.partage.isole'       = 'shared store belongs to this context ({0})'
+    'doc.partage.commun'      = "{0} writes its application storage -- extension secrets, recent folders, trusted folders -- to a MACHINE-WIDE store. A client project path ends up next to personal ones there, and two contexts sign each other out: the store is shared but its encryption stays per profile, so each one makes the other's entry unreadable."
+    'doc.partage.communFix'   = "Close this editor, then reopen it from the context shortcut (or 'work <context>' then 'code <project>'). Launching now passes --shared-data-dir; the folder will appear and this check turns green. One last sign-in will be needed."
+    'doc.partage.sansFlag'    = "{0} has a machine-wide store but exposes no --shared-data-dir: its application storage stays shared across contexts."
     # --- ctx doctor -Fix ----------------------------------------------------
     # The diagnostic already knows the answer; making the human retype it is
     # friction for nothing. But it repairs only what it can PROVE and UNDO, and
@@ -460,5 +464,8 @@
     'editeur.profil.partage'  = 'SHARED'
     'editeur.ext.isolees'     = 'isolated'
     'editeur.ext.partagees'   = 'shared'
+    'editeur.partage.isole'   = 'isolated'
+    'editeur.partage.commun'  = 'MACHINE-WIDE'
+    'editeur.partage.sansObjet' = 'n/a'
     'editeur.sansUserDataDir' = '{0} does not expose --user-data-dir: its sessions stay common to every context.'
 }

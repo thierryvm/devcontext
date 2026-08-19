@@ -635,6 +635,16 @@ function Get-DevContextDoctor {
         }
     }
 
+    # Le magasin PARTAGE : la couche que --user-data-dir n'isole plus depuis
+    # VS Code 1.133. Mesuree sur le disque, jamais deduite d'une capacite.
+    #
+    # Le @() n'est pas decoratif : Get-CtxStockagePartageFacts rend @() hors
+    # contexte, ce qui arrive ici en $null sans lui.
+    $faitsPartage = @(Get-CtxStockagePartageFacts -Contexte $proprio)
+    foreach ($c in (Test-CtxDoctorStockagePartage -Faits $faitsPartage)) {
+        $checks.Add($c)
+    }
+
     # --- agents ------------------------------------------------------------
     #
     # Le reste du module cloisonne QUI ON EST. Rien n'y regardait OU CA ECRIT --
@@ -1199,6 +1209,131 @@ function Test-CtxDoctorEditeurConnexions {
 
     New-CtxCheck -Domaine 'editeur' -Sujet 'connexions' -Verdict 'INFO' `
         -Detail (T 'doc.editeur.connexions')
+}
+
+function Get-CtxStockagePartageFacts {
+    <#
+      GATHERING. Le magasin PARTAGE de ce contexte existe-t-il sur le disque ?
+
+      CE QUE CE CONTROLE MESURE, ET POURQUOI IL EXISTE
+
+      Mesure le 19 aout 2026. VS Code 1.133 a sorti le stockage "application"
+      du --user-data-dir. Les SECRETS des extensions, la liste des dossiers
+      recents et celle des dossiers approuves vivent desormais dans un magasin
+      COMMUN A LA MACHINE, quel que soit le profil :
+
+          [shared storage] Creating shared storage database at
+             'c:\Users\<moi>\.vscode-shared\sharedStorage\state.vscdb'
+
+      Le chiffrement, lui, est reste par profil. Deux contextes ecrivent donc
+      la meme entree avec deux cles differentes, et le suivant ne sait plus la
+      lire -- l'editeur jette l'entree et redemande une connexion. Six
+      demarrages mesures ce jour-la : les six ou "Error while decrypting the
+      ciphertext" apparait sont exactement les six ou zero session est relue.
+
+      Le cout visible est cette boucle. Le cout reel est qu'un chemin de projet
+      CLIENT figurait dans les dossiers recents d'une fenetre PERSONNELLE.
+
+      POURQUOI MESURER PLUTOT QUE CROIRE LA CAPACITE
+
+      Open-DevCode injecte --shared-data-dir sur une capacite DECLAREE, pas
+      mesuree : la sonde en ligne de commande n'initialise jamais le magasin
+      partage, donc elle est aveugle a ce flag. La seule preuve possible est
+      l'usage reel -- le dossier existe, ou il n'existe pas. C'est ce que ce
+      controle regarde.
+
+      Rien n'est rapporte pour un editeur JAMAIS ouvert dans ce contexte : son
+      profil n'existe pas, il n'a donc rien partage. Un avertissement qu'aucune
+      action ne peut effacer est le defaut que ce module s'interdit.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()][string]$Contexte,
+        [AllowNull()][AllowEmptyString()][string]$DossierContexte
+    )
+
+    if (-not $Contexte -and -not $DossierContexte) { return @() }
+    if (-not $DossierContexte) {
+        $DossierContexte = try { Get-CtxPath $Contexte } catch { $null }
+    }
+    if (-not $DossierContexte) { return @() }
+
+    $faits = @()
+    foreach ($e in Get-CtxEditorFacts) {
+        $caps = Get-CtxEditorCapabilitiesCached -Editor $e
+        $profil = [System.IO.Path]::Combine($DossierContexte, $e.Profile)
+        $partage = [System.IO.Path]::Combine($DossierContexte, $e.Profile + '-shared')
+        $faits += [pscustomobject]@{
+            Editeur  = $e.Label
+            Commande = $e.Name
+            Concerne = [bool](Get-CtxProp $caps 'SharedDataStore')
+            Supporte = [bool](Get-CtxProp $caps 'SharedDataDir')
+            Utilise  = Test-Path -LiteralPath $profil
+            Isole    = Test-Path -LiteralPath $partage
+            Chemin   = $partage
+        }
+    }
+    $faits
+}
+
+function Test-CtxDoctorStockagePartage {
+    <#
+      PURE. Le verdict, a partir des faits ci-dessus.
+
+      Trois etats seulement, et chacun se leve par une action que
+      l'utilisateur peut faire :
+
+        editeur jamais ouvert ici -> RIEN. Il n'a rien partage.
+        flag inconnu de l'editeur -> INFO. Limite de l'editeur, pas du module.
+        magasin du contexte absent -> ATTENTION, effacable en rouvrant
+                                      l'editeur par son raccourci de contexte.
+        magasin du contexte present -> OK.
+
+      Le magasin commun n'est pas regarde. Il continuera d'exister apres le
+      correctif -- le profil par defaut s'en sert legitimement -- et en faire
+      un motif d'alerte donnerait un verdict rouge que rien n'efface.
+    #>
+    [CmdletBinding()]
+    param([AllowNull()][object[]]$Faits = @())
+
+    # Le Where-Object n'est pas decoratif. Une fonction PowerShell ne peut pas
+    # RENDRE un tableau vide : il se deplie en traversant le flux de sortie et
+    # l'appelant recoit $null -- dont @($null) fait un tableau d'UN element
+    # nul. Sous StrictMode, le $f.Utilise d'en dessous leve alors.
+    #
+    # Mesure ici meme le 19 aout 2026 : `ctx doctor` sur un dossier hors
+    # contexte tombait sur « The property 'Utilise' cannot be found ». Le
+    # dossier arbitraire est le cas le plus ordinaire qui soit, et c'etait le
+    # seul qu'aucun de mes tests ne construisait.
+    foreach ($f in @($Faits | Where-Object { $null -ne $_ })) {
+        if (-not $f.Utilise) { continue }
+
+        # L'editeur a-t-il seulement un magasin commun ? Mesure du 19 aout
+        # 2026 : Cursor, Windsurf et Trae ne declarent aucun
+        # sharedDataFolderName -- ils sont partis d'un VS Code anterieur a la
+        # fonctionnalite, leur --user-data-dir couvre encore tout, et il n'y a
+        # rien a leur reprocher. Les avertir serait un rouge que rien n'efface.
+        if (-not $f.Concerne) { continue }
+
+        $sujet = '{0}/partage' -f $f.Commande
+
+        if (-not $f.Supporte) {
+            New-CtxCheck -Domaine 'editeur' -Sujet $sujet -Verdict 'INFO' `
+                -Detail (T 'doc.partage.sansFlag' $f.Editeur) `
+                -Correctif (T 'doc.editeur.limiteFix')
+            continue
+        }
+
+        if ($f.Isole) {
+            New-CtxCheck -Domaine 'editeur' -Sujet $sujet -Verdict 'OK' `
+                -Detail (T 'doc.partage.isole' $f.Chemin)
+        }
+        else {
+            New-CtxCheck -Domaine 'editeur' -Sujet $sujet -Verdict 'ATTENTION' `
+                -Detail (T 'doc.partage.commun' $f.Editeur) `
+                -Correctif (T 'doc.partage.communFix')
+        }
+    }
 }
 
 function Get-CtxPathUtilisateur {

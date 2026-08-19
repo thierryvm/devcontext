@@ -486,3 +486,246 @@ Describe 'Sync-CtxEditorEntryPoints' {
         Get-Content (Join-Path $d 'code.cmd') -Raw | Should -Be $avant
     }
 }
+
+Describe 'isolement du stockage PARTAGE (--shared-data-dir)' {
+    # LA TROUVAILLE DU 19 AOUT 2026, sur la machine de l'auteur.
+    #
+    # VS Code 1.133 a sorti le stockage « application » du --user-data-dir. Les
+    # SECRETS des extensions, la liste des dossiers recents et celle des
+    # dossiers approuves vivent desormais dans un magasin COMMUN A LA MACHINE :
+    #
+    #   get appSharedDataHome() {
+    #     const dir = this.args["shared-data-dir"];
+    #     if (dir) return URI.file(resolve(dir));
+    #     return joinPath(this.userHome, ".vscode-shared");
+    #   }
+    #
+    # Le chiffrement, lui, est reste PAR PROFIL. Deux contextes ecrivent donc la
+    # meme entree avec deux cles differentes ; le suivant n'arrive plus a la
+    # lire, l'editeur jette l'entree et redemande une connexion. Mesure sur six
+    # demarrages : les six ou « Error while decrypting the ciphertext » apparait
+    # sont exactement les six ou zero session est relue. Le seul demarrage sans
+    # cette erreur est le seul ou les connexions ont survecu.
+    #
+    # Le cout n'est pas que l'agacement. Le chemin d'un projet CLIENT se
+    # retrouvait dans la liste des dossiers recents d'une fenetre PERSO, et un
+    # dossier approuve dans un contexte l'etait dans tous.
+
+    BeforeAll {
+        $script:Tout = [pscustomobject]@{
+            UserDataDir = $true; ExtensionsDir = $true; SharedDataDir = $true
+        }
+        $script:SansPartage = [pscustomobject]@{
+            UserDataDir = $true; ExtensionsDir = $true; SharedDataDir = $false
+        }
+    }
+
+    It 'injecte --shared-data-dir dans le contexte quand l editeur le supporte' {
+        InModuleScope DevContext -Parameters @{ c = $script:Tout } { param($c)
+            $r = Resolve-CtxEditorArguments -Capabilities $c -ContextDir 'F:\CTX\perso' `
+                -ProfileName 'vscode' -Arguments @('.')
+            $r -join ' ' | Should -Be ('--user-data-dir F:\CTX\perso\vscode ' +
+                '--extensions-dir F:\CTX\perso\vscode-ext ' +
+                '--shared-data-dir F:\CTX\perso\vscode-shared .')
+        }
+    }
+
+    It 'n injecte rien quand l editeur ne connait pas le flag' {
+        # Meme regle que pour --extensions-dir : un flag ignore se lit comme de
+        # l'isolation dans le raccourci, alors que le magasin reste commun.
+        InModuleScope DevContext -Parameters @{ c = $script:SansPartage } { param($c)
+            $r = Resolve-CtxEditorArguments -Capabilities $c -ContextDir 'F:\CTX\perso' `
+                -ProfileName 'vscode' -Arguments @('.')
+            $r | Should -Not -Contain '--shared-data-dir'
+        }
+    }
+
+    It 'n injecte rien pour une capacite ABSENTE de l objet' {
+        # Le controle negatif qui protege les appelants d'avant ce champ : une
+        # capacite absente n'est pas une capacite fausse, mais elle ne doit
+        # surtout pas devenir une capacite VRAIE par defaut.
+        InModuleScope DevContext {
+            $ancien = [pscustomobject]@{ UserDataDir = $true; ExtensionsDir = $true }
+            $r = Resolve-CtxEditorArguments -Capabilities $ancien -ContextDir 'F:\CTX\perso' `
+                -ProfileName 'vscode' -Arguments @('.')
+            $r | Should -Not -Contain '--shared-data-dir'
+        }
+    }
+
+    It 'laisse gagner un appelant qui a pose le flag lui-meme' {
+        InModuleScope DevContext -Parameters @{ c = $script:Tout } { param($c)
+            $r = Resolve-CtxEditorArguments -Capabilities $c -ContextDir 'F:\CTX\perso' `
+                -ProfileName 'vscode' -Arguments @('--shared-data-dir', 'A_MOI', '.')
+            @($r | Where-Object { $_ -eq '--shared-data-dir' }).Count | Should -Be 1
+            $r | Should -Contain 'A_MOI'
+        }
+    }
+
+    It 'construit le chemin meme quand le lecteur n existe pas' {
+        # Meme piege que pour les deux autres flags : Join-Path est un cmdlet de
+        # FOURNISSEUR et rend une chaine VIDE sur un lecteur non monte, ce qui
+        # ferait lire le flag suivant comme la valeur du precedent.
+        InModuleScope DevContext -Parameters @{ c = $script:Tout } { param($c)
+            Test-Path -LiteralPath 'Q:\' | Should -BeFalse -Because 'ce test suppose Q: non monte'
+            $r = Resolve-CtxEditorArguments -Capabilities $c -ContextDir 'Q:\CTX\perso' `
+                -ProfileName 'vscode' -Arguments @('.')
+            $r | Should -Contain 'Q:\CTX\perso\vscode-shared'
+            for ($i = 0; $i -lt $r.Count - 1; $i++) {
+                if ($r[$i] -like '--*') {
+                    $r[$i + 1] | Should -Not -BeLike '--*' -Because "le flag $($r[$i]) doit etre suivi de sa valeur"
+                }
+            }
+        }
+    }
+}
+
+Describe 'Test-CtxEditorDeclaredFlags, sur le flag de stockage partage' {
+    It 'lit --shared-data-dir quand il est declare' {
+        InModuleScope DevContext {
+            (Test-CtxEditorDeclaredFlags -Content 'blah "shared-data-dir":{"type":"string"} blah').SharedDataDir |
+                Should -BeTrue
+        }
+    }
+
+    It 'ne deduit PAS le flag partage de la presence de --user-data-dir' {
+        # Le controle negatif. Les deux chaines se ressemblent assez pour qu'une
+        # recherche trop large les confonde, et un editeur qui n'a que le
+        # premier serait alors declare isole sur une couche qu'il partage.
+        InModuleScope DevContext {
+            $r = Test-CtxEditorDeclaredFlags -Content 'user-data-dir extensions-dir extensions-download-dir'
+            $r.UserDataDir   | Should -BeTrue
+            $r.ExtensionsDir | Should -BeTrue
+            $r.SharedDataDir | Should -BeFalse
+        }
+    }
+
+    It 'accepte un contenu nul sans lever' {
+        InModuleScope DevContext {
+            (Test-CtxEditorDeclaredFlags -Content $null).SharedDataDir | Should -BeFalse
+        }
+    }
+}
+
+Describe 'Get-CtxEditorCapabilitiesCached, face a un cache ecrit AVANT ce champ' {
+    # LE DEFAUT QUE CE TEST EXISTE POUR ATTRAPER, et il serait silencieux.
+    #
+    # Le cache est un JSON relu en table de hachage. Y lire une cle absente ne
+    # LEVE pas : cela rend $null, que [bool] transforme en $false. Une entree
+    # ecrite avant l'ajout de SharedDataDir aurait donc repondu « cet editeur ne
+    # sait pas isoler son magasin partage » -- avec l'autorite d'une mesure, et
+    # pour toujours, puisque rien dans la cle n'aurait change.
+    #
+    # La cle porte donc un numero de schema. Le prix d'un changement de schema
+    # est une sonde de plus, une seule fois, par editeur.
+
+    It 'ne sert pas une entree ecrite sous l ancienne forme de cle' {
+        InModuleScope DevContext {
+            $racine = Join-Path $TestDrive 'ctxroot'
+            New-Item -ItemType Directory -Path $racine -Force | Out-Null
+
+            $faux = Join-Path $TestDrive 'faux-editeur.cmd'
+            'rem' | Set-Content -LiteralPath $faux
+            $editeur = [pscustomobject]@{ Name = 'faux'; Cli = $faux; Exe = $null; Root = $null }
+
+            # L'ancienne cle, telle qu'elle etait construite avant ce changement.
+            $stamp = (Get-Item -LiteralPath $faux).LastWriteTimeUtc.ToString('o')
+            $ancienneCle = '{0}|{1}|{2}' -f $editeur.Name, $faux, $stamp
+            @{ $ancienneCle = @{
+                    UserDataDir = $true; ExtensionsDir = $true; Method = 'measured'; ExitCode = 0
+                }
+            } | ConvertTo-Json -Depth 5 |
+                Set-Content -LiteralPath (Join-Path $racine 'editors.cache.json') -Encoding UTF8
+
+            Mock Test-CtxEditorCapabilities {
+                [pscustomobject]@{
+                    UserDataDir = $true; ExtensionsDir = $true; SharedDataDir = $true
+                    Method      = 'measured'; SharedDataMethod = 'declared'; ExitCode = 0
+                }
+            }
+
+            $caps = Get-CtxEditorCapabilitiesCached -Editor $editeur -ContextRoot $racine
+
+            $caps.SharedDataDir | Should -BeTrue -Because 'une entree sans ce champ doit etre ignoree, pas lue comme un refus'
+            Should -Invoke Test-CtxEditorCapabilities -Times 1 -Exactly
+        }
+    }
+
+    It 'sert bien une entree ecrite sous la forme courante' {
+        # Le pendant : invalider TOUT le cache a chaque lecture couterait une
+        # sonde par lancement d'editeur, ce que le cache existe precisement pour
+        # eviter.
+        InModuleScope DevContext {
+            $racine = Join-Path $TestDrive 'ctxroot2'
+            New-Item -ItemType Directory -Path $racine -Force | Out-Null
+
+            $faux = Join-Path $TestDrive 'faux-editeur2.cmd'
+            'rem' | Set-Content -LiteralPath $faux
+            $editeur = [pscustomobject]@{ Name = 'faux2'; Cli = $faux; Exe = $null; Root = $null }
+
+            @{ (Get-CtxEditorCacheKey -Editor $editeur) = @{
+                    UserDataDir = $true; ExtensionsDir = $true; SharedDataDir = $true
+                    Method      = 'measured'; SharedDataMethod = 'declared'; ExitCode = 0
+                }
+            } | ConvertTo-Json -Depth 5 |
+                Set-Content -LiteralPath (Join-Path $racine 'editors.cache.json') -Encoding UTF8
+
+            Mock Test-CtxEditorCapabilities { throw 'le cache aurait du suffire' }
+
+            (Get-CtxEditorCapabilitiesCached -Editor $editeur -ContextRoot $racine).SharedDataDir |
+                Should -BeTrue
+            Should -Invoke Test-CtxEditorCapabilities -Times 0 -Exactly
+        }
+    }
+}
+
+Describe 'Get-CtxEditorMagasinPartage' {
+    # "Accepte --shared-data-dir" et "possede un magasin commun" sont deux
+    # questions distinctes. La seconde se lit dans le product.json de
+    # l'editeur, et c'est elle qui decide si le sujet le concerne.
+
+    BeforeAll {
+        $script:Poser = {
+            param([string]$Nom, [string]$Json)
+            $racine = Join-Path $TestDrive $Nom
+            $app = Join-Path $racine 'build-4242/resources/app'
+            New-Item -ItemType Directory -Path $app -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $app 'product.json') -Value $Json -Encoding UTF8
+            $racine
+        }
+    }
+
+    It 'lit le nom du magasin quand l editeur le declare' {
+        # Et sous un dossier de VERSION : c'est la disposition reelle de VS Code
+        # depuis aout 2026, celle qui avait rendu le lecteur de surface aveugle.
+        $r = & $script:Poser 'avec' '{"dataFolderName":".vscode","sharedDataFolderName":".vscode-shared"}'
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            Get-CtxEditorMagasinPartage -Root $r | Should -Be '.vscode-shared'
+        }
+    }
+
+    It 'rend $null quand la cle est absente -- le cas des forks' {
+        # Mesure du 19 aout 2026 : Cursor, Windsurf et Trae sont exactement ce
+        # cas. Rendre autre chose que $null leur inventerait un probleme.
+        $r = & $script:Poser 'sans' '{"dataFolderName":".cursor"}'
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            Get-CtxEditorMagasinPartage -Root $r | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'rend $null sans lever sur une racine absente, vide ou illisible' {
+        InModuleScope DevContext {
+            Get-CtxEditorMagasinPartage -Root $null | Should -BeNullOrEmpty
+            Get-CtxEditorMagasinPartage -Root '' | Should -BeNullOrEmpty
+            Get-CtxEditorMagasinPartage -Root 'Q:\nexiste\pas' | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'rend $null sur un product.json qui n est pas du JSON' {
+        # Un editeur inconnu ne doit jamais faire tomber un diagnostic.
+        $r = & $script:Poser 'casse' 'ceci n est pas du json {{{'
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            { Get-CtxEditorMagasinPartage -Root $r } | Should -Not -Throw
+            Get-CtxEditorMagasinPartage -Root $r | Should -BeNullOrEmpty
+        }
+    }
+}

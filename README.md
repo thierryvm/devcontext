@@ -241,8 +241,8 @@ environment. That is an operating-system property, not a missing feature.
 
 An editor keeps its GitHub, Copilot and marketplace sessions inside its profile
 directory, encrypted per user. Give each context its own directory and the
-sessions stop colliding — that is the whole mechanism, and every editor in the
-VS Code family exposes it as `--user-data-dir`.
+sessions stop colliding — every editor in the VS Code family exposes that as
+`--user-data-dir`, and it is where the mechanism starts.
 
 The difficulty is that nothing else in your day passes that flag. A shortcut you
 made, `code .` in a terminal, "Open with" from the file explorer, an npm script,
@@ -275,23 +275,67 @@ price of the thing you came for: signing in for a client no longer signs you out
 of your own account, and both windows stay live side by side. `ctx doctor` says
 so in the report rather than leaving you to guess it from a login prompt.
 
+**One flag stopped being enough on 19 August 2026.** VS Code 1.133 moved
+*application* storage — extension secrets, the recently-opened list, the
+trusted-folders list — out of the profile directory and into `~/.vscode-shared`,
+a single store for the whole machine:
+
+```
+[shared storage] Creating shared storage database at
+   'c:\Users\<me>\.vscode-shared\sharedStorage\state.vscdb'
+```
+
+The encryption stayed per profile. So two contexts write the same entry under
+two different keys, the second cannot read the first, and the editor discards it
+and asks you to sign in — every launch, forever. The give-away is one line in
+the editor's own log: `Error while decrypting the ciphertext`. On the machine
+that found it, six launches carried that line and those same six read back zero
+sessions.
+
+The sign-in loop is the symptom people notice. The one that matters is that a
+**client** project path was sitting in the recently-opened list of a **personal**
+window, and a folder trusted in one context was trusted in all of them.
+
+DevContext now passes `--shared-data-dir` alongside the other two, and
+`ctx doctor` checks the result on disk rather than trusting the flag — because
+this is exactly the kind of thing an editor can change again without telling
+anyone.
+
 **Discovered, not declared.** `ctx-editors` looks for editors and probes what
 each one supports:
 
 ```
-Editeur             Commande      Profil  Extensions   Methode
-Visual Studio Code  code          isole   isolees      measured
-Cursor              cursor        isole   isolees      measured
-Windsurf            windsurf      isole   isolees      measured
-Antigravity         antigravity   isole   partagees    declared
+Editeur             Commande      Profil  Extensions  Partage     Methode
+Visual Studio Code  code          isole   isolees     isole       measured
+Cursor              cursor        isole   isolees     sans objet  measured
+Windsurf            windsurf      isole   isolees     sans objet  measured
+Antigravity         antigravity   isole   partagees   sans objet  declared
+Trae                trae          isole   isolees     sans objet  measured
 ```
 
 `measured` means the flag was tried and the directory it named appeared.
-`declared` means the editor exposes no command line to try, so the flag was read
-from the application's own files — weaker evidence, reported as such rather than
-rounded up. Antigravity is the case that settles the argument for measuring:
-it accepts `--user-data-dir` and has no `--extensions-dir` at all, which no
-amount of "it is a VS Code fork" would have told you.
+`declared` means the flag was read from the application's own files — weaker
+evidence, reported as such rather than rounded up. Antigravity is the case that
+settles the argument for measuring: it accepts `--user-data-dir` and has no
+`--extensions-dir` at all, which no amount of "it is a VS Code fork" would have
+told you.
+
+`sans objet` in the `Partage` column is not a shrug — it is the answer. Those
+editors declare no `sharedDataFolderName` in their own `product.json`: they were
+forked from a VS Code that predates the machine-wide store, so they have none,
+and `--user-data-dir` still covers everything for them. Reporting them as
+`COMMUN` would have put a permanent warning on three editors out of four, on a
+perfectly tidy machine. *Does not accept `--shared-data-dir`* and *shares its
+storage* are two different sentences.
+
+Where the column does say something, it is always on `declared` evidence,
+whatever the `Methode` column says — and that limit is worth knowing. The
+command-line path never initialises the shared store, so probing it measures
+nothing: `--shared-data-dir Z` alongside `--list-extensions` exits 0 and creates
+no `Z`. An absent side effect is not evidence of absence, and answering
+"unsupported" there would state more than is known while wearing a
+measurement's authority. What *can* be measured is the outcome, once you have
+actually opened the editor — and that is what `ctx doctor` reports.
 
 Add an editor DevContext does not know by dropping an `editors.json` next to
 your contexts:

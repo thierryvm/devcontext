@@ -1,4 +1,4 @@
-﻿## [Unreleased]
+﻿## [1.9.3] - 19 August 2026
 
 ### Added
 
@@ -92,8 +92,25 @@
   names the actual authority — the Accounts menu — instead of prescribing an
   action that may already be done.
 
-  A verdict carries the confidence of its evidence. Not published on its own:
-  it travels with the next change.
+  A verdict carries the confidence of its evidence.
+
+### Fixed
+
+- **A control character shipped inside a sentence.** `docs/ARCHITECTURE.md`
+  carried a raw ESC byte in the middle of a word — `reaches <ESC>ditor.ps1` —
+  where `shims\editor.ps1` was meant. Upstream of the file the backslash and the
+  `e` were read as an escape sequence, the pair collapsed into one control
+  character, and the `E` of `editor.ps1` went with it. Invisible in a diff,
+  invisible in an editor, and that file ships in the package — so it was
+  published.
+
+  Rewritten with a forward slash: Windows accepts both, and prose about a path
+  does not need the character that keeps being eaten.
+
+  Two more of the same family were produced the same day, while writing the very
+  lines that warn about it. So the trap now has a row in `AGENTS.md`, with the
+  one command that actually sees it — `grep -P '[\x00-\x08\x0b\x0c\x0e-\x1f]'` —
+  which is how this one was found, two commits later than it should have been.
 
 ---
 

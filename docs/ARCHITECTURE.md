@@ -253,7 +253,7 @@ an empty message. A shortcut needs the reverse — lancer-editeur.ps1 detaches
 through start, or the launching process survives the whole working session.
 Two needs, two paths, the same context decision behind both.
 
-The editor's name reaches ditor.ps1 through DEVCTX_SHIM_EDITOR, set by the
+The editor's name reaches shims/editor.ps1 through DEVCTX_SHIM_EDITOR, set by the
 entry point, never as a parameter: the argument stream belongs to the caller and
 must arrive untouched.
 

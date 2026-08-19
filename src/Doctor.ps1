@@ -462,8 +462,14 @@ function Get-DevContextDoctor {
     $actif     = $env:DEVCTX
 
     if (-not $proprio) {
+        # Les MEMES MOTS que `ctx` sur le meme dossier. Les deux commandes ont
+        # rendu des verdicts differents sur ce fait-la jusqu'au 19 aout 2026 --
+        # INFO ici, NO-GO la-bas -- et c'est le piege « la meme question
+        # repondue a deux endroits » que AGENTS.md consigne deja.
+        $detail = if ($actif) { T 'doc.ctx.horsContexteActif' $actif }
+        else { T 'doc.ctx.horsContexte' }
         $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'INFO' `
-                    -Detail (T 'doc.ctx.horsContexte')))
+                    -Detail $detail))
     }
     elseif (-not $actif) {
         $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'ATTENTION' `

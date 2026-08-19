@@ -76,13 +76,17 @@
     'ctx.remote'             = 'remote (push)  : {0}'
     'ctx.go'                 = 'GO - folder, identity and account agree.'
     'ctx.goSansCompte'       = 'GO - folder and identity agree. GitHub account not verified, see above.'
+    'ctx.goSansProprietaire' = 'GO - nothing here objects. No context owns this folder, see below.'
     'ctx.noGo'               = 'NO-GO'
     'ctx.correctif'          = 'Fix: {0}'
     'ctx.detail'             = 'Full detail: ctx-doctor'
 
     'ctx.pb.dossierSansActif' = "This folder belongs to context '{0}', and no context is active."
     'ctx.pb.dossierAutre'     = "This folder belongs to context '{0}', but '{1}' is active."
-    'ctx.pb.horsRacine'       = 'Outside the active context root ({0}).'
+    # Replaces 'ctx.pb.horsRacine', removed on 19 August 2026: a folder nobody
+    # owns crosses no identity, and the refusal it produced offered a fix the
+    # user had already applied.
+    'ctx.note.sansProprietaire' = "No context governs this folder. Identity '{0}' stays loaded, but the GLOBAL git identity is what will sign here: includeIf rules only cover context roots. Nothing is crossed -- and nothing is decided either."
     'ctx.pb.compteGitHub'     = "Active GitHub account '{0}' - this context expects '{1}'."
     'ctx.pb.sansLogin'        = "This context has no 'github.login' in its manifest: the active account can only be reported, never verified."
     'ctx.pb.ghConfigDir'      = "GH_CONFIG_DIR is unset: 'gh' uses the machine-wide config, therefore the last account you logged into."
@@ -361,6 +365,7 @@
     'doc.mcp.stdio'           = 'stdio ({0})'
     'doc.mcp.aucun'           = 'no MCP server declared for this folder'
     'doc.ctx.horsContexte'    = 'this folder belongs to no context'
+    'doc.ctx.horsContexteActif' = "this folder belongs to no context; identity '{0}' is loaded in this shell, but the GLOBAL git identity is what will sign here"
     'doc.ctx.sansActif'       = "folder of context '{0}', but no context is active in this shell"
     'doc.ctx.autreActif'      = "folder of context '{0}', active identity '{1}'"
     'doc.gh.sansConfigDir'    = 'GH_CONFIG_DIR is unset: gh uses the machine-wide config, therefore the last account logged into'

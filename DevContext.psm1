@@ -1864,6 +1864,61 @@ function Get-CtxVercelState {
     T 'vercel.aucune'
 }
 
+function Get-CtxVerdictDossier {
+    <#
+      PURE. Le dossier courant et l'identite active s'accordent-ils ?
+
+      Rend un ETAT, pas un message : l'appelant decide si cet etat vaut un
+      refus, une remarque, ou rien. C'est la separation que le reste du module
+      applique deja -- Test-CtxDoctor* decide, Get-Ctx*Facts ramasse -- et son
+      absence ici a coute exactement ce qu'elle coute toujours.
+
+      CE QUI A ETE CORRIGE LE 19 AOUT 2026
+
+      Un dossier que PERSONNE ne possede rendait un NO-GO, motif « hors de la
+      racine du contexte actif », correctif propose `work <ctx> -NoCd` -- soit
+      exactement ce que l'utilisateur venait de lancer. Un verdict qu'aucune
+      action n'efface est la faute du cri au loup, retournee contre le module
+      lui-meme. Et `ctx doctor`, sur le meme dossier, repondait INFO : un seul
+      fait, deux verdicts, dont un faux.
+
+      Ce fichier declare pourtant, quelques lignes plus bas, que « NO-GO doit
+      vouloir dire desaccord d'identite ». Un dossier sans proprietaire ne
+      croise rien.
+
+      CAUSE DE FOND
+
+      Un contexte n'a qu'UNE racine, une chaine. « Hors de ma racine » etait
+      donc confondu avec « appartient a quelqu'un d'autre » -- alors que ce
+      second cas se decide par comparaison de NOMS, et se decidait deja.
+
+      Les cinq etats sont distincts parce qu'ils appellent cinq reponses
+      differentes, et les confondre deux a deux est precisement le defaut
+      corrige.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()][string]$Proprietaire,
+        [AllowNull()][AllowEmptyString()][string]$Actif
+    )
+
+    $aProprio = -not [string]::IsNullOrWhiteSpace($Proprietaire)
+    $aActif = -not [string]::IsNullOrWhiteSpace($Actif)
+
+    if ($aProprio) {
+        if (-not $aActif) { return 'dossierSansActif' }
+        if ($Proprietaire -ne $Actif) { return 'dossierAutre' }
+        return 'accord'
+    }
+
+    # Un contexte est charge, et ce dossier n'appartient a personne. Rien n'est
+    # croise ; rien n'est decide non plus, et c'est ce qui merite d'etre dit.
+    if ($aActif) { return 'sansProprietaire' }
+
+    # Ni proprietaire, ni identite active : il n'y a aucune question.
+    'neutre'
+}
+
 function Test-DevContext {
     <#
       Ancienne version : affichait git / gh / vercel / supabase et s'arretait la.
@@ -1880,6 +1935,13 @@ function Test-DevContext {
     param([switch]$Quiet)
 
     $problems = @()
+
+    # Les REMARQUES ne sont pas des problemes, et cette distinction est le
+    # correctif du 19 aout 2026. Un constat vrai mais sans faute ne doit pas
+    # tomber dans $problems : il y deviendrait un NO-GO, donc un refus, alors
+    # que rien n'est croise.
+    $remarques = @()
+
     $owner    = Resolve-DevContextForPath
     $here     = (Get-Location).Path
 
@@ -1922,16 +1984,23 @@ function Test-DevContext {
     }
 
     # --- 1. Le dossier appartient-il au contexte actif ? ---
-    if ($owner) {
-        if (-not $env:DEVCTX) {
-            $problems += T 'ctx.pb.dossierSansActif' $owner.name
-        }
-        elseif ($owner.name -ne $env:DEVCTX) {
-            $problems += T 'ctx.pb.dossierAutre' $owner.name $env:DEVCTX
-        }
-    }
-    elseif ($env:DEVCTX -and $env:DEVCTX_ROOT_PATH) {
-        $problems += T 'ctx.pb.horsRacine' $env:DEVCTX_ROOT_PATH
+    #
+    # La decision est au-dessus, pure et testable. Ce qui suit ne fait que
+    # choisir le CANAL : un refus, une remarque, ou rien. Le seul etat qui a
+    # change le 19 aout 2026 est 'sansProprietaire', passe des problemes aux
+    # remarques -- ce qui, ici, se lit d'un coup d'oeil.
+    #
+    # Ce que la remarque dit est plus utile que le refus qu'elle remplace : dans
+    # un dossier hors de toute racine, ce n'est pas l'identite du contexte qui
+    # signera. Les regles includeIf ne portent que sur les racines de contextes,
+    # mesure le 19 aout 2026 -- `git config --show-origin user.email` y
+    # designait le ~/.gitconfig GLOBAL. Un depot client egare hors des racines
+    # se voit a cette ligne.
+    $proprietaire = Get-CtxProp $owner 'name'
+    switch (Get-CtxVerdictDossier -Proprietaire $proprietaire -Actif $env:DEVCTX) {
+        'dossierSansActif' { $problems += T 'ctx.pb.dossierSansActif' $proprietaire }
+        'dossierAutre' { $problems += T 'ctx.pb.dossierAutre' $proprietaire $env:DEVCTX }
+        'sansProprietaire' { $remarques += T 'ctx.note.sansProprietaire' $env:DEVCTX }
     }
 
     # --- 2. Le compte GitHub actif est-il celui attendu ? ---
@@ -2028,7 +2097,19 @@ function Test-DevContext {
             # affirmerait une mesure qui n'a pas eu lieu -- deux lignes sous un
             # « gh : (non verifie) » qui dit le contraire. Un GO reste un GO :
             # les axes hors ligne, eux, ont bien ete verifies.
-            $go = if ($ghObserve.Etat -eq 'nonVerifie' -and $expected) { 'ctx.goSansCompte' } else { 'ctx.go' }
+            #
+            # Un troisieme cas depuis le 19 aout 2026, pour la meme raison : sur
+            # un dossier que personne ne possede, « dossier concorde » affirme un
+            # accord avec un proprietaire qui n'existe pas -- deux lignes
+            # au-dessus d'une remarque qui dit « rien n'est decide non plus ».
+            #
+            # L'ordre n'est pas arbitraire. Le compte passe en premier, ce qui
+            # laisse le comportement existant strictement inchange partout ou il
+            # s'appliquait deja ; le proprietaire n'est consulte que la ou la
+            # phrase habituelle serait fausse.
+            $go = if ($ghObserve.Etat -eq 'nonVerifie' -and $expected) { 'ctx.goSansCompte' }
+            elseif (-not $owner) { 'ctx.goSansProprietaire' }
+            else { 'ctx.go' }
             Write-Host "  $(T $go)" -ForegroundColor Green
         }
         else {
@@ -2047,6 +2128,14 @@ function Test-DevContext {
             }
             Write-Host "  $(T 'ctx.detail')" -ForegroundColor DarkGray
         }
+
+        # Apres le verdict, jamais dedans : une remarque qui remonterait au-dessus
+        # se lirait comme un motif de refus.
+        foreach ($r in $remarques) {
+            Write-Host ""
+            Write-Host "  $r" -ForegroundColor Yellow
+        }
+
         Write-Host ""
     }
 

@@ -33,6 +33,40 @@
   one would have been discovered the day it accused a file the module had just
   written itself.
 
+### Fixed
+
+- **`ctx` refused a folder that nobody owns, and the fix it offered could not
+  work.** Standing in a directory outside every context root with an identity
+  loaded, `ctx` answered `NO-GO`, reason *outside the active context root*,
+  remedy `work <ctx> -NoCd` — which is exactly what the user had just run. A
+  verdict no action can clear is the cry-wolf failure this project names for
+  guards elsewhere, turned inward.
+
+  Worse, `ctx doctor` answered `INFO` on the same folder. One fact, two
+  verdicts, one of them false. That is the *same question answered in two
+  places* already recorded in `AGENTS.md`, and this is its second instance.
+
+  **Root cause: a context has only ONE root, a single string.** So *outside my
+  root* was conflated with *belongs to someone else* — while the second case was
+  already decided, twenty lines above, by comparing **names**. The module's own
+  comment states the rule it was breaking: *NO-GO must mean identity
+  disagreement*. A folder nobody owns crosses nothing.
+
+  The refusal becomes a remark, and the remark says something the refusal never
+  did: **here it is not the context's identity that will sign.** `includeIf`
+  rules only cover context roots — measured, `git config --show-origin
+  user.email` in such a folder points at the global `~/.gitconfig`. A client
+  repository misplaced outside every root is visible on that line.
+
+  The `GO` sentence gained a third variant for the same reason `ctx.goSansCompte`
+  exists: *folder, identity and account agree* asserts agreement with an owner
+  who does not exist, two lines above a remark saying the opposite.
+
+  **The real crossing still refuses**, unchanged: a folder belonging to another
+  context, with a fix that names it. The decision moved into a pure function so
+  that this could finally be pinned — it had **no test at all**, which is how the
+  contradiction survived.
+
 ---
 
 ## [1.9.4] - 19 August 2026

@@ -403,6 +403,10 @@
     'doc.editeur.profilSeul'  = 'profil par contexte, extensions communes'
     'doc.editeur.methode'     = '{0} ({1})'
     'doc.editeur.limiteFix'   = 'aucun ; limite de cet editeur, pas du module'
+    'doc.partage.isole'       = 'magasin partage propre au contexte ({0})'
+    'doc.partage.commun'      = "{0} ecrit son stockage d'application -- secrets des extensions, dossiers recents, dossiers approuves -- dans un magasin COMMUN A LA MACHINE. Un chemin de projet client s'y retrouve a cote des projets personnels, et deux contextes s'y deconnectent mutuellement : le magasin est commun mais son chiffrement reste par profil, donc chacun rend illisible l'entree de l'autre."
+    'doc.partage.communFix'   = "Refermer cet editeur, puis le rouvrir par le raccourci du contexte (ou 'work <contexte>' puis 'code <projet>'). Le lancement pose desormais --shared-data-dir ; le dossier apparaitra et ce controle passera au vert. Il faudra se reconnecter UNE derniere fois."
+    'doc.partage.sansFlag'    = "{0} possede un magasin commun a la machine mais n'expose pas --shared-data-dir : son stockage d'application reste partage entre les contextes."
     # --- ctx doctor -Fix ----------------------------------------------------
     # Le diagnostic connait deja la reponse ; faire retaper la commande est une
     # friction pour rien. Mais il ne repare que ce qu'il peut PROUVER et
@@ -465,5 +469,8 @@
     'editeur.profil.partage'  = 'PARTAGE'
     'editeur.ext.isolees'     = 'isolees'
     'editeur.ext.partagees'   = 'partagees'
+    'editeur.partage.isole'   = 'isole'
+    'editeur.partage.commun'  = 'COMMUN'
+    'editeur.partage.sansObjet' = 'sans objet'
     'editeur.sansUserDataDir' = "{0} n'expose pas --user-data-dir : ses sessions restent communes a tous les contextes."
 }

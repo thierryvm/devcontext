@@ -1,4 +1,4 @@
-# Roadmap
+﻿# Roadmap
 
 What this tool is trying to become, and in which order. Dates are intentions,
 not commitments.
@@ -308,6 +308,32 @@ needs to live in the tray. The decision waits until the CLI surface has settled
 ---
 
 ## Known gaps, carried
+
+- **An upstream release can move a guarantee out from under a flag.** Found on
+  19 August 2026, and the reason this line is at the top of the list. VS Code
+  1.133 moved application storage — extension secrets, recently-opened folders,
+  trusted folders — out of `--user-data-dir` and into a machine-wide
+  `~/.vscode-shared`. Nothing was renamed, nothing was announced in a place this
+  project reads, and the only visible symptom was a sign-in prompt on every
+  launch. `--shared-data-dir` closes it, and `ctx doctor` now measures the
+  outcome on disk.
+
+  What stays open is the class, not the case: **this project has no way to learn
+  that an editor changed what a flag covers.** It found out because the author
+  was annoyed enough to ask. A capability read once and cached will keep
+  answering with the layout of the version it was read from. Candidates, none
+  chosen yet: re-read the surface when the editor's build id changes rather than
+  only its timestamp; assert on a known-good machine that each isolated folder
+  actually receives writes; or accept the limit and say so here, which is what
+  this entry does today.
+
+- **The shared store written before that fix is not cleaned up.** Separating what
+  happens from now on was the safe half. `~/.vscode-shared` still holds the
+  entries written when it was the only store — including recently-opened paths
+  that mix a client context with personal ones. Deleting it signs the editor's
+  **default** profile out, so nothing here does it automatically; there is no
+  command for it either, and adding one means deciding what to do about a
+  default profile the module does not own.
 
 - ~~**The two test jobs are hand-copied, not shared.**~~ **Closed, 18 August
   2026.** The matrix lives once, in `.github/workflows/suite.yml`, called by both

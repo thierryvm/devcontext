@@ -556,3 +556,141 @@ Describe 'Test-CtxDoctorIdentiteGit, quand la BONNE valeur vient du mauvais endr
         }
     }
 }
+
+Describe 'Test-CtxDoctorStockagePartage' {
+    # LA COUCHE QUE --user-data-dir N ISOLE PLUS, mesuree le 19 aout 2026.
+    #
+    # VS Code 1.133 ecrit les secrets des extensions, les dossiers recents et
+    # les dossiers approuves dans ~/.vscode-shared -- un magasin commun a toute
+    # la machine. Le chiffrement etant reste par profil, deux contextes se
+    # deconnectent mutuellement ; et le chemin d'un projet CLIENT se retrouve
+    # dans les dossiers recents d'une fenetre PERSONNELLE.
+
+    BeforeAll {
+        $script:Fait = {
+            param([bool]$Supporte, [bool]$Utilise, [bool]$Isole, [bool]$Concerne = $true)
+            [pscustomobject]@{
+                Editeur  = 'Visual Studio Code'; Commande = 'code'
+                Concerne = $Concerne
+                Supporte = $Supporte; Utilise = $Utilise; Isole = $Isole
+                Chemin   = 'F:\CTX\perso\vscode-shared'
+            }
+        }
+    }
+
+    It 'ne dit RIEN d un editeur jamais ouvert dans ce contexte' {
+        # LE CONTROLE QUI COMPTE LE PLUS. Un editeur installe mais jamais lance
+        # ici n'a rien partage -- l avertir serait un verdict rouge que rien ne
+        # peut effacer, et un verdict qu'on ne peut pas effacer enseigne a ne
+        # plus lire le diagnostic. C'est exactement le defaut corrige la veille
+        # sur le controle des comptes de profil.
+        InModuleScope DevContext -Parameters @{ f = (& $script:Fait $true $false $false) } { param($f)
+            @(Test-CtxDoctorStockagePartage -Faits @($f)).Count | Should -Be 0
+        }
+    }
+
+    It 'ne dit RIEN d un editeur qui n a pas de magasin commun du tout' {
+        # LE FAUX POSITIF EVITE DE JUSTESSE, mesure le 19 aout 2026.
+        #
+        # sharedDataFolderName est declare par VS Code ('.vscode-shared') et
+        # ABSENT de Cursor, Windsurf et Trae : ces forks sont partis d'un VS
+        # Code anterieur a la fonctionnalite. Leur --user-data-dir couvre encore
+        # tout, ils n'ont rien a isoler, et il n'y a rien a leur reprocher.
+        #
+        # "N'accepte pas --shared-data-dir" et "partage son stockage" sont deux
+        # phrases differentes. Les confondre aurait mis un ATTENTION permanent
+        # sur trois editeurs sur quatre, sur une machine parfaitement rangee --
+        # et un verdict que rien n'efface enseigne a ne plus lire le rapport.
+        InModuleScope DevContext -Parameters @{ f = (& $script:Fait $false $true $false $false) } { param($f)
+            @(Test-CtxDoctorStockagePartage -Faits @($f)).Count | Should -Be 0
+        }
+    }
+
+    It 'rend ATTENTION quand le profil existe mais pas le magasin du contexte' {
+        InModuleScope DevContext -Parameters @{ f = (& $script:Fait $true $true $false) } { param($f)
+            $r = @(Test-CtxDoctorStockagePartage -Faits @($f))
+            $r.Count | Should -Be 1
+            $r[0].Verdict | Should -Be 'ATTENTION'
+            $r[0].Sujet   | Should -Be 'code/partage'
+            $r[0].Correctif | Should -Not -BeNullOrEmpty -Because 'un avertissement sans geste a faire est un reproche'
+        }
+    }
+
+    It 'rend OK des que le magasin du contexte existe' {
+        # Et il devient vert par une action REELLE : rouvrir l editeur par le
+        # raccourci du contexte. C'est ce qui separe ce controle d une alarme.
+        InModuleScope DevContext -Parameters @{ f = (& $script:Fait $true $true $true) } { param($f)
+            $r = @(Test-CtxDoctorStockagePartage -Faits @($f))
+            $r[0].Verdict | Should -Be 'OK'
+        }
+    }
+
+    It 'rend INFO, et non ATTENTION, quand l editeur ignore le flag' {
+        # Une limite de l editeur n'est pas une faute de configuration : rien a
+        # corriger, donc rien a signaler en rouge.
+        InModuleScope DevContext -Parameters @{ f = (& $script:Fait $false $true $false) } { param($f)
+            $r = @(Test-CtxDoctorStockagePartage -Faits @($f))
+            $r[0].Verdict | Should -Be 'INFO'
+        }
+    }
+
+    It 'ne regarde PAS le magasin commun de la machine' {
+        # Il continuera d exister apres le correctif -- le profil par defaut de
+        # l editeur s en sert legitimement. En faire un motif d alerte rendrait
+        # le verdict definitivement rouge sur une machine parfaitement rangee.
+        InModuleScope DevContext -Parameters @{ f = (& $script:Fait $true $true $true) } { param($f)
+            (Test-CtxDoctorStockagePartage -Faits @($f)).Verdict | Should -Be 'OK'
+        }
+    }
+
+    It 'accepte une liste vide sans lever' {
+        InModuleScope DevContext {
+            { Test-CtxDoctorStockagePartage -Faits @() } | Should -Not -Throw
+        }
+    }
+
+    It 'accepte le $null qu une fonction rend a la place d un tableau vide' {
+        # LE CAS QUI A CASSE, et il est le plus ordinaire : `ctx doctor` sur un
+        # dossier hors contexte. Get-CtxStockagePartageFacts y rend @(), qui se
+        # deplie en traversant la sortie et arrive ici en $null -- dont @($null)
+        # fait un tableau d UN element nul. Sous StrictMode, lire une propriete
+        # dessus leve. Deux tests existants de Get-DevContextDoctor sont partis
+        # au rouge la-dessus avant que ce test n existe.
+        InModuleScope DevContext {
+            { Test-CtxDoctorStockagePartage -Faits $null } | Should -Not -Throw
+            @(Test-CtxDoctorStockagePartage -Faits $null).Count | Should -Be 0
+        }
+    }
+}
+
+Describe 'Get-CtxStockagePartageFacts' {
+    It 'rend un tableau vide hors contexte, sans lever' {
+        # Un dossier hors contexte n'a pas de manifeste. Le seul appelant qui
+        # l'avait oublie faisait planter `ctx doctor` sur la liaison de
+        # parametre, pas sur la lecture qu'il tentait.
+        InModuleScope DevContext {
+            { Get-CtxStockagePartageFacts -Contexte '' } | Should -Not -Throw
+            @(Get-CtxStockagePartageFacts -Contexte '').Count | Should -Be 0
+        }
+    }
+
+    It 'nomme le magasin d apres le dossier de profil de l editeur' {
+        # Le nom doit suivre le profil, pas l'editeur : `code` ecrit dans
+        # 'vscode' depuis aout 2026, et de vraies sessions y vivent.
+        InModuleScope DevContext {
+            $racine = Join-Path $TestDrive 'ctx-perso'
+            New-Item -ItemType Directory -Path (Join-Path $racine 'vscode') -Force | Out-Null
+
+            Mock Get-CtxEditorFacts {
+                @([pscustomobject]@{ Name = 'code'; Label = 'Visual Studio Code'; Profile = 'vscode' })
+            }
+            Mock Get-CtxEditorCapabilitiesCached { [pscustomobject]@{ SharedDataDir = $true } }
+
+            $f = @(Get-CtxStockagePartageFacts -Contexte 'perso' -DossierContexte $racine)
+            $f.Count | Should -Be 1
+            $f[0].Utilise | Should -BeTrue -Because 'le dossier de profil existe'
+            $f[0].Isole   | Should -BeFalse -Because 'le dossier -shared n a pas ete cree'
+            $f[0].Chemin  | Should -Be (Join-Path $racine 'vscode-shared')
+        }
+    }
+}

@@ -75,7 +75,7 @@ $script:EditorHints = @(
 # The flags this module knows how to isolate with. Both belong to the VS Code
 # command line and are inherited by its descendants; an editor from another
 # family supports neither, which the probe reports rather than guesses.
-$script:EditorIsolationFlags = @('--user-data-dir', '--extensions-dir')
+$script:EditorIsolationFlags = @('--user-data-dir', '--extensions-dir', '--shared-data-dir')
 
 function Get-CtxEditorHints {
     <#
@@ -303,14 +303,35 @@ function Test-CtxEditorProbeResult {
     param(
         [int]$ExitCode = 0,
         [bool]$ProfileCreated = $false,
-        [bool]$ExtensionsCreated = $false
+        [bool]$ExtensionsCreated = $false,
+        [AllowNull()]$Declared = $null,
+        [AllowNull()][AllowEmptyString()][string]$SharedDataStore = $null
     )
 
+    # --shared-data-dir NE PEUT PAS etre mesure ici, et c'est une mesure, pas
+    # une hypothese : le 19 aout 2026, `code --user-data-dir X --extensions-dir
+    # Y --shared-data-dir Z --list-extensions` sort 0, cree X et Y, et ne cree
+    # PAS Z. Le chemin ligne de commande n'initialise jamais le magasin
+    # partage ; seul le processus graphique le fait, ce qu'une sonde n'a pas le
+    # droit d'ouvrir.
+    #
+    # La regle « seul l'effet sur le disque fait preuve » vaut toujours pour ce
+    # qu'elle couvre. Ici elle ne couvre rien : l'ABSENCE d'effet ne prouve pas
+    # l'absence de support. Repondre $false serait donc affirmer plus que ce
+    # qu'on sait -- et le repondre avec l'autorite d'une mesure.
+    #
+    # Ce champ vient donc de la surface d'arguments declaree, et il est
+    # etiquete comme tel. Le verdict reel se prend ailleurs : `ctx doctor`
+    # regarde si le magasin du contexte existe sur le disque, ce qui est une
+    # mesure de l'usage reel et non du support suppose.
     [pscustomobject]@{
-        UserDataDir   = $ProfileCreated
-        ExtensionsDir = $ExtensionsCreated
-        Method        = 'measured'
-        ExitCode      = $ExitCode
+        UserDataDir      = $ProfileCreated
+        ExtensionsDir    = $ExtensionsCreated
+        SharedDataDir    = [bool](Get-CtxProp $Declared 'SharedDataDir')
+        SharedDataStore  = $SharedDataStore
+        Method           = 'measured'
+        SharedDataMethod = if ($null -eq $Declared) { 'unknown' } else { 'declared' }
+        ExitCode         = $ExitCode
     }
 }
 
@@ -324,10 +345,12 @@ function Test-CtxEditorDeclaredFlags {
     param([AllowNull()][AllowEmptyString()][string]$Content)
 
     [pscustomobject]@{
-        UserDataDir   = [bool]($Content -and $Content.Contains('user-data-dir'))
-        ExtensionsDir = [bool]($Content -and $Content.Contains('extensions-dir'))
-        Method        = 'declared'
-        ExitCode      = $null
+        UserDataDir      = [bool]($Content -and $Content.Contains('user-data-dir'))
+        ExtensionsDir    = [bool]($Content -and $Content.Contains('extensions-dir'))
+        SharedDataDir    = [bool]($Content -and $Content.Contains('shared-data-dir'))
+        Method           = 'declared'
+        SharedDataMethod = 'declared'
+        ExitCode         = $null
     }
 }
 
@@ -345,21 +368,102 @@ function Read-CtxEditorArgvSurface {
         [int]$MaxBytes = 64MB
     )
 
-    $candidates = @(
-        Join-Path $Root 'resources/app.asar'
-        Join-Path $Root 'resources/app/out/vs/code/node/cli.js'
-        Join-Path $Root 'resources/app/package.json'
+    # LE DOSSIER DE VERSION, mesure le 19 aout 2026.
+    #
+    # VS Code n'installe plus son application sous <racine>\resources : il
+    # intercale un dossier portant l'identifiant de la build --
+    # ...\Microsoft VS Code\a5b5009513\resources\app. Les trois chemins
+    # d'origine ne designaient donc plus rien, et cette fonction rendait $null
+    # SANS RIEN DIRE. L'appelant lisait « cet editeur ne declare aucun flag »,
+    # ce qui est le contraire de la verite.
+    #
+    # On essaie donc la racine, PUIS chaque dossier de premier niveau. Un seul
+    # niveau, volontairement : une recherche profonde dans une installation
+    # d'editeur coute des minutes, et un diagnostic que personne n'attend est
+    # un diagnostic que personne ne lance.
+    $bases = @($Root)
+    try {
+        $sousDossiers = Get-ChildItem -LiteralPath $Root -Directory -ErrorAction Stop
+        $bases += @($sousDossiers | Select-Object -ExpandProperty FullName)
+    }
+    catch {
+        # Racine illisible : on garde la racine seule plutot que d'echouer.
+        $null = $_
+    }
+
+    # Du plus parlant au moins parlant, et NON l'inverse. package.json existe
+    # dans presque toutes les dispositions et ne contient aucun flag : le
+    # rencontrer en premier rendrait une reponse valide et vide.
+    $relatifs = @(
+        'resources/app.asar'
+        'resources/app/out/cli.js'
+        'resources/app/out/main.js'
+        'resources/app/out/vs/code/node/cli.js'
+        'resources/app/package.json'
     )
 
-    foreach ($c in $candidates) {
-        if (-not (Test-Path -LiteralPath $c -PathType Leaf)) { continue }
+    foreach ($rel in $relatifs) {
+        foreach ($base in $bases) {
+            $c = [System.IO.Path]::Combine($base, $rel)
+            if (-not (Test-Path -LiteralPath $c -PathType Leaf)) { continue }
+            try {
+                $info = Get-Item -LiteralPath $c
+                if ($info.Length -gt $MaxBytes) { continue }
+                return [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($c))
+            }
+            catch { continue }
+        }
+    }
+}
+
+function Get-CtxEditorMagasinPartage {
+    <#
+      Le nom du dossier de stockage COMMUN A LA MACHINE que cet editeur
+      utilise, ou $null s'il n'en a pas.
+
+      POURQUOI CETTE QUESTION EXISTE SEPAREMENT DE LA CAPACITE
+
+      "L'editeur accepte --shared-data-dir" et "l'editeur possede un magasin
+      commun" sont deux questions differentes, et les confondre fabrique un
+      faux positif.
+
+      Mesure le 19 aout 2026 sur cette machine : product.json declare
+      sharedDataFolderName = '.vscode-shared' pour VS Code, et ne le declare
+      PAS pour Cursor, Windsurf ni Trae. Ces forks sont partis d'un VS Code
+      anterieur a la fonctionnalite : ils n'ont pas de magasin commun, donc
+      rien a isoler, et leur --user-data-dir couvre encore tout. Les avertir
+      serait un verdict rouge sur une machine parfaitement rangee.
+
+      Rend $null quand on ne peut pas savoir -- editeur sans dossier
+      d'installation connu, product.json illisible. Le silence est le bon repli
+      ici : on ne perd qu'un avertissement, et on n'en invente aucun.
+    #>
+    param([AllowNull()][AllowEmptyString()][string]$Root)
+
+    if (-not $Root) { return $null }
+
+    $bases = @($Root)
+    try {
+        $sous = Get-ChildItem -LiteralPath $Root -Directory -ErrorAction Stop
+        $bases += @($sous | Select-Object -ExpandProperty FullName)
+    }
+    catch { $null = $_ }
+
+    foreach ($base in $bases) {
+        # [IO.Path]::Combine et NON Join-Path : cmdlet de FOURNISSEUR, il
+        # resout le lecteur et echoue sur 'Cannot find drive' quand il n'est
+        # pas monte. Le piege est documente dans AGENTS.md et il a quand meme
+        # ete refait ici le 19 aout 2026 -- attrape par le test qui donne
+        # expres une racine sur Q:.
+        $p = [System.IO.Path]::Combine($base, 'resources', 'app', 'product.json')
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { continue }
         try {
-            $info = Get-Item -LiteralPath $c
-            if ($info.Length -gt $MaxBytes) { continue }
-            return [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($c))
+            $produit = Get-Content -LiteralPath $p -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            return (Get-CtxProp $produit 'sharedDataFolderName')
         }
         catch { continue }
     }
+    $null
 }
 
 function Test-CtxEditorCapabilities {
@@ -378,6 +482,17 @@ function Test-CtxEditorCapabilities {
     )
 
     if ($Editor.Cli) {
+        # La surface declaree est lue MEME quand la sonde peut tourner, parce
+        # que la sonde est aveugle a --shared-data-dir (voir
+        # Test-CtxEditorProbeResult). Le cout est un fichier lu une fois par
+        # version d'editeur : le resultat est mis en cache.
+        $declare = $null
+        if (Get-CtxProp $Editor 'Root') {
+            $surfaceCli = Read-CtxEditorArgvSurface -Root $Editor.Root
+            if ($surfaceCli) { $declare = Test-CtxEditorDeclaredFlags -Content $surfaceCli }
+        }
+        $magasin = Get-CtxEditorMagasinPartage -Root (Get-CtxProp $Editor 'Root')
+
         $stem = Join-Path $ScratchRoot ('devctx-probe-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
         $profileDir = "$stem-profile"
         $extDir = "$stem-ext"
@@ -386,11 +501,14 @@ function Test-CtxEditorCapabilities {
             $code = $LASTEXITCODE
             $result = Test-CtxEditorProbeResult -ExitCode $code `
                 -ProfileCreated (Test-Path -LiteralPath $profileDir) `
-                -ExtensionsCreated (Test-Path -LiteralPath $extDir)
+                -ExtensionsCreated (Test-Path -LiteralPath $extDir) `
+                -Declared $declare -SharedDataStore $magasin
         }
         catch {
             $result = [pscustomobject]@{
-                UserDataDir = $false; ExtensionsDir = $false; Method = 'failed'; ExitCode = $null
+                UserDataDir = $false; ExtensionsDir = $false; SharedDataDir = $false
+                SharedDataStore = $magasin
+                Method = 'failed'; SharedDataMethod = 'unknown'; ExitCode = $null
             }
         }
         finally {
@@ -402,7 +520,9 @@ function Test-CtxEditorCapabilities {
     }
 
     $surface = if ($Editor.Root) { Read-CtxEditorArgvSurface -Root $Editor.Root }
-    Test-CtxEditorDeclaredFlags -Content $surface
+    $declareSeul = Test-CtxEditorDeclaredFlags -Content $surface
+    $declareSeul | Add-Member -NotePropertyName SharedDataStore `
+        -NotePropertyValue (Get-CtxEditorMagasinPartage -Root (Get-CtxProp $Editor 'Root')) -PassThru
 }
 
 # ---------------------------------------------------------------------------
@@ -454,6 +574,20 @@ function Resolve-CtxEditorArguments {
         $injected += '--extensions-dir', [System.IO.Path]::Combine($ContextDir, $ProfileName + '-ext')
     }
 
+    # LE MAGASIN PARTAGE. Sans ce flag, VS Code 1.133 et suivants ecrivent les
+    # SECRETS des extensions, la liste des dossiers recents et celle des
+    # dossiers approuves dans ~/.vscode-shared -- un seul fichier pour toute la
+    # machine, quel que soit le --user-data-dir.
+    #
+    # Le chiffrement, lui, est reste par profil. Deux contextes ecrivent donc
+    # la meme entree avec deux cles differentes, et le suivant ne sait plus la
+    # lire : l'editeur jette l'entree et redemande une connexion. Le symptome
+    # visible est cette boucle ; le cout reel est qu'un chemin de projet CLIENT
+    # se retrouve dans les dossiers recents d'une fenetre PERSONNELLE.
+    if ((Get-CtxProp $Capabilities 'SharedDataDir') -and '--shared-data-dir' -notin $already) {
+        $injected += '--shared-data-dir', [System.IO.Path]::Combine($ContextDir, $ProfileName + '-shared')
+    }
+
     @($injected) + @($Arguments)
 }
 
@@ -492,7 +626,7 @@ function Resolve-CtxEditorTargetPath {
     # flag is assumed NOT to, because treating a path as a flag's value loses
     # the target entirely, while the reverse merely costs one extra candidate.
     $consumers = @(
-        '--user-data-dir', '--extensions-dir', '--extension-development-path',
+        '--user-data-dir', '--extensions-dir', '--shared-data-dir', '--extension-development-path',
         '--extensions-download-dir', '--install-extension', '--uninstall-extension',
         '--locale', '--log', '--sync', '--profile', '--remote', '--folder-uri',
         '--file-uri', '--prof-startup-prefix', '--crash-reporter-directory'
@@ -549,6 +683,9 @@ function Get-CtxNormalizedPath {
 # updates itself gets re-probed; one that has not changed does not pay for a
 # process launch every time somebody types `code .`.
 
+# Version de l'enregistrement mis en cache. Voir Get-CtxEditorCacheKey.
+$script:EditorCacheSchema = 3
+
 function Get-CtxEditorCachePath {
     param([string]$ContextRoot = $script:CtxRoot)
     [System.IO.Path]::Combine($ContextRoot, 'editors.cache.json')
@@ -561,7 +698,18 @@ function Get-CtxEditorCacheKey {
     if ($target -and (Test-Path -LiteralPath $target)) {
         $stamp = (Get-Item -LiteralPath $target).LastWriteTimeUtc.ToString('o')
     }
-    '{0}|{1}|{2}' -f $Editor.Name, $target, $stamp
+
+    # LE NUMERO DE SCHEMA, et pourquoi il est dans la CLE.
+    #
+    # Le cache est relu en table de hachage. Y lire une cle absente ne leve
+    # pas : cela rend $null, que [bool] transforme en $false. Une entree
+    # ecrite avant l'ajout d'un champ repondrait donc « non supporte » avec
+    # l'autorite d'une mesure -- et pour toujours, puisque ni le chemin ni
+    # l'horodatage de l'editeur n'auraient change.
+    #
+    # Le prix d'une incrementation est une sonde de plus, une seule fois, par
+    # editeur. A INCREMENTER des qu'un champ est ajoute a l'enregistrement.
+    '{0}|{1}|{2}|{3}' -f $script:EditorCacheSchema, $Editor.Name, $target, $stamp
 }
 
 function Get-CtxEditorCapabilitiesCached {
@@ -585,10 +733,13 @@ function Get-CtxEditorCapabilitiesCached {
         if ($cache.ContainsKey($key)) {
             $hit = $cache[$key]
             return [pscustomobject]@{
-                UserDataDir   = [bool]$hit['UserDataDir']
-                ExtensionsDir = [bool]$hit['ExtensionsDir']
-                Method        = [string]$hit['Method']
-                ExitCode      = $hit['ExitCode']
+                UserDataDir      = [bool]$hit['UserDataDir']
+                ExtensionsDir    = [bool]$hit['ExtensionsDir']
+                SharedDataDir    = [bool]$hit['SharedDataDir']
+                SharedDataStore  = $hit['SharedDataStore']
+                Method           = [string]$hit['Method']
+                SharedDataMethod = [string]$hit['SharedDataMethod']
+                ExitCode         = $hit['ExitCode']
             }
         }
     }
@@ -600,8 +751,13 @@ function Get-CtxEditorCapabilitiesCached {
             New-Item -ItemType Directory -Path $ContextRoot -Force -ErrorAction Stop | Out-Null
         }
         $cache[$key] = @{
-            UserDataDir = $caps.UserDataDir; ExtensionsDir = $caps.ExtensionsDir
-            Method      = $caps.Method;      ExitCode      = $caps.ExitCode
+            UserDataDir      = $caps.UserDataDir
+            ExtensionsDir    = $caps.ExtensionsDir
+            SharedDataDir    = [bool](Get-CtxProp $caps 'SharedDataDir')
+            SharedDataStore  = Get-CtxProp $caps 'SharedDataStore'
+            Method           = $caps.Method
+            SharedDataMethod = [string](Get-CtxProp $caps 'SharedDataMethod' 'unknown')
+            ExitCode         = $caps.ExitCode
         }
         $cache | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path -Encoding UTF8 -ErrorAction Stop
     }
@@ -657,8 +813,17 @@ function Get-DevEditorList {
             Commande          = $editor.Name
             Isole             = [bool]$caps.UserDataDir
             ExtensionsIsolees = [bool]$caps.ExtensionsDir
+            PartageIsole      = [bool](Get-CtxProp $caps 'SharedDataDir')
+            PartageConcerne   = [bool](Get-CtxProp $caps 'SharedDataStore')
             Profil     = if ($caps.UserDataDir) { T 'editeur.profil.isole' } else { T 'editeur.profil.partage' }
             Extensions = if ($caps.ExtensionsDir) { T 'editeur.ext.isolees' } else { T 'editeur.ext.partagees' }
+            # Trois etats, pas deux. Un editeur SANS magasin commun n'a rien a
+            # isoler : lui coller 'COMMUN' inventerait un probleme. Mesure du
+            # 19 aout 2026 : Cursor, Windsurf et Trae ne declarent aucun
+            # sharedDataFolderName.
+            Partage    = if (-not (Get-CtxProp $caps 'SharedDataStore')) { T 'editeur.partage.sansObjet' }
+            elseif (Get-CtxProp $caps 'SharedDataDir') { T 'editeur.partage.isole' }
+            else { T 'editeur.partage.commun' }
             Methode    = $caps.Method
             Chemin     = if ($editor.Cli) { $editor.Cli } else { $editor.Exe }
         }

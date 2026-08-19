@@ -1,4 +1,4 @@
-# Architecture
+﻿# Architecture
 
 How DevContext is put together, and why each piece sits where it does. Written
 for whoever maintains it next — human or agent.
@@ -272,9 +272,34 @@ than measured. Weaker evidence, reported as weaker. **A GUI is never launched
 to answer the question**; doing so once left an editor crashing in a loop on the
 user's screen.
 
-Results are cached under the context root, keyed on the executable's path *and*
-its last-write time, so an editor that gains a flag by updating is re-probed and
-one that has not changed costs nothing.
+Results are cached under the context root, keyed on the executable's path, its
+last-write time **and a schema number**. The first two mean an editor that gains
+a flag by updating is re-probed, while one that has not changed costs nothing.
+The third exists because the cache is JSON reread as a hashtable: a key absent
+from an older record yields `$null`, which `[bool]` turns into `$false` — so a
+new capability would read as *unsupported*, with a measurement's authority, and
+permanently. Bump the schema whenever the record gains a field.
+
+### Where the rule does not reach
+
+`--shared-data-dir` is the exception the rule cannot cover, and it is worth
+stating rather than smoothing over. VS Code 1.133 moved application storage —
+extension secrets, recently-opened folders, trusted folders — out of
+`--user-data-dir` and into a machine-wide store, and this flag is what puts it
+back inside the context.
+
+But the shared store is only initialised by the running application, never by
+the command-line path. Measured: `--user-data-dir X --extensions-dir Y
+--shared-data-dir Z --list-extensions` exits 0, creates X and Y, and does not
+create Z. The probe is therefore **blind** here, and its absence of evidence is
+not evidence of absence. Answering `$false` would state more than is known while
+wearing the label `measured`.
+
+So the support is read from the argument surface and labelled `declared`, and
+the part that *can* be measured is measured elsewhere: `ctx doctor` looks at
+whether this context's shared directory exists on disk after real use. Declared
+capability, measured outcome — and the outcome is the half that matters, since
+it is what an upstream change would silently break.
 
 ---
 

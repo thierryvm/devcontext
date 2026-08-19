@@ -1,4 +1,41 @@
-﻿## [1.9.4] - 19 August 2026
+﻿## [Unreleased]
+
+### Added
+
+- **`ctx doctor` watches the context root itself.** A context is defined by one
+  rule — a folder in the root carrying a `context.json`. Everything else there
+  was **ignored in silence**, which is correct for enumerating contexts and
+  blind for everything else. A stray folder sat in `F:\CTX` for nine days
+  without a single check naming it, and it was an agent working on a client
+  project that noticed, not the module.
+
+  The stray folder is not the case that costs. **The undone context is.** A
+  context folder carries `gh/`, `ssh/`, `vercel/`, `vscode/` — keys and
+  sessions. Strip its `context.json` and it keeps every one of them: no `work`
+  loads it, no check looks at it, nothing cleans it up. The check recognises
+  exactly that, names the material it found, and says plainly that deleting the
+  folder is not enough — a key or a token removed from disk stays valid on the
+  service side.
+
+  A plain foreign folder is also reported, one notch lower, because *it will get
+  in nobody's way* is precisely why nobody would ever review it. An unexpected
+  **file** is `INFO`: a file carries no session, and the module writes one there
+  itself.
+
+  **Nothing is said while no context is declared in the root.** A root with no
+  context is not the module's root yet — it is a path someone put in a setting,
+  or a fresh install's default. Enumerating its subfolders would produce a flood
+  the day the root points at a working directory by mistake, and a report nobody
+  reads protects nothing.
+
+  The module's own cache file is skipped by a name **derived from the function
+  that writes it**, never a second copy of the string. Twin lists drift, and this
+  one would have been discovered the day it accused a file the module had just
+  written itself.
+
+---
+
+## [1.9.4] - 19 August 2026
 
 ### Added
 

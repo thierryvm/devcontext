@@ -415,6 +415,13 @@
     'doc.jeton.horsCloisonnementFix' = "Le REVOQUER, pas seulement l effacer : un jeton retire du disque reste valide cote service. Depuis un shell SANS contexte actif : {0}. Verifier ensuite que les sessions cloisonnees sont intactes (work <contexte> -NoCd; ctx)."
     'doc.jeton.compteEtranger' = "{0} connait, a son emplacement PAR DEFAUT ({2}), un compte declare par un AUTRE contexte : {1}. Tout appel qui echappe au PATH lira ce fichier-la, pas celui du contexte -- et repondra donc sous ce compte depuis n importe quel dossier."
     'doc.jeton.compteEtrangerFix' = "Depuis un shell SANS contexte actif : {0} --user <login>. Verifier ensuite que la session cloisonnee de chaque contexte est intacte (work <contexte> -NoCd; gh auth status). Le jeton reste valide cote service tant qu il n est pas revoque."
+    # --- la racine des contextes --------------------------------------------
+    'doc.racine.propre'       = "{0} ne porte que ses {1} contexte(s)"
+    'doc.racine.orphelin'     = "'{0}' vit dans la racine des contextes sans declarer de context.json, alors qu il porte des elements de contexte : {1}. Ce sont des cles et des sessions sur disque qui n appartiennent a personne : aucun `work` ne les charge, aucun controle ne les regarde, rien ne les nettoie."
+    'doc.racine.orphelinFix'  = "Trancher. Soit ce contexte doit revivre, et il lui manque son context.json ; soit il est fini, et le dossier se supprime -- APRES avoir revoque ce qu il contient, car une cle ou un jeton effaces du disque restent valides cote service. Chemin : {0}"
+    'doc.racine.etranger'     = "'{0}' vit dans {1}, la racine des contextes, sans en etre un. Il ne genera rien -- et c est le probleme : il y dormira sans que personne ne le revoie."
+    'doc.racine.etrangerFix'  = "Le deplacer hors de la racine, ou le supprimer. La racine ne devrait porter que des contextes et le cache du module ; tout ce qu on y depose d autre y devient invisible."
+    'doc.racine.fichier'      = "fichier inattendu a la racine des contextes : '{0}' dans {1}"
     # --- ctx doctor -Fix ----------------------------------------------------
     # Le diagnostic connait deja la reponse ; faire retaper la commande est une
     # friction pour rien. Mais il ne repare que ce qu'il peut PROUVER et

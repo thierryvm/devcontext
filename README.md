@@ -99,6 +99,13 @@ one will actually reach, whether the tokens are still valid, where a credential
 is sitting in clear text in a config file, and which of your shortcuts will
 quietly open a client project on your personal profile.
 
+It watches **its own root**, too. A context is a folder carrying a
+`context.json`, and everything else in that root used to be ignored in silence —
+a stray folder sat there for nine days with nothing to name it. The case that
+costs is not the stray folder but the *undone* context: strip a context folder of
+its `context.json` and it keeps its `ssh/` keys and `gh/` sessions, while no
+`work` ever loads it again.
+
 **It looks for the credential that answers from everywhere.** Compartmentalising
 holds as long as a tool is reached through `PATH` — that is where the shims sit.
 A credential left at a tool's *default* location belongs to no context and

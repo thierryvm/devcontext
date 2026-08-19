@@ -479,6 +479,16 @@ function Get-DevContextDoctor {
         $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'OK' -Detail $proprio))
     }
 
+    # --- la racine des contextes -------------------------------------------
+    #
+    # Un dossier etranger y a dormi neuf jours sans qu'aucun controle ne le
+    # nomme. Le cas qui coute n'est pas celui-la mais le contexte DEFAIT : prive
+    # de son context.json, un dossier garde ses cles et ses sessions, et plus
+    # rien ne le regarde.
+    foreach ($c in (Test-CtxDoctorRacine -Faits (Get-CtxRacineFacts))) {
+        $checks.Add($c)
+    }
+
     # --- git ---------------------------------------------------------------
     Push-Location -LiteralPath $dossier
     try {
@@ -1347,6 +1357,155 @@ function Test-CtxDoctorStockagePartage {
             New-CtxCheck -Domaine 'editeur' -Sujet $sujet -Verdict 'ATTENTION' `
                 -Detail (T 'doc.partage.commun' $f.Editeur) `
                 -Correctif (T 'doc.partage.communFix')
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# La racine des contextes se surveille elle-meme
+# ---------------------------------------------------------------------------
+#
+# Get-CtxManifests definit un contexte par une seule regle : un dossier de la
+# racine qui porte un context.json. Tout le reste y est IGNORE EN SILENCE -- ce
+# qui est juste pour enumerer des contextes, et aveugle pour tout le reste.
+#
+# Un dossier etranger a dormi neuf jours dans F:\CTX sans qu'aucun controle ne
+# le nomme (trouve le 18 aout 2026 par l'agent d'un projet client, pas par le
+# module). Le cas qui coute n'est pas le dossier egare : c'est le contexte
+# DEFAIT. Un dossier de contexte porte gh/, ssh/, vercel/, vscode/ -- des cles
+# et des sessions. Prive de son context.json, il continue d'exister, plus aucun
+# `work` ne le charge, aucun controle ne le regarde, et rien ne le nettoie.
+
+function Get-CtxRacineFacts {
+    <#
+      GATHERING. Qu'y a-t-il dans la racine des contextes qui n'en soit pas un ?
+
+      Rend UN objet et non une liste, parce que la racine est une chose et non
+      plusieurs : elle porte son chemin, son nombre de contextes declares, et la
+      liste de ce qui n'en est pas. La decision a besoin des trois ensemble, et
+      lui faire recompter les contextes voudrait dire relire le disque dans une
+      fonction qui ne doit rien lire.
+
+      "Etre un contexte" est teste par la MEME regle que Get-CtxManifests : la
+      presence d'un context.json. Une seconde definition diverge tot ou tard, et
+      celle qui diverge se decouvre le jour ou elle accuse un vrai contexte.
+    #>
+    [CmdletBinding()]
+    param([AllowNull()][AllowEmptyString()][string]$Racine)
+
+    if (-not $PSBoundParameters.ContainsKey('Racine')) { $Racine = $script:CtxRoot }
+    if ([string]::IsNullOrWhiteSpace($Racine)) { return $null }
+    if (-not (Test-Path -LiteralPath $Racine -PathType Container)) { return $null }
+
+    # Le nom du cache est DERIVE de la fonction qui l'ecrit, jamais recopie.
+    # Deux listes jumelles divergent, et celle-ci se decouvrirait le jour ou
+    # elle accuse un fichier que le module vient d'ecrire lui-meme. Le piege
+    # "deriver une liste et recopier sa jumelle" est deja dans AGENTS.md.
+    $cache = [System.IO.Path]::GetFileName((Get-CtxEditorCachePath -ContextRoot $Racine))
+    $bruit = @($cache, 'desktop.ini', 'Thumbs.db', '.DS_Store')
+
+    # Ce qui trahit un dossier de CONTEXTE defait plutot qu'un dossier egare.
+    # Chacun de ces noms porte des identifiants ou une session.
+    $artefacts = @('gh', 'ssh', 'vercel', 'vscode', 'vscode-ext', 'vscode-shared',
+        'gitconfig', 'supabase-index.json')
+
+    $entrees = @(Get-ChildItem -LiteralPath $Racine -Force -ErrorAction SilentlyContinue)
+
+    $nbContextes = 0
+    $intrus = @()
+
+    foreach ($e in @($entrees | Sort-Object Name)) {
+        # Variable intermediaire plutot qu'une continuation de ligne :
+        # PSUseConsistentIndentation refuse l'alignement du second membre, et
+        # ce piege a deja coute une passe le 19 aout 2026 dans Editors.ps1.
+        $manifeste = [System.IO.Path]::Combine($e.FullName, 'context.json')
+        $estContexte = $e.PSIsContainer -and (Test-Path -LiteralPath $manifeste)
+
+        if ($estContexte) { $nbContextes++; continue }
+        if (-not $e.PSIsContainer -and ($bruit -contains $e.Name)) { continue }
+
+        $trouves = @()
+        if ($e.PSIsContainer) {
+            foreach ($a in $artefacts) {
+                if (Test-Path -LiteralPath ([System.IO.Path]::Combine($e.FullName, $a))) {
+                    $trouves += $a
+                }
+            }
+        }
+
+        $intrus += [pscustomobject]@{
+            Nom        = $e.Name
+            Chemin     = $e.FullName
+            EstDossier = [bool]$e.PSIsContainer
+            Artefacts  = @($trouves)
+        }
+    }
+
+    [pscustomobject]@{
+        Racine    = $Racine
+        Contextes = $nbContextes
+        Intrus    = @($intrus)
+    }
+}
+
+function Test-CtxDoctorRacine {
+    <#
+      PURE. Le verdict sur le contenu de la racine.
+
+      RIEN N'EST DIT TANT QU'AUCUN CONTEXTE N'Y EST DECLARE. Une racine sans
+      contexte n'est pas encore la racine du module : c'est un chemin que
+      quelqu'un a pose dans un reglage, ou le defaut d'une installation neuve.
+      Y enumerer chaque sous-dossier donnerait un deluge le jour ou la racine
+      pointe par erreur sur un dossier de travail -- et un rapport qu'on ne lit
+      plus ne protege rien.
+
+      Trois cas quand elle EST la racine du module :
+
+        dossier portant des elements de contexte -> ATTENTION. Des cles et des
+            sessions sans proprietaire. C'est le cas qui a motive ce controle.
+
+        dossier quelconque -> ATTENTION. Il ne genera rien, et c'est justement
+            le probleme : il y dormira sans que personne ne le revoie.
+
+        fichier inattendu -> INFO. Un fichier ne porte pas de session, et le
+            module en ecrit deja un ; l'enjeu n'est pas le meme.
+    #>
+    [CmdletBinding()]
+    param([AllowNull()]$Faits)
+
+    if ($null -eq $Faits) { return }
+
+    $nb = 0
+    if ($Faits.PSObject.Properties['Contextes']) { $nb = [int]$Faits.Contextes }
+    if ($nb -lt 1) { return }
+
+    $intrus = @()
+    if ($Faits.PSObject.Properties['Intrus']) { $intrus = @($Faits.Intrus | Where-Object { $null -ne $_ }) }
+
+    if ($intrus.Count -eq 0) {
+        New-CtxCheck -Domaine 'contexte' -Sujet 'racine' -Verdict 'OK' `
+            -Detail (T 'doc.racine.propre' $Faits.Racine $nb)
+        return
+    }
+
+    foreach ($i in $intrus) {
+        $sujet = 'racine/{0}' -f $i.Nom
+
+        if (-not $i.EstDossier) {
+            New-CtxCheck -Domaine 'contexte' -Sujet $sujet -Verdict 'INFO' `
+                -Detail (T 'doc.racine.fichier' $i.Nom $Faits.Racine)
+            continue
+        }
+
+        if (@($i.Artefacts).Count -gt 0) {
+            New-CtxCheck -Domaine 'contexte' -Sujet $sujet -Verdict 'ATTENTION' `
+                -Detail (T 'doc.racine.orphelin' $i.Nom (@($i.Artefacts) -join ', ')) `
+                -Correctif (T 'doc.racine.orphelinFix' $i.Chemin)
+        }
+        else {
+            New-CtxCheck -Domaine 'contexte' -Sujet $sujet -Verdict 'ATTENTION' `
+                -Detail (T 'doc.racine.etranger' $i.Nom $Faits.Racine) `
+                -Correctif (T 'doc.racine.etrangerFix')
         }
     }
 }

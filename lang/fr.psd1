@@ -76,13 +76,17 @@
     'ctx.remote'             = 'remote (push)  : {0}'
     'ctx.go'                 = 'GO - identite, dossier et compte concordent.'
     'ctx.goSansCompte'       = 'GO - identite et dossier concordent. Compte GitHub non verifie, voir ci-dessus.'
+    'ctx.goSansProprietaire' = 'GO - rien ne s oppose ici. Aucun contexte ne possede ce dossier, voir ci-dessous.'
     'ctx.noGo'               = 'NO-GO'
     'ctx.correctif'          = 'Correctif : {0}'
     'ctx.detail'             = 'Detail complet : ctx-doctor'
 
     'ctx.pb.dossierSansActif' = "Ce dossier appartient au contexte '{0}', et aucun contexte n'est actif."
     'ctx.pb.dossierAutre'     = "Ce dossier appartient au contexte '{0}', mais '{1}' est actif."
-    'ctx.pb.horsRacine'       = 'Hors de la racine du contexte actif ({0}).'
+    # Remplace 'ctx.pb.horsRacine', retire le 19 aout 2026 : un dossier que
+    # personne ne possede ne croise aucune identite, et le refus qu'il produisait
+    # proposait un correctif deja applique.
+    'ctx.note.sansProprietaire' = "Aucun contexte ne gouverne ce dossier. L identite '{0}' reste chargee, mais c est l identite git GLOBALE qui signera ici : les regles includeIf ne portent que sur les racines de contextes. Rien n est croise -- et rien n est decide non plus."
     'ctx.pb.compteGitHub'     = "Compte GitHub actif '{0}' - le contexte attend '{1}'."
     'ctx.pb.sansLogin'        = "Le contexte n'a pas de 'github.login' dans son manifeste : le compte actif ne peut pas etre verifie, seulement affiche."
     'ctx.pb.ghConfigDir'      = "GH_CONFIG_DIR absent : 'gh' utilise la config GLOBALE de la machine, donc le dernier compte connecte."
@@ -361,6 +365,7 @@
     'doc.mcp.stdio'           = 'stdio ({0})'
     'doc.mcp.aucun'           = 'aucun serveur MCP declare pour ce dossier'
     'doc.ctx.horsContexte'    = 'ce dossier n appartient a aucun contexte'
+    'doc.ctx.horsContexteActif' = "ce dossier n appartient a aucun contexte ; l identite '{0}' est chargee dans ce shell, mais c est l identite git GLOBALE qui signera ici"
     'doc.ctx.sansActif'       = "dossier du contexte '{0}', mais aucun contexte actif dans ce shell"
     'doc.ctx.autreActif'      = "dossier du contexte '{0}', identite active '{1}'"
     'doc.gh.sansConfigDir'    = 'GH_CONFIG_DIR absent : gh utilise la config globale, donc le dernier compte connecte'

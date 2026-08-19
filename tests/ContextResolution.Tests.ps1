@@ -181,3 +181,93 @@ Describe 'Resolve-CtxSupabaseRef' {
         }
     }
 }
+
+Describe 'Get-CtxVerdictDossier' {
+    # Ce comportement n'avait AUCUN test jusqu'au 19 aout 2026, et c'est
+    # exactement pour cela que `ctx` et `ctx doctor` ont pu se contredire sur le
+    # meme fait sans que rien ne rougisse.
+
+    It 'rend <Attendu> pour proprietaire=<P> et actif=<A>' -ForEach @(
+        @{ P = 'perso'; A = 'perso'; Attendu = 'accord' }
+        @{ P = 'goldteam'; A = 'perso'; Attendu = 'dossierAutre' }
+        @{ P = 'goldteam'; A = ''; Attendu = 'dossierSansActif' }
+        @{ P = ''; A = 'perso'; Attendu = 'sansProprietaire' }
+        @{ P = ''; A = ''; Attendu = 'neutre' }
+    ) {
+        InModuleScope DevContext -Parameters @{ p = $P; a = $A; attendu = $Attendu } {
+            param($p, $a, $attendu)
+            Get-CtxVerdictDossier -Proprietaire $p -Actif $a | Should -Be $attendu
+        }
+    }
+
+    It 'traite $null comme une absence, pas comme un nom' {
+        InModuleScope DevContext {
+            Get-CtxVerdictDossier -Proprietaire $null -Actif 'perso' | Should -Be 'sansProprietaire'
+            Get-CtxVerdictDossier -Proprietaire 'perso' -Actif $null | Should -Be 'dossierSansActif'
+            Get-CtxVerdictDossier -Proprietaire $null -Actif $null | Should -Be 'neutre'
+            Get-CtxVerdictDossier -Proprietaire '   ' -Actif 'perso' | Should -Be 'sansProprietaire'
+        }
+    }
+
+    It 'ne confond pas un dossier SANS proprietaire avec un dossier d un AUTRE contexte' {
+        # LE correctif du 19 aout 2026, en une assertion. Les deux etats etaient
+        # confondus parce qu'un contexte n'a qu'UNE racine : « hors de ma
+        # racine » etait lu comme « appartient a quelqu'un d'autre ». Le premier
+        # ne croise rien et ne doit pas refuser ; le second refuse toujours.
+        InModuleScope DevContext {
+            $sansProprio = Get-CtxVerdictDossier -Proprietaire '' -Actif 'perso'
+            $autre = Get-CtxVerdictDossier -Proprietaire 'goldteam' -Actif 'perso'
+
+            $sansProprio | Should -Not -Be $autre
+            $sansProprio | Should -Be 'sansProprietaire'
+            $autre | Should -Be 'dossierAutre' -Because 'le vrai croisement doit toujours refuser'
+        }
+    }
+
+    It 'ne rend jamais un etat que Test-DevContext ne sait pas traiter' {
+        # Un etat inconnu tomberait dans aucune branche du switch appelant : ni
+        # refus, ni remarque, ni rien -- un silence qu'aucun test ne verrait.
+        InModuleScope DevContext {
+            $connus = @('accord', 'dossierSansActif', 'dossierAutre', 'sansProprietaire', 'neutre')
+            foreach ($p in @('', 'perso', 'goldteam', $null)) {
+                foreach ($a in @('', 'perso', 'goldteam', $null)) {
+                    $connus | Should -Contain (Get-CtxVerdictDossier -Proprietaire $p -Actif $a)
+                }
+            }
+        }
+    }
+}
+
+Describe 'Test-DevContext, sur un dossier que personne ne possede' {
+    It 'appelle la remarque, jamais un probleme' {
+        # Le canal compte autant que l'etat : range dans $problems, ce constat
+        # redeviendrait un NO-GO. La source est lue plutot que la sortie, parce
+        # que faire tourner `ctx` en test demanderait git, gh et une racine de
+        # contextes -- trois choses absentes d'un agent de CI.
+        InModuleScope DevContext {
+            $source = (Get-Command Test-DevContext).ScriptBlock.ToString()
+
+            $source | Should -Match "'sansProprietaire'\s*\{\s*\`$remarques"
+            $source | Should -Not -Match "'sansProprietaire'\s*\{\s*\`$problems"
+        }
+    }
+
+    It 'n annonce pas un accord de dossier qu il n a pas mesure' {
+        # Le GO habituel affirme « identite, dossier et compte concordent ». Sans
+        # proprietaire, cette phrase affirme un accord avec quelqu un qui n
+        # existe pas -- deux lignes au-dessus d une remarque qui dit le
+        # contraire. Meme raison d etre que 'ctx.goSansCompte'.
+        InModuleScope DevContext {
+            (Get-Command Test-DevContext).ScriptBlock.ToString() |
+                Should -Match "ctx\.goSansProprietaire"
+
+            foreach ($langue in @('fr', 'en')) {
+                $cle = Import-PowerShellDataFile -LiteralPath (
+                    Join-Path (Split-Path (Get-Module DevContext).Path -Parent) "lang/$langue.psd1")
+                $cle.Keys | Should -Contain 'ctx.goSansProprietaire'
+                $cle.Keys | Should -Contain 'ctx.note.sansProprietaire'
+                $cle.Keys | Should -Not -Contain 'ctx.pb.horsRacine'
+            }
+        }
+    }
+}

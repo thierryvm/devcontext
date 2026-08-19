@@ -99,6 +99,16 @@ one will actually reach, whether the tokens are still valid, where a credential
 is sitting in clear text in a config file, and which of your shortcuts will
 quietly open a client project on your personal profile.
 
+**It looks for the credential that answers from everywhere.** Compartmentalising
+holds as long as a tool is reached through `PATH` — that is where the shims sit.
+A credential left at a tool's *default* location belongs to no context and
+answers from any folder, a client's included. On 18 August 2026 `npx --yes
+vercel@latest`, a form that consults no `PATH` at all, left a personal
+account's token exactly there, and nothing reported it. `ctx doctor` now sweeps
+those default locations for `gh`, `vercel` and `supabase`, and names the
+identity a global config still declares — silently, when the folder belongs to no
+context, because a boundary has to exist before it can be crossed.
+
 ---
 
 ## Install

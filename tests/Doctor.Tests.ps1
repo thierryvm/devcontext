@@ -694,3 +694,290 @@ Describe 'Get-CtxStockagePartageFacts' {
         }
     }
 }
+
+Describe 'Get-CtxJetonGlobalEmplacements' {
+    It 'vise l emplacement PAR DEFAUT de gh, jamais GH_CONFIG_DIR' {
+        # LE test de ce controle. Dans un shell ou `work` est passe,
+        # GH_CONFIG_DIR designe le dossier DU CONTEXTE. Resoudre l'emplacement
+        # par la variable mesurerait la config cloisonnee -- celle qui va bien --
+        # et rendrait "rien a signaler" sur une machine dont la config GLOBALE
+        # connait deux comptes. Le controle n'aurait alors jamais rien trouve,
+        # ce qu'aucun autre test ne montrerait.
+        InModuleScope DevContext {
+            $ancien = $env:GH_CONFIG_DIR
+            try {
+                $env:GH_CONFIG_DIR = Join-Path $TestDrive 'ctx-perso-gh'
+                $gh = @(Get-CtxJetonGlobalEmplacements | Where-Object { $_.Outil -eq 'gh' })
+
+                $gh.Count | Should -Be 1
+                @($gh[0].Chemins) | Should -Not -Contain (Join-Path $env:GH_CONFIG_DIR 'hosts.yml')
+                @($gh[0].Chemins | Where-Object { $_ -like '*ctx-perso-gh*' }).Count |
+                    Should -Be 0 -Because 'la config du contexte n est pas ce que ce controle mesure'
+            }
+            finally {
+                # RESTAURER, jamais effacer. Un test qui vidait la variable au
+                # lieu de la remettre a desarme en silence un test ulterieur --
+                # le defaut est deja consigne dans tests/README.md.
+                if ($null -eq $ancien) { Remove-Item Env:\GH_CONFIG_DIR -ErrorAction SilentlyContinue }
+                else { $env:GH_CONFIG_DIR = $ancien }
+            }
+        }
+    }
+
+    It 'rend les trois outils cloisonnes, sans lever' {
+        InModuleScope DevContext {
+            $e = @(Get-CtxJetonGlobalEmplacements)
+            @($e | ForEach-Object { $_.Outil }) | Should -Be @('gh', 'vercel', 'supabase')
+            foreach ($x in $e) { @($x.Chemins).Count | Should -BeGreaterThan 0 }
+        }
+    }
+}
+
+Describe 'Read-CtxGhHostsComptes' {
+    It 'rend les logins du bloc users ET le compte actif' {
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'hosts-deux.yml'
+            @(
+                'github.com:'
+                '    users:'
+                '        thierryvm:'
+                '        ovb-willemot:'
+                '    user: thierryvm'
+                '    git_protocol: ssh'
+            ) | Set-Content -LiteralPath $f -Encoding utf8
+
+            @(Read-CtxGhHostsComptes -Chemin $f) | Should -Be @('ovb-willemot', 'thierryvm')
+        }
+    }
+
+    It 'ne fait jamais sortir la valeur d un oauth_token' {
+        # Le format ANCIEN de gh range le jeton dans ce fichier. La fonction ne
+        # doit rendre que des logins : ce qui n'est pas rendu ne peut pas
+        # atterrir dans un rapport, et un rapport se colle dans une conversation.
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'hosts-ancien.yml'
+            @(
+                'github.com:'
+                '    oauth_token: FAUX-JETON-DE-TEST-NE-PAS-RENDRE'
+                '    user: thierryvm'
+            ) | Set-Content -LiteralPath $f -Encoding utf8
+
+            $c = @(Read-CtxGhHostsComptes -Chemin $f)
+            $c | Should -Be @('thierryvm')
+            ($c -join ' ') | Should -Not -Match 'FAUX-JETON'
+        }
+    }
+
+    It 'sort du bloc users des que l indentation revient' {
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'hosts-deux-hotes.yml'
+            @(
+                'github.com:'
+                '    users:'
+                '        thierryvm:'
+                'autre.example.com:'
+                '    users:'
+                '        quelquun:'
+            ) | Set-Content -LiteralPath $f -Encoding utf8
+
+            @(Read-CtxGhHostsComptes -Chemin $f) | Should -Be @('quelquun', 'thierryvm')
+        }
+    }
+
+    It 'rend un tableau vide sur un fichier absent, sans lever' {
+        InModuleScope DevContext {
+            { Read-CtxGhHostsComptes -Chemin (Join-Path $TestDrive 'jamais-ecrit.yml') } | Should -Not -Throw
+            @(Read-CtxGhHostsComptes -Chemin (Join-Path $TestDrive 'jamais-ecrit.yml')).Count | Should -Be 0
+        }
+    }
+}
+
+Describe 'Get-CtxJetonGlobalFacts' {
+    BeforeAll {
+        function New-CtxEmplacementTest {
+            param($Outil, $Format, $Chemin, $Commande = 'commande logout')
+            [pscustomobject]@{
+                Outil = $Outil; Libelle = $Outil; Format = $Format
+                Chemins = @($Chemin); Commande = $Commande
+            }
+        }
+    }
+
+    It 'rattache un login au contexte qui le declare' {
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'facts-hosts.yml'
+            @('github.com:', '    users:', '        ovb-willemot:') |
+                Set-Content -LiteralPath $f -Encoding utf8
+
+            $faits = @(Get-CtxJetonGlobalFacts `
+                    -Emplacements @([pscustomobject]@{
+                        Outil = 'gh'; Libelle = 'GitHub CLI'; Format = 'gh-hosts'
+                        Chemins = @($f); Commande = 'gh auth logout'
+                    }) `
+                    -Manifestes @(
+                    [pscustomobject]@{ name = 'perso'; github = [pscustomobject]@{ login = 'thierryvm' } }
+                    [pscustomobject]@{ name = 'goldteam'; github = [pscustomobject]@{ login = 'ovb-willemot' } }
+                ))
+
+            $faits.Count | Should -Be 1
+            $faits[0].Present | Should -BeTrue
+            $faits[0].Comptes[0].Login | Should -Be 'ovb-willemot'
+            $faits[0].Comptes[0].Contexte | Should -Be 'goldteam'
+        }
+    }
+
+    It 'signale un auth.json Vercel qui porte un token' {
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'auth-plein.json'
+            '{ "token": "FAUX-JETON-DE-TEST-0123456789" }' | Set-Content -LiteralPath $f -Encoding utf8
+
+            $faits = @(Get-CtxJetonGlobalFacts -Manifestes @() -Emplacements @(
+                    [pscustomobject]@{
+                        Outil = 'vercel'; Libelle = 'Vercel CLI'; Format = 'vercel-auth'
+                        Chemins = @($f); Commande = 'vercel logout'
+                    }))
+
+            $faits[0].Present | Should -BeTrue
+            $faits[0].Chemin | Should -Be $f
+        }
+    }
+
+    It 'ne signale PAS un auth.json sans token' {
+        # Le garde anti-faux-positif. La CLI Vercel ecrit ce fichier des le
+        # premier lancement, connecte ou non : rapporter sa seule EXISTENCE
+        # donnerait un rouge que personne ne peut effacer sans desinstaller.
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'auth-vide.json'
+            '{ "// Note": "This is your Vercel credentials file." }' |
+                Set-Content -LiteralPath $f -Encoding utf8
+
+            $faits = @(Get-CtxJetonGlobalFacts -Manifestes @() -Emplacements @(
+                    [pscustomobject]@{
+                        Outil = 'vercel'; Libelle = 'Vercel CLI'; Format = 'vercel-auth'
+                        Chemins = @($f); Commande = 'vercel logout'
+                    }))
+
+            $faits[0].Present | Should -BeFalse
+        }
+    }
+
+    It 'ne signale PAS un fichier de jeton vide' {
+        InModuleScope DevContext {
+            $f = Join-Path $TestDrive 'access-token-vide'
+            "   `n" | Set-Content -LiteralPath $f -Encoding utf8 -NoNewline
+
+            $faits = @(Get-CtxJetonGlobalFacts -Manifestes @() -Emplacements @(
+                    [pscustomobject]@{
+                        Outil = 'supabase'; Libelle = 'Supabase CLI'; Format = 'jeton-brut'
+                        Chemins = @($f); Commande = 'supabase logout'
+                    }))
+
+            $faits[0].Present | Should -BeFalse
+        }
+    }
+
+    It 'ne fait entrer AUCUNE valeur de secret dans les faits' {
+        # Les faits traversent -Json et se collent dans une conversation. Le
+        # controle lit des fichiers qui CONTIENNENT un secret ; ce test est ce
+        # qui prouve qu'il n en ressort rien.
+        InModuleScope DevContext {
+            $secret = 'FAUX-JETON-DE-TEST-QUI-NE-DOIT-JAMAIS-SORTIR'
+            $v = Join-Path $TestDrive 'fuite-auth.json'
+            "{ ""token"": ""$secret"" }" | Set-Content -LiteralPath $v -Encoding utf8
+            $s = Join-Path $TestDrive 'fuite-access-token'
+            $secret | Set-Content -LiteralPath $s -Encoding utf8
+
+            $faits = @(Get-CtxJetonGlobalFacts -Manifestes @() -Emplacements @(
+                    [pscustomobject]@{
+                        Outil = 'vercel'; Libelle = 'Vercel CLI'; Format = 'vercel-auth'
+                        Chemins = @($v); Commande = 'vercel logout'
+                    }
+                    [pscustomobject]@{
+                        Outil = 'supabase'; Libelle = 'Supabase CLI'; Format = 'jeton-brut'
+                        Chemins = @($s); Commande = 'supabase logout'
+                    }))
+
+            ($faits | ConvertTo-Json -Depth 6) | Should -Not -Match 'QUI-NE-DOIT-JAMAIS-SORTIR'
+
+            $checks = @(Test-CtxDoctorJetonGlobal -Faits $faits -Contexte 'perso')
+            ($checks | ConvertTo-Json -Depth 6) | Should -Not -Match 'QUI-NE-DOIT-JAMAIS-SORTIR'
+        }
+    }
+}
+
+Describe 'Test-CtxDoctorJetonGlobal' {
+    It 'ne dit RIEN hors de tout contexte' {
+        # Le controle negatif decisif. Ce module s installe depuis une galerie
+        # publique : chez quelqu un qui ne cloisonne rien, un `gh` connecte
+        # globalement est la configuration NORMALE de gh. Accuser la serait le
+        # rouge qu aucune action ne peut effacer.
+        InModuleScope DevContext {
+            $faits = @([pscustomobject]@{
+                    Outil = 'gh'; Libelle = 'GitHub CLI'; Commande = 'gh auth logout'
+                    Present = $true; Chemin = 'C:\quelque\part\hosts.yml'
+                    Comptes = @([pscustomobject]@{ Login = 'quelquun'; Contexte = $null })
+                })
+
+            @(Test-CtxDoctorJetonGlobal -Faits $faits -Contexte '').Count | Should -Be 0
+            @(Test-CtxDoctorJetonGlobal -Faits $faits -Contexte $null).Count | Should -Be 0
+        }
+    }
+
+    It 'rend PROBLEME quand le compte appartient a un AUTRE contexte' {
+        InModuleScope DevContext {
+            $faits = @([pscustomobject]@{
+                    Outil = 'gh'; Libelle = 'GitHub CLI'; Commande = 'gh auth logout'
+                    Present = $true; Chemin = 'C:\quelque\part\hosts.yml'
+                    Comptes = @(
+                        [pscustomobject]@{ Login = 'thierryvm'; Contexte = 'perso' }
+                        [pscustomobject]@{ Login = 'ovb-willemot'; Contexte = 'goldteam' }
+                    )
+                })
+
+            $c = @(Test-CtxDoctorJetonGlobal -Faits $faits -Contexte 'perso')
+            $c.Count | Should -Be 1
+            $c[0].Verdict | Should -Be 'PROBLEME'
+            $c[0].Domaine | Should -Be 'gh'
+            $c[0].Sujet | Should -Be 'global'
+            $c[0].Detail | Should -Match 'ovb-willemot'
+            $c[0].Detail | Should -Not -Match 'thierryvm' -Because 'le compte du contexte courant n est pas le reproche'
+        }
+    }
+
+    It 'rend ATTENTION quand l identifiant existe mais n appartient a aucun contexte connu' {
+        InModuleScope DevContext {
+            $faits = @([pscustomobject]@{
+                    Outil = 'vercel'; Libelle = 'Vercel CLI'; Commande = 'vercel logout'
+                    Present = $true; Chemin = 'C:\quelque\part\auth.json'
+                    Comptes = @()
+                })
+
+            $c = @(Test-CtxDoctorJetonGlobal -Faits $faits -Contexte 'perso')
+            $c[0].Verdict | Should -Be 'ATTENTION'
+            $c[0].Correctif | Should -Match 'vercel logout'
+        }
+    }
+
+    It 'rend OK quand rien ne vit a l emplacement par defaut' {
+        InModuleScope DevContext {
+            $faits = @([pscustomobject]@{
+                    Outil = 'supabase'; Libelle = 'Supabase CLI'; Commande = 'supabase logout'
+                    Present = $false; Chemin = $null; Comptes = @()
+                })
+
+            $c = @(Test-CtxDoctorJetonGlobal -Faits $faits -Contexte 'perso')
+            $c[0].Verdict | Should -Be 'OK'
+        }
+    }
+
+    It 'ne leve pas sur des faits vides ou nuls' {
+        # Meme defaut que celui qui a casse `ctx doctor` hors contexte le
+        # 19 aout 2026 : un tableau vide traverse la sortie et arrive en $null,
+        # dont @() fait un tableau d UN element nul.
+        InModuleScope DevContext {
+            { Test-CtxDoctorJetonGlobal -Faits @() -Contexte 'perso' } | Should -Not -Throw
+            { Test-CtxDoctorJetonGlobal -Faits $null -Contexte 'perso' } | Should -Not -Throw
+            { Test-CtxDoctorJetonGlobal -Faits @($null) -Contexte 'perso' } | Should -Not -Throw
+        }
+    }
+}

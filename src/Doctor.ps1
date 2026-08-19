@@ -592,6 +592,21 @@ function Get-DevContextDoctor {
         }
     }
 
+    # --- identifiants hors cloisonnement -----------------------------------
+    #
+    # Le cloisonnement porte sur ce que les outils lisent QUAND LE PATH les
+    # designe. Un identifiant depose a l'emplacement PAR DEFAUT y echappe par
+    # construction : il repond depuis n'importe quel dossier. Le 18 aout 2026,
+    # un jeton perso ecrit la par `npx --yes vercel@latest` -- forme qui ne
+    # consulte pas le PATH -- etait joignable depuis un dossier client.
+    #
+    # Le @() n'est pas decoratif : un tableau vide se deplie en traversant la
+    # sortie et arrive ici en $null.
+    $faitsJetons = @(Get-CtxJetonGlobalFacts)
+    foreach ($c in (Test-CtxDoctorJetonGlobal -Faits $faitsJetons -Contexte $proprio)) {
+        $checks.Add($c)
+    }
+
     # --- mcp ---------------------------------------------------------------
     $mcp = @(Get-CtxMcpFacts -Dossier $dossier)
     if ($mcp.Count -eq 0) {
@@ -1332,6 +1347,292 @@ function Test-CtxDoctorStockagePartage {
             New-CtxCheck -Domaine 'editeur' -Sujet $sujet -Verdict 'ATTENTION' `
                 -Detail (T 'doc.partage.commun' $f.Editeur) `
                 -Correctif (T 'doc.partage.communFix')
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Identifiants hors cloisonnement
+# ---------------------------------------------------------------------------
+#
+# Tout le module repose sur une seule idee : le dossier decide. Elle tient tant
+# que l'outil est atteint PAR LE PATH -- c'est la que les shims s'interposent et
+# que `work` a pose les bonnes variables.
+#
+# Un identifiant depose a l'emplacement PAR DEFAUT echappe a cette idee par
+# construction. Il n'appartient a aucun contexte, et il repond depuis n'importe
+# quel dossier.
+#
+# Mesure le 18 aout 2026 : un jeton du compte PERSONNEL dormait dans
+# %APPDATA%\com.vercel.cli\Data\auth.json, joignable depuis un dossier CLIENT.
+# Il avait ete ecrit par `npx --yes vercel@latest`, une forme qui ne consulte
+# pas le PATH du tout -- aucun shim ne pouvait s'interposer. Rien ne le
+# signalait.
+
+function Get-CtxJetonGlobalEmplacements {
+    <#
+      La liste FERMEE des emplacements par defaut, un jeu par outil cloisonne.
+
+      Enumerer, jamais decouvrir. Une heuristique du genre "tout fichier qui
+      ressemble a un jeton" produirait des faux positifs partout et personne ne
+      la croirait ; une liste se relit, et ce qui lui manque se voit.
+
+      [System.IO.Path]::Combine et non Join-Path : Join-Path resout ses chemins
+      et LEVE sur un lecteur absent. Le piege est deja consigne dans AGENTS.md,
+      et il a mordu ici meme le 19 aout 2026.
+    #>
+    $racineApp  = $env:APPDATA
+    $racineUser = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+    $xdg        = $env:XDG_CONFIG_HOME
+
+    $gh = @()
+    if ($xdg)        { $gh += [System.IO.Path]::Combine($xdg, 'gh', 'hosts.yml') }
+    if ($racineApp)  { $gh += [System.IO.Path]::Combine($racineApp, 'GitHub CLI', 'hosts.yml') }
+    if ($racineUser) { $gh += [System.IO.Path]::Combine($racineUser, '.config', 'gh', 'hosts.yml') }
+
+    $vercel = @()
+    if ($racineApp)  { $vercel += [System.IO.Path]::Combine($racineApp, 'com.vercel.cli', 'Data', 'auth.json') }
+    if ($racineUser) {
+        $vercel += [System.IO.Path]::Combine($racineUser, '.local', 'share', 'com.vercel.cli', 'auth.json')
+        $vercel += [System.IO.Path]::Combine($racineUser, 'Library', 'Application Support', 'com.vercel.cli', 'auth.json')
+    }
+
+    $supabase = @()
+    if ($racineUser) { $supabase += [System.IO.Path]::Combine($racineUser, '.supabase', 'access-token') }
+
+    @(
+        [pscustomobject]@{
+            Outil = 'gh'; Libelle = 'GitHub CLI'; Format = 'gh-hosts'
+            Chemins = @($gh); Commande = 'gh auth logout --hostname github.com'
+        }
+        [pscustomobject]@{
+            Outil = 'vercel'; Libelle = 'Vercel CLI'; Format = 'vercel-auth'
+            Chemins = @($vercel); Commande = 'vercel logout'
+        }
+        [pscustomobject]@{
+            Outil = 'supabase'; Libelle = 'Supabase CLI'; Format = 'jeton-brut'
+            Chemins = @($supabase); Commande = 'supabase logout'
+        }
+    )
+}
+
+function Read-CtxGhHostsComptes {
+    <#
+      Rend les LOGINS que le hosts.yml de `gh` declare. Rien d'autre.
+
+      Un login est public -- le module en compare deja dans deux controles. Le
+      SECRET, lui, n'est pas dans ce fichier sur cette machine : `gh` le range
+      dans le trousseau de Windows, et hosts.yml ne porte alors aucun
+      oauth_token. Mesure le 19 aout 2026 : `cmdkey /list` montre
+      gh:github.com:<login>, le fichier ne montre que les noms.
+
+      C'est precisement pourquoi ce controle regarde les IDENTITES DECLAREES et
+      non la presence d'un secret. Un controle qui aurait cherche un jeton dans
+      le fichier aurait rendu "rien a signaler" sur une config globale qui
+      connait deux comptes, dont un CLIENT. Un faux negatif ne se voit jamais.
+
+      Analyse ligne a ligne, sans dependance : le module n'en a aucune, et en
+      ajouter une pour lire cinq lignes serait un mauvais echange.
+    #>
+    param([Parameter(Mandatory)][string]$Chemin)
+
+    $comptes = [System.Collections.Generic.List[string]]::new()
+    $lignes = try { @(Get-Content -LiteralPath $Chemin -ErrorAction Stop) } catch { @() }
+
+    $dansUsers = $false
+    $indentUsers = -1
+
+    foreach ($ligne in $lignes) {
+        if ($ligne -match '^\s*#') { continue }
+        if ([string]::IsNullOrWhiteSpace($ligne)) { continue }
+
+        $indent = $ligne.Length - $ligne.TrimStart().Length
+
+        if ($ligne -match '^\s*users:\s*$') {
+            $dansUsers = $true
+            $indentUsers = $indent
+            continue
+        }
+
+        if ($dansUsers) {
+            if ($indent -le $indentUsers) { $dansUsers = $false }
+            elseif ($ligne -match '^\s*([A-Za-z0-9][A-Za-z0-9-]*):\s*$') {
+                $comptes.Add($Matches[1])
+                continue
+            }
+        }
+
+        # Le compte ACTIF de cet hote : celui qu'une invocation SANS
+        # GH_CONFIG_DIR utilisera. C'est le plus interessant des deux.
+        if ($ligne -match '^\s*user:\s*(\S+)\s*$') {
+            $comptes.Add($Matches[1].Trim('"', "'"))
+        }
+    }
+
+    @($comptes | Where-Object { $_ } | Sort-Object -Unique)
+}
+
+function Test-CtxJetonJsonPorteur {
+    <#
+      Le fichier JSON porte-t-il une propriete non vide ? Rend un booleen, et
+      JAMAIS la valeur : ce qui n'est pas rendu ne peut pas fuir dans un
+      rapport, et un rapport se colle dans une conversation.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Chemin,
+        [Parameter(Mandatory)][string]$Propriete
+    )
+
+    $objet = $null
+    try {
+        $objet = Get-Content -LiteralPath $Chemin -Raw -ErrorAction Stop |
+            ConvertFrom-Json -ErrorAction Stop
+    }
+    catch { return $false }
+
+    -not [string]::IsNullOrWhiteSpace([string](Get-CtxProp $objet $Propriete))
+}
+
+function Get-CtxJetonGlobalFacts {
+    <#
+      GATHERING. Pour chaque outil cloisonne : un identifiant vit-il a son
+      emplacement PAR DEFAUT, hors de tout contexte ?
+
+      LE PIEGE, ET IL EST CENTRAL : NE PAS LIRE GH_CONFIG_DIR
+
+      Dans un shell ou `work` est passe, GH_CONFIG_DIR designe le dossier DU
+      CONTEXTE. Resoudre l'emplacement par la variable mesurerait donc la
+      config cloisonnee -- exactement celle qui va bien -- et rendrait "rien a
+      signaler" sur une machine dont la config globale connait deux comptes.
+      L'emplacement par defaut du systeme est vise en IGNORANT la variable, et
+      c'est tout l'interet du controle.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][object[]]$Emplacements,
+        [AllowNull()][object[]]$Manifestes
+    )
+
+    if (-not $PSBoundParameters.ContainsKey('Emplacements')) {
+        $Emplacements = @(Get-CtxJetonGlobalEmplacements)
+    }
+    if (-not $PSBoundParameters.ContainsKey('Manifestes')) {
+        $Manifestes = @(Get-CtxManifests)
+    }
+
+    # login -> contexte. L'ensemble ferme des comptes que les manifestes
+    # declarent : c'est le seul cas ou un verdict peut etre AFFIRMATIF hors
+    # ligne. Sans reseau, rien d'autre ne dit a qui appartient un jeton.
+    $parLogin = @{}
+    foreach ($m in @($Manifestes | Where-Object { $null -ne $_ })) {
+        $nom = Get-CtxProp $m 'name'
+        $login = Get-CtxProp $m 'github.login'
+        if ($nom -and $login) { $parLogin[[string]$login] = [string]$nom }
+    }
+
+    $faits = @()
+    foreach ($e in @($Emplacements | Where-Object { $null -ne $_ })) {
+        $trouve = $null
+        $logins = @()
+
+        foreach ($c in @($e.Chemins)) {
+            if ([string]::IsNullOrWhiteSpace($c)) { continue }
+            if (-not (Test-Path -LiteralPath $c -PathType Leaf)) { continue }
+
+            switch ($e.Format) {
+                'gh-hosts' {
+                    $l = @(Read-CtxGhHostsComptes -Chemin $c)
+                    if ($l.Count -gt 0) { $trouve = $c; $logins = $l }
+                }
+                'vercel-auth' {
+                    if (Test-CtxJetonJsonPorteur -Chemin $c -Propriete 'token') { $trouve = $c }
+                }
+                'jeton-brut' {
+                    $brut = try { Get-Content -LiteralPath $c -Raw -ErrorAction Stop } catch { '' }
+                    if (-not [string]::IsNullOrWhiteSpace($brut)) { $trouve = $c }
+                }
+            }
+
+            if ($trouve) { break }
+        }
+
+        $comptes = @()
+        foreach ($l in @($logins)) {
+            $comptes += [pscustomobject]@{
+                Login    = $l
+                Contexte = if ($parLogin.ContainsKey($l)) { $parLogin[$l] } else { $null }
+            }
+        }
+
+        $faits += [pscustomobject]@{
+            Outil    = $e.Outil
+            Libelle  = $e.Libelle
+            Commande = $e.Commande
+            Present  = [bool]$trouve
+            Chemin   = $trouve
+            Comptes  = @($comptes)
+        }
+    }
+
+    @($faits)
+}
+
+function Test-CtxDoctorJetonGlobal {
+    <#
+      PURE. Le verdict, a partir des faits ci-dessus.
+
+      RIEN N'EST DIT HORS CONTEXTE, ET C'EST LA REGLE LA PLUS IMPORTANTE ICI.
+
+      Ce module s'installe depuis une galerie publique. Chez quelqu'un qui ne
+      cloisonne rien, un `gh` connecte globalement est la configuration NORMALE
+      de `gh` -- pas un defaut. Un identifiant global n'est une faute que la ou
+      une frontiere existe pour etre franchie. Accuser en dehors donnerait le
+      rouge qu'aucune action ne peut effacer, qui est le defaut que ce projet
+      s'interdit partout ailleurs.
+
+      Deux verdicts quand quelque chose est trouve :
+
+        un compte d'un AUTRE contexte -> PROBLEME. Le fait est etabli hors
+            ligne, sans ambiguite : ce login est declare par un autre manifeste.
+
+        un identifiant, compte inconnu -> ATTENTION. Il est hors cloisonnement,
+            ce qui est vrai et suffisant ; dire de QUI il est demanderait le
+            reseau, et ce controle ne le touche pas.
+
+      Meme logique que le controle d'identite git : mauvaise valeur = PROBLEME,
+      bonne valeur par le mauvais mecanisme = ATTENTION.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][object[]]$Faits = @(),
+        [AllowNull()][AllowEmptyString()][string]$Contexte
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Contexte)) { return }
+
+    # Le Where-Object n'est pas decoratif : une fonction PowerShell ne peut pas
+    # RENDRE un tableau vide, il arrive en $null, et @($null) fait un tableau
+    # d'UN element nul dont StrictMode refuse la lecture. Ce defaut exact a
+    # casse `ctx doctor` hors contexte le 19 aout 2026.
+    foreach ($f in @($Faits | Where-Object { $null -ne $_ })) {
+        if (-not $f.Present) {
+            New-CtxCheck -Domaine $f.Outil -Sujet 'global' -Verdict 'OK' `
+                -Detail (T 'doc.jeton.aucun' $f.Libelle)
+            continue
+        }
+
+        $etrangers = @($f.Comptes | Where-Object { $_.Contexte -and $_.Contexte -ne $Contexte })
+
+        if ($etrangers.Count -gt 0) {
+            $noms = @($etrangers | ForEach-Object { '{0} ({1})' -f $_.Login, $_.Contexte }) -join ', '
+            New-CtxCheck -Domaine $f.Outil -Sujet 'global' -Verdict 'PROBLEME' `
+                -Detail (T 'doc.jeton.compteEtranger' $f.Libelle $noms $f.Chemin) `
+                -Correctif (T 'doc.jeton.compteEtrangerFix' $f.Commande)
+        }
+        else {
+            New-CtxCheck -Domaine $f.Outil -Sujet 'global' -Verdict 'ATTENTION' `
+                -Detail (T 'doc.jeton.horsCloisonnement' $f.Libelle $f.Chemin) `
+                -Correctif (T 'doc.jeton.horsCloisonnementFix' $f.Commande)
         }
     }
 }

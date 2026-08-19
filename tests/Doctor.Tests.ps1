@@ -981,3 +981,193 @@ Describe 'Test-CtxDoctorJetonGlobal' {
         }
     }
 }
+
+Describe 'Get-CtxRacineFacts' {
+    # L'arrangement vit dans la portee du TEST, jamais dans InModuleScope : une
+    # fonction definie en BeforeAll n'existe pas dans la portee du module, et le
+    # bloc echoue sur CommandNotFoundException plutot que sur ce qu'il mesure.
+    # Le chemin traverse par -Parameters, comme partout ailleurs dans ce fichier.
+    BeforeAll {
+        function New-CtxRacineTest {
+            param([Parameter(Mandatory)][string]$Chemin)
+            New-Item -ItemType Directory -Path $Chemin -Force | Out-Null
+            foreach ($c in @('perso', 'goldteam')) {
+                $d = Join-Path $Chemin $c
+                New-Item -ItemType Directory -Path $d -Force | Out-Null
+                ('{ "name": "' + $c + '" }') |
+                    Set-Content -LiteralPath (Join-Path $d 'context.json') -Encoding utf8
+            }
+            $Chemin
+        }
+    }
+
+    It 'rend $null quand la racine n existe pas, sans lever' {
+        $absente = Join-Path $TestDrive 'racine-jamais-creee'
+        InModuleScope DevContext -Parameters @{ r = $absente } { param($r)
+            { Get-CtxRacineFacts -Racine $r } | Should -Not -Throw
+            Get-CtxRacineFacts -Racine $r | Should -BeNullOrEmpty
+            Get-CtxRacineFacts -Racine '' | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'compte les contextes par la presence de context.json, et ne voit aucun intrus' {
+        $r = New-CtxRacineTest -Chemin (Join-Path $TestDrive 'racine-propre')
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            $f = Get-CtxRacineFacts -Racine $r
+            $f.Contextes | Should -Be 2
+            @($f.Intrus).Count | Should -Be 0
+        }
+    }
+
+    It 'ignore le cache du module, dont le NOM est derive de la fonction qui l ecrit' {
+        # Le garde contre la liste jumelle. Si ce nom etait recopie en dur dans
+        # le controle, renommer le fichier de cache ferait accuser par le
+        # diagnostic un fichier que le module vient d'ecrire lui-meme -- et
+        # personne ne relierait les deux. Le mock prouve que le nom ignore vient
+        # bien de la fonction qui ecrit ce fichier.
+        $r = New-CtxRacineTest -Chemin (Join-Path $TestDrive 'racine-cache')
+        'x' | Set-Content -LiteralPath (Join-Path $r 'un-autre-nom-de-cache.json') -Encoding utf8
+
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            Mock Get-CtxEditorCachePath {
+                [System.IO.Path]::Combine($ContextRoot, 'un-autre-nom-de-cache.json')
+            }
+
+            @((Get-CtxRacineFacts -Racine $r).Intrus).Count |
+                Should -Be 0 -Because 'le nom ignore doit suivre la fonction qui ecrit le cache'
+        }
+    }
+
+    It 'reconnait un dossier de contexte DEFAIT a ses artefacts' {
+        # Le cas qui a motive ce controle : un dossier de contexte prive de son
+        # context.json garde ses cles et ses sessions, et plus rien ne le lit.
+        $r = New-CtxRacineTest -Chemin (Join-Path $TestDrive 'racine-defait')
+        foreach ($a in @('gh', 'ssh', 'vscode')) {
+            New-Item -ItemType Directory -Path (Join-Path $r "ancien-client\$a") -Force | Out-Null
+        }
+
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            $i = @((Get-CtxRacineFacts -Racine $r).Intrus)
+            $i.Count | Should -Be 1
+            $i[0].Nom | Should -Be 'ancien-client'
+            $i[0].EstDossier | Should -BeTrue
+            @($i[0].Artefacts) | Should -Be @('gh', 'ssh', 'vscode')
+        }
+    }
+
+    It 'rend un dossier etranger sans artefact, et un fichier inattendu' {
+        $r = New-CtxRacineTest -Chemin (Join-Path $TestDrive 'racine-melangee')
+        New-Item -ItemType Directory -Path (Join-Path $r 'notes-perso') -Force | Out-Null
+        'rien' | Set-Content -LiteralPath (Join-Path $r 'brouillon.txt') -Encoding utf8
+
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            $i = @((Get-CtxRacineFacts -Racine $r).Intrus)
+            $i.Count | Should -Be 2
+
+            $dossier = $i | Where-Object { $_.Nom -eq 'notes-perso' }
+            $dossier.EstDossier | Should -BeTrue
+            @($dossier.Artefacts).Count | Should -Be 0
+
+            $fichier = $i | Where-Object { $_.Nom -eq 'brouillon.txt' }
+            $fichier.EstDossier | Should -BeFalse
+        }
+    }
+
+    It 'ignore le bruit du systeme de fichiers' {
+        $r = New-CtxRacineTest -Chemin (Join-Path $TestDrive 'racine-bruit')
+        foreach ($n in @('desktop.ini', 'Thumbs.db', '.DS_Store')) {
+            'x' | Set-Content -LiteralPath (Join-Path $r $n) -Encoding utf8
+        }
+
+        InModuleScope DevContext -Parameters @{ r = $r } { param($r)
+            @((Get-CtxRacineFacts -Racine $r).Intrus).Count | Should -Be 0
+        }
+    }
+}
+
+Describe 'Test-CtxDoctorRacine' {
+    It 'ne dit RIEN tant qu aucun contexte n est declare dans la racine' {
+        # Le controle negatif decisif. Une racine sans contexte n est pas encore
+        # la racine du module : c est un chemin pose dans un reglage, ou le
+        # defaut d une installation neuve. Enumerer ses sous-dossiers donnerait
+        # un deluge le jour ou elle vise par erreur un dossier de travail.
+        InModuleScope DevContext {
+            $faits = [pscustomobject]@{
+                Racine = 'F:\pas-la-racine'
+                Contextes = 0
+                Intrus = @(
+                    [pscustomobject]@{ Nom = 'un'; Chemin = 'F:\pas-la-racine\un'; EstDossier = $true; Artefacts = @('gh') }
+                    [pscustomobject]@{ Nom = 'deux'; Chemin = 'F:\pas-la-racine\deux'; EstDossier = $true; Artefacts = @() }
+                )
+            }
+
+            @(Test-CtxDoctorRacine -Faits $faits).Count | Should -Be 0
+        }
+    }
+
+    It 'rend OK sur une racine qui ne porte que ses contextes' {
+        InModuleScope DevContext {
+            $c = @(Test-CtxDoctorRacine -Faits ([pscustomobject]@{
+                        Racine = 'F:\CTX'; Contextes = 2; Intrus = @()
+                    }))
+            $c.Count | Should -Be 1
+            $c[0].Verdict | Should -Be 'OK'
+            $c[0].Domaine | Should -Be 'contexte'
+            $c[0].Sujet | Should -Be 'racine'
+        }
+    }
+
+    It 'rend ATTENTION et NOMME les artefacts d un contexte defait' {
+        InModuleScope DevContext {
+            $c = @(Test-CtxDoctorRacine -Faits ([pscustomobject]@{
+                        Racine = 'F:\CTX'; Contextes = 2
+                        Intrus = @([pscustomobject]@{
+                                Nom = 'ancien-client'; Chemin = 'F:\CTX\ancien-client'
+                                EstDossier = $true; Artefacts = @('gh', 'ssh')
+                            })
+                    }))
+
+            $c.Count | Should -Be 1
+            $c[0].Verdict | Should -Be 'ATTENTION'
+            $c[0].Sujet | Should -Be 'racine/ancien-client'
+            $c[0].Detail | Should -Match 'gh, ssh'
+            $c[0].Correctif | Should -Match 'F:\\CTX\\ancien-client'
+        }
+    }
+
+    It 'rend ATTENTION sur un dossier etranger, sans parler de cles' {
+        InModuleScope DevContext {
+            $c = @(Test-CtxDoctorRacine -Faits ([pscustomobject]@{
+                        Racine = 'F:\CTX'; Contextes = 2
+                        Intrus = @([pscustomobject]@{
+                                Nom = 'notes'; Chemin = 'F:\CTX\notes'
+                                EstDossier = $true; Artefacts = @()
+                            })
+                    }))
+
+            $c[0].Verdict | Should -Be 'ATTENTION'
+            $c[0].Detail | Should -Not -Match 'cle|session'
+        }
+    }
+
+    It 'rend INFO sur un fichier inattendu : il ne porte pas de session' {
+        InModuleScope DevContext {
+            $c = @(Test-CtxDoctorRacine -Faits ([pscustomobject]@{
+                        Racine = 'F:\CTX'; Contextes = 2
+                        Intrus = @([pscustomobject]@{
+                                Nom = 'brouillon.txt'; Chemin = 'F:\CTX\brouillon.txt'
+                                EstDossier = $false; Artefacts = @()
+                            })
+                    }))
+
+            $c[0].Verdict | Should -Be 'INFO'
+        }
+    }
+
+    It 'ne leve pas sur des faits absents' {
+        InModuleScope DevContext {
+            { Test-CtxDoctorRacine -Faits $null } | Should -Not -Throw
+            @(Test-CtxDoctorRacine -Faits $null).Count | Should -Be 0
+        }
+    }
+}

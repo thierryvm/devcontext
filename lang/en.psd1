@@ -415,6 +415,13 @@
     'doc.jeton.horsCloisonnementFix' = "REVOKE it, do not merely delete it: a token removed from disk stays valid on the service side. From a shell with NO active context: {0}. Then check each context's own session is intact (work <context> -NoCd; ctx)."
     'doc.jeton.compteEtranger' = "{0} knows, at its DEFAULT location ({2}), an account declared by ANOTHER context: {1}. Any call that escapes PATH reads that file rather than the context's -- and so answers as that account from any folder."
     'doc.jeton.compteEtrangerFix' = "From a shell with NO active context: {0} --user <login>. Then check each context's own session is intact (work <context> -NoCd; gh auth status). The token stays valid on the service side until it is revoked."
+    # --- the context root ----------------------------------------------------
+    'doc.racine.propre'       = '{0} holds nothing but its {1} context(s)'
+    'doc.racine.orphelin'     = "'{0}' lives in the context root without declaring a context.json, yet it carries context material: {1}. Those are keys and sessions on disk belonging to nobody: no `work` loads them, no check looks at them, nothing cleans them up."
+    'doc.racine.orphelinFix'  = "Decide. Either this context should live again, and it is missing its context.json; or it is finished, and the folder goes -- AFTER revoking what it holds, because a key or a token deleted from disk stays valid on the service side. Path: {0}"
+    'doc.racine.etranger'     = "'{0}' lives in {1}, the context root, without being one. It will get in nobody's way -- which is the problem: it will sit there with nobody reviewing it."
+    'doc.racine.etrangerFix'  = "Move it out of the root, or delete it. The root should hold contexts and the module's cache, nothing else; anything else put there becomes invisible."
+    'doc.racine.fichier'      = "unexpected file in the context root: '{0}' in {1}"
     # --- ctx doctor -Fix ----------------------------------------------------
     # The diagnostic already knows the answer; making the human retype it is
     # friction for nothing. But it repairs only what it can PROVE and UNDO, and

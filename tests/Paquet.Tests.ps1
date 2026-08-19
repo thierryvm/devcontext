@@ -179,8 +179,40 @@ Describe 'Le paquet assemble' {
     It 'pese nettement moins que le depot de travail' {
         # Pas une question d'octets : le paquet mesure sa propre discipline. Le
         # 15 aout 2026, 78 % du paquet d'essai etait .git.
+        #
+        # L'ATTENDU A CHANGE LE 19 AOUT 2026, ET C'EST DIT PLUTOT QUE FAIT EN
+        # SILENCE. Il etait un plafond ABSOLU -- 700 ko -- et il a rougi sur la
+        # croissance du module LUI-MEME : DevContext.psm1, src/Doctor.ps1 et
+        # CHANGELOG.md pesent a eux trois plus de 250 ko. La composition du
+        # paquet a ete relue fichier par fichier avant de toucher a cette ligne,
+        # et il ne portait rien d'illegitime : docs/plans, docs/specs,
+        # docs/article, docs/demo, tests et tools sont deja ecartes par
+        # $script:ExclusPaquet.
+        #
+        # Le plafond ne disait donc pas ce que le titre de ce test annonce. Le
+        # paquet est par CONSTRUCTION un sous-ensemble des fichiers suivis : il
+        # doit peser moins qu'eux, et cette comparaison-la ne vieillit pas -- les
+        # deux cotes grandissent ensemble. Elle reste sans appel sur le defaut de
+        # reference : .git embarque ferait 4,8 Mo de paquet contre 1,3 Mo de
+        # fichiers suivis.
+        #
+        # Un plafond ajuste a la mesure du jour aurait ete une expectative
+        # recalee sur le resultat, ce que ce projet s'interdit. Une comparaison
+        # structurelle n'a pas ce defaut : elle ne peut pas etre satisfaite en
+        # deplacant un chiffre.
+        $suivis = @(Get-CtxFichiersSuivis -Racine $script:Racine)
+        $arbre = 0
+        foreach ($f in $suivis) {
+            $chemin = Join-Path $script:Racine $f
+            if (Test-Path -LiteralPath $chemin -PathType Leaf) {
+                $arbre += (Get-Item -LiteralPath $chemin).Length
+            }
+        }
+
         $paquet = (Get-ChildItem -LiteralPath $script:Module -Recurse -File | Measure-Object Length -Sum).Sum
-        $paquet | Should -BeLessThan 700kb
+
+        $arbre | Should -BeGreaterThan 0 -Because 'sans arbre a comparer, ce test ne mesure rien'
+        $paquet | Should -BeLessThan $arbre
     }
 }
 

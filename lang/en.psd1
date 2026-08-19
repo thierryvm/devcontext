@@ -407,6 +407,14 @@
     'doc.partage.commun'      = "{0} writes its application storage -- extension secrets, recent folders, trusted folders -- to a MACHINE-WIDE store. A client project path ends up next to personal ones there, and two contexts sign each other out: the store is shared but its encryption stays per profile, so each one makes the other's entry unreadable."
     'doc.partage.communFix'   = "Close this editor, then reopen it from the context shortcut (or 'work <context>' then 'code <project>'). Launching now passes --shared-data-dir; the folder will appear and this check turns green. One last sign-in will be needed."
     'doc.partage.sansFlag'    = "{0} has a machine-wide store but exposes no --shared-data-dir: its application storage stays shared across contexts."
+    # --- credentials outside every context ----------------------------------
+    # These have to stand on their own: they are read by someone who does not
+    # yet know a token can live anywhere other than where `work` puts it.
+    'doc.jeton.aucun'         = '{0}: no credential at the default location'
+    'doc.jeton.horsCloisonnement' = "{0} holds a credential at its DEFAULT location ({1}), outside every context. It answers from ANY folder, a client's included, as soon as a call escapes PATH: npx, an absolute path, WSL, or a tool that launches the CLI itself."
+    'doc.jeton.horsCloisonnementFix' = "REVOKE it, do not merely delete it: a token removed from disk stays valid on the service side. From a shell with NO active context: {0}. Then check each context's own session is intact (work <context> -NoCd; ctx)."
+    'doc.jeton.compteEtranger' = "{0} knows, at its DEFAULT location ({2}), an account declared by ANOTHER context: {1}. Any call that escapes PATH reads that file rather than the context's -- and so answers as that account from any folder."
+    'doc.jeton.compteEtrangerFix' = "From a shell with NO active context: {0} --user <login>. Then check each context's own session is intact (work <context> -NoCd; gh auth status). The token stays valid on the service side until it is revoked."
     # --- ctx doctor -Fix ----------------------------------------------------
     # The diagnostic already knows the answer; making the human retype it is
     # friction for nothing. But it repairs only what it can PROVE and UNDO, and

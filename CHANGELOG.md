@@ -1,4 +1,48 @@
-﻿## [1.9.3] - 19 August 2026
+﻿## [Unreleased]
+
+### Added
+
+- **`ctx doctor` reports a credential that answers from every folder.** The
+  whole module rests on one idea — the folder decides — and it holds as long as
+  the tool is reached **through `PATH`**, which is where the shims sit and where
+  `work` has placed the right variables. A credential left at a tool's **default**
+  location escapes that by construction: it belongs to no context, and it
+  answers from anywhere.
+
+  Measured on 18 August 2026: a **personal** account's token sat in
+  `%APPDATA%\com.vercel.cli\Data\auth.json`, reachable from a **client**
+  folder. It had been written by `npx --yes vercel@latest` — a form that does
+  not consult `PATH` at all, so no shim could stand in the way. Nothing
+  reported it.
+
+  The sweep covers `gh`, `vercel` and `supabase` at their documented defaults,
+  and the list is **enumerated, never discovered**: a heuristic hunting for
+  "files that look like a token" produces false positives nobody believes.
+
+  Running it on the machine that asked for it found something on the first
+  pass. The **global** `gh` config declared two accounts — the personal one and
+  a **client's** — so any `gh` call escaping `PATH` would have answered as
+  whichever was active, from any folder.
+
+  Two verdicts. An account another context declares is `PROBLEME`: the fact is
+  established offline, without ambiguity. A credential whose owner is unknown is
+  `ATTENTION` — true and sufficient; saying whose it is would take a network
+  call, and this pass makes none. Same reasoning as the git-identity check:
+  wrong value is a problem, right value through the wrong mechanism is a
+  warning.
+
+  **Nothing is said outside a context.** This module installs from a public
+  gallery, and on a machine that compartmentalises nothing a globally signed-in
+  `gh` is simply how `gh` works. A credential at a default location is only a
+  fault where a boundary exists to be crossed.
+
+  The remedy names **revoking**, not deleting — a token removed from disk stays
+  valid on the service side. That was the lesson of 18 August, where the fix
+  that worked was `vercel logout`, not `Remove-Item`.
+
+---
+
+## [1.9.3] - 19 August 2026
 
 ### Added
 

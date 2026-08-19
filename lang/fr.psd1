@@ -407,6 +407,14 @@
     'doc.partage.commun'      = "{0} ecrit son stockage d'application -- secrets des extensions, dossiers recents, dossiers approuves -- dans un magasin COMMUN A LA MACHINE. Un chemin de projet client s'y retrouve a cote des projets personnels, et deux contextes s'y deconnectent mutuellement : le magasin est commun mais son chiffrement reste par profil, donc chacun rend illisible l'entree de l'autre."
     'doc.partage.communFix'   = "Refermer cet editeur, puis le rouvrir par le raccourci du contexte (ou 'work <contexte>' puis 'code <projet>'). Le lancement pose desormais --shared-data-dir ; le dossier apparaitra et ce controle passera au vert. Il faudra se reconnecter UNE derniere fois."
     'doc.partage.sansFlag'    = "{0} possede un magasin commun a la machine mais n'expose pas --shared-data-dir : son stockage d'application reste partage entre les contextes."
+    # --- identifiants hors cloisonnement ------------------------------------
+    # Ces messages doivent tenir seuls : ils sont lus par quelqu'un qui ne sait
+    # pas encore qu'un jeton peut vivre ailleurs que la ou `work` le pose.
+    'doc.jeton.aucun'         = "{0} : aucun identifiant a l emplacement par defaut"
+    'doc.jeton.horsCloisonnement' = "{0} porte un identifiant a son emplacement PAR DEFAUT ({1}), hors de tout contexte. Il repond depuis N IMPORTE QUEL dossier, y compris celui d un client, des qu un appel echappe au PATH : npx, chemin absolu, WSL, ou un outil qui lance la CLI lui-meme."
+    'doc.jeton.horsCloisonnementFix' = "Le REVOQUER, pas seulement l effacer : un jeton retire du disque reste valide cote service. Depuis un shell SANS contexte actif : {0}. Verifier ensuite que les sessions cloisonnees sont intactes (work <contexte> -NoCd; ctx)."
+    'doc.jeton.compteEtranger' = "{0} connait, a son emplacement PAR DEFAUT ({2}), un compte declare par un AUTRE contexte : {1}. Tout appel qui echappe au PATH lira ce fichier-la, pas celui du contexte -- et repondra donc sous ce compte depuis n importe quel dossier."
+    'doc.jeton.compteEtrangerFix' = "Depuis un shell SANS contexte actif : {0} --user <login>. Verifier ensuite que la session cloisonnee de chaque contexte est intacte (work <contexte> -NoCd; gh auth status). Le jeton reste valide cote service tant qu il n est pas revoque."
     # --- ctx doctor -Fix ----------------------------------------------------
     # Le diagnostic connait deja la reponse ; faire retaper la commande est une
     # friction pour rien. Mais il ne repare que ce qu'il peut PROUVER et

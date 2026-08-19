@@ -1,0 +1,69 @@
+# The steps between "the package has been audited" and "the package is about to
+# be published", in ONE place.
+#
+# WHY THIS FILE EXISTS
+#
+# They used to live only inside the `publier` job, which runs on a real tag and
+# behind a manual approval. So they were unreachable to a rehearsal: the only way
+# to try them was to spend a version number, and a version number cannot be spent
+# twice -- a published version is never removed, only unlisted.
+#
+# On 18 August 2026, two of the three failed release attempts died in exactly this
+# stretch. The second one died AFTER a human had approved it, on a question no
+# test had asked.
+#
+# SHARED, NOT COPIED. A rehearsal that re-typed these steps would be a twin of a
+# derived thing -- the defect this repository has already paid for twice, and the
+# very defect that produced those failures. A rehearsal that drifts from what it
+# rehearses is worse than none: it reports green about something that no longer
+# exists.
+
+name: Take the audited package
+description: Download the audited package, prepare the environment from ITS manifest, and prove the bytes are the ones the audit approved.
+
+inputs:
+  version:
+    description: >
+      The version the audit reported. The package's own manifest is read back and
+      compared against it -- the package travelled between two jobs as an
+      artifact, and "presumably the same bytes" becomes checked here, at the last
+      boundary where checking is still free.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Take the package that was audited
+      uses: actions/download-artifact@v8
+      with:
+        name: devcontext-package
+        path: paquet/DevContext
+
+    # The modules the manifest requires are installed HERE, and read from the
+    # manifest that is about to be submitted -- not from the source tree, and not
+    # from a list somebody had to remember to keep in step.
+    #
+    # Measured on the first real publication, 18 August 2026: the audit declared
+    # the package publishable in an environment that carried them, and the
+    # publisher failed in one that did not.
+    #
+    #   The specified RequiredModules entry 'Microsoft.PowerShell.SecretManagement'
+    #   in the module manifest '...\DevContext.psd1' is invalid.
+    #
+    # Reproduced outside CI by removing those modules from PSModulePath: the same
+    # message, word for word.
+    - uses: ./.github/actions/prepare-powershell
+      with:
+        manifest: ./paquet/DevContext/DevContext.psd1
+        gallery: true
+
+    - name: These are the bytes that were audited
+      shell: pwsh
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        $v = (Import-PowerShellDataFile -LiteralPath ./paquet/DevContext/DevContext.psd1).ModuleVersion
+        if ("$v" -ne $env:VERSION) {
+          throw "Le paquet telecharge porte la version $v, alors que l'audit a valide $($env:VERSION)."
+        }
+        Write-Host "  Paquet $v : conforme a ce qui a ete audite."

@@ -38,6 +38,20 @@ name: Release
 on:
   push:
     tags: ['v*']
+
+  # La repetition, declenchee LA OU ELLE SERT : sur une PR qui touche la
+  # machinerie de publication. Attendre qu'on pense a lancer un essai a blanc,
+  # c'est le "il suffira de s'en souvenir" que ce depot reproche partout
+  # ailleurs. Rien ici ne peut publier -- ce n'est pas un tag -- et aucun secret
+  # d'environnement n'est joignable depuis ces jobs.
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/actions/**'
+      - 'tools/Build-Package.ps1'
+      - 'tools/Assert-Release.ps1'
+      - 'DevContext.psd1'
+
   workflow_dispatch:
     inputs:
       dry_run:
@@ -231,44 +245,13 @@ jobs:
         with:
           sparse-checkout: .github/actions
 
-      - name: Take the package that was audited
-        uses: actions/download-artifact@v8
+      # Ces trois etapes vivent dans une action composite, et le job de
+      # repetition ci-dessous utilise LA MEME. Recopiees, elles auraient derive,
+      # et une repetition qui derive de ce qu'elle repete est pire qu'aucune :
+      # elle rend vert a propos de quelque chose qui n'existe plus.
+      - uses: ./.github/actions/take-audited-package
         with:
-          name: devcontext-package
-          path: paquet/DevContext
-
-      # The modules the manifest requires are installed HERE, and read from the
-      # manifest that is about to be submitted -- not from the source tree, and
-      # not from a list somebody had to remember to keep in step.
-      #
-      # Measured on the first real publication, 18 August 2026: the audit
-      # declared the package publishable in an environment that carried them, and
-      # the publisher failed in one that did not.
-      #
-      #   The specified RequiredModules entry 'Microsoft.PowerShell.SecretManagement'
-      #   in the module manifest '...\DevContext.psd1' is invalid.
-      #
-      # Reproduced outside CI by simply removing those modules from PSModulePath:
-      # the same message, word for word.
-      - uses: ./.github/actions/prepare-powershell
-        with:
-          manifest: ./paquet/DevContext/DevContext.psd1
-          gallery: true
-
-      - name: These are the bytes that were audited
-        shell: pwsh
-        env:
-          VERSION: ${{ needs.verifier.outputs.version }}
-        run: |
-          # The package travelled between two jobs as an artifact. Reading its
-          # version back and comparing it against the one the audit reported
-          # turns "presumably the same bytes" into something checked, at the last
-          # boundary where checking is still free.
-          $v = (Import-PowerShellDataFile -LiteralPath ./paquet/DevContext/DevContext.psd1).ModuleVersion
-          if ("$v" -ne $env:VERSION) {
-            throw "Le paquet telecharge porte la version $v, alors que l'audit a valide $($env:VERSION)."
-          }
-          Write-Host "  Paquet $v : conforme a ce qui a ete audite."
+          version: ${{ needs.verifier.outputs.version }}
 
       - name: Publish
         shell: pwsh
@@ -303,3 +286,64 @@ jobs:
             catch { Write-Host "  Essai $essai : pas encore indexee." }
           }
           Write-Host "::warning::$v n'est pas encore visible sur la Gallery. L'indexation prend parfois plusieurs minutes."
+
+  # La repetition. Elle fait TOUT ce que `publier` fait, sauf publier -- et elle
+  # tourne la ou `publier` ne peut pas : hors tag, sans approbation, sans cle.
+  #
+  # Ce qu'elle couvre est precisement ce que rien ne couvrait : sur les trois
+  # echecs de publication du 18 aout 2026, deux etaient dans ces etapes-la, et le
+  # second est tombe APRES l'approbation d'un humain, sur une question qu'aucun
+  # test n'avait posee.
+  repetition:
+    name: Rehearse the publish, without publishing
+    runs-on: windows-latest
+    timeout-minutes: 15
+    needs: verifier
+    if: needs.verifier.outputs.publier != 'true'
+
+    # PAS d'`environment:`, et c'est le sujet du dernier controle ci-dessous. Un
+    # job qui ne nomme pas l'environnement ne peut pas lire ses secrets : c'est
+    # l'affirmation que porte l'en-tete de ce fichier, et elle n'avait jamais ete
+    # verifiee par quoi que ce soit.
+
+    steps:
+      - name: Take the composite action, not the source
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+
+      - uses: ./.github/actions/take-audited-package
+        with:
+          version: ${{ needs.verifier.outputs.version }}
+
+      - name: The command that publishes exists here
+        shell: pwsh
+        run: |
+          # Sans cela, la repetition prouverait que l'environnement se prepare
+          # sans prouver qu'il porte l'outil du geste suivant. Get-Command et
+          # non l'appel : ce job n'a rien a publier, et le prouver est le point.
+          $cmd = Get-Command Publish-PSResource -ErrorAction SilentlyContinue
+          if (-not $cmd) {
+            throw "Publish-PSResource est absente : le job de publication echouerait ici, apres l'approbation."
+          }
+          Write-Host ("  Publish-PSResource disponible ({0})." -f $cmd.Version)
+
+      - name: And the key is NOT reachable from here
+        shell: pwsh
+        env:
+          # Deliberement reference depuis un job SANS environnement. GitHub rend
+          # une chaine vide : un secret d'environnement n'existe que pour les
+          # jobs qui nomment cet environnement.
+          PSGALLERY_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          if ($env:PSGALLERY_KEY) {
+            throw "La cle de la Gallery est joignable depuis un job sans environnement. La porte d'approbation ne protege plus rien."
+          }
+          Write-Host '  La cle est hors de portee, comme prevu.'
+
+      - name: What this rehearsal did not do
+        shell: pwsh
+        run: |
+          # Nommer ce qui n'a pas ete couvert. Une repetition silencieuse sur ses
+          # angles morts se lit comme une garantie complete.
+          Write-Host '::notice::Repetition terminee. NON couvert : la publication elle-meme, la porte d approbation, et l indexation de la Gallery -- trois choses qui exigent un vrai tag.'

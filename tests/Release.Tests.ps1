@@ -264,3 +264,101 @@ Describe 'Motifs de secrets — une seule liste' {
         }
     }
 }
+
+Describe 'La repetition du job de publication' {
+    # CE BLOC EXISTE PARCE QUE RIEN NE REGARDAIT CE FICHIER. Sur les trois echecs
+    # de publication du 18 aout 2026, deux etaient dans les etapes qui precedent
+    # le geste de publier -- des etapes qui ne tournaient que sur un vrai tag,
+    # donc impossibles a essayer sans depenser un numero de version. Un numero
+    # publie ne se reprend jamais.
+    BeforeAll {
+        $script:Workflow = Get-Content -LiteralPath (
+            Join-Path (Split-Path $PSScriptRoot -Parent) '.github/workflows/release.yml') -Raw
+
+        # Un lecteur minimal plutot qu'une dependance YAML : ce module n'en a
+        # aucune, et en ajouter une pour lire quatre blocs serait un mauvais
+        # echange. Les cles de job sont a deux espaces sous `jobs:`.
+        function Get-CtxBlocJob {
+            param([Parameter(Mandatory)][string]$Yaml, [Parameter(Mandatory)][string]$Nom)
+
+            $lignes = $Yaml -split "`r?`n"
+            $debut = -1
+            for ($i = 0; $i -lt $lignes.Count; $i++) {
+                if ($lignes[$i] -match "^  $([regex]::Escape($Nom))\s*:\s*$") { $debut = $i; break }
+            }
+            if ($debut -lt 0) { return $null }
+
+            $bloc = @($lignes[$debut])
+            for ($i = $debut + 1; $i -lt $lignes.Count; $i++) {
+                if ($lignes[$i] -match '^  \S') { break }
+                $bloc += $lignes[$i]
+            }
+            $bloc -join "`n"
+        }
+    }
+
+    It 'existe, et ne tourne que la ou rien ne peut etre publie' {
+        $bloc = Get-CtxBlocJob -Yaml $script:Workflow -Nom 'repetition'
+        $bloc | Should -Not -BeNullOrEmpty -Because 'sans elle, ces etapes ne s essaient qu en publiant'
+        $bloc | Should -Match "needs\.verifier\.outputs\.publier != 'true'"
+    }
+
+    It 'partage les etapes avec le job de publication, au lieu de les recopier' {
+        # LE test de ce chantier. Une repetition qui re-tape ces etapes serait le
+        # jumeau recopie d'une chose derivee -- exactement le defaut qui a produit
+        # les echecs du 18 aout. Et une repetition qui derive de ce qu'elle repete
+        # est pire qu'aucune : elle rend vert a propos de quelque chose qui
+        # n'existe plus.
+        $publier = Get-CtxBlocJob -Yaml $script:Workflow -Nom 'publier'
+        $repetition = Get-CtxBlocJob -Yaml $script:Workflow -Nom 'repetition'
+
+        $action = 'uses: ./.github/actions/take-audited-package'
+        $publier | Should -BeLike "*$action*"
+        $repetition | Should -BeLike "*$action*"
+    }
+
+    It 'ne laisse aucune copie de ces etapes dans le workflow' {
+        # Le pendant du test precedent : partager ne sert a rien si une copie
+        # survit a cote. Ces deux marqueurs appartiennent desormais a l'action
+        # composite, et a elle seule.
+        foreach ($marqueur in @('download-artifact', 'These are the bytes that were audited')) {
+            $script:Workflow | Should -Not -BeLike "*$marqueur*" -Because "'$marqueur' doit vivre dans l action composite, pas ici"
+        }
+    }
+
+    It 'l action composite existe et exige la version auditee' {
+        $action = Join-Path (Split-Path $PSScriptRoot -Parent) '.github/actions/take-audited-package/action.yml'
+        Test-Path -LiteralPath $action | Should -BeTrue
+
+        $texte = Get-Content -LiteralPath $action -Raw
+        $texte | Should -Match 'download-artifact'
+        $texte | Should -Match 'required:\s*true' -Because 'sans version, la comparaison des octets ne veut rien dire'
+    }
+
+    It 'ne nomme AUCUN environnement, ce qui met la cle hors de portee' {
+        # C'est l'affirmation que porte l'en-tete de ce workflow : « la cle est un
+        # secret d'environnement, donc elle n'est pas seulement inutilisee avant
+        # l'approbation, elle est INACCESSIBLE ». Rien ne la verifiait.
+        $repetition = Get-CtxBlocJob -Yaml $script:Workflow -Nom 'repetition'
+        $repetition | Should -Not -Match '(?m)^\s{4}environment:'
+        $repetition | Should -Match 'PSGALLERY_API_KEY' -Because 'la repetition doit PROUVER que la cle est vide, pas l ignorer'
+    }
+
+    It 'laisse la porte d approbation exactement ou elle etait' {
+        # Le controle qui compte le plus dans ce fichier. Tout ce qui precede
+        # serait sans valeur si la porte avait disparu en chemin.
+        $publier = Get-CtxBlocJob -Yaml $script:Workflow -Nom 'publier'
+        $publier | Should -Match '(?m)^\s{4}environment:'
+        $publier | Should -Match 'name: publication'
+        $publier | Should -Match "needs\.verifier\.outputs\.publier == 'true'"
+    }
+
+    It 'se declenche sur une PR qui touche la machinerie de publication' {
+        # Attendre qu'on pense a lancer un essai a blanc, c'est le « il suffira de
+        # s en souvenir » que ce depot reproche partout ailleurs.
+        $script:Workflow | Should -Match '(?m)^\s{2}pull_request:'
+        foreach ($chemin in @('.github/workflows/release.yml', 'tools/Assert-Release.ps1', 'DevContext.psd1')) {
+            $script:Workflow | Should -BeLike "*$chemin*"
+        }
+    }
+}

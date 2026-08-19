@@ -33,6 +33,38 @@
   one would have been discovered the day it accused a file the module had just
   written itself.
 
+### Changed
+
+- **The publish job can now be rehearsed without spending a version number.**
+  The steps between *the package has been audited* and *the package is about to
+  be published* lived only inside the job that runs on a real tag, behind a
+  manual approval. The only way to try them was to publish — and a published
+  version is never removed, only unlisted.
+
+  On 18 August 2026, two of the three failed release attempts died in exactly
+  that stretch. The second died **after** a human had approved it, on a question
+  no test had asked.
+
+  A `repetition` job now does everything the publish job does except publish, and
+  runs where the publish job cannot: off a tag, with no approval, with no key. It
+  **shares** the steps through a composite action rather than restating them — a
+  rehearsal that drifts from what it rehearses is worse than none, since it
+  reports green about something that no longer exists. A test fails if a copy
+  reappears in the workflow.
+
+  It runs on any pull request touching the release machinery, because *someone
+  will remember to run the dry run* is the assumption this repository criticises
+  everywhere else.
+
+  Two things it proves that nothing proved before: `Publish-PSResource` is
+  actually present in that environment, and the Gallery key is **unreachable**
+  from a job that names no environment — the claim the release workflow's own
+  header makes and that nothing had ever checked.
+
+  It also says out loud what it does **not** cover: the publish itself, the
+  approval gate, and Gallery indexing. A rehearsal silent about its blind spots
+  reads as a complete guarantee.
+
 ### Fixed
 
 - **`ctx` refused a folder that nobody owns, and the fix it offered could not

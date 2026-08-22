@@ -222,6 +222,29 @@ Describe 'Aucune decision prise sur du texte affiche' {
 }
 
 Describe 'Cles utilisees et cles declarees' {
+    It 'chaque sous-commande a sa ligne d aide, dans les deux langues' {
+        # CE TEST EXISTE PARCE QUE LE SUIVANT NE POUVAIT PAS LE VOIR. L'aide
+        # construit sa cle par INTERPOLATION -- T "ctx.sc.aide.$k" -- et le motif
+        # du test suivant ne lit que les litteraux. Une sous-commande ajoutee a
+        # la table sans sa ligne d'aide passait donc tous les controles, et
+        # s'affichait « [ctx.sc.aide.<nom>] » a l'ecran.
+        #
+        # Mesure le 22 aout 2026, sur `dashboard`, decouvert par un utilisateur
+        # et non par la suite. C'est le meme defaut de famille que le tableau des
+        # coutures : une liste DERIVEE (les sous-commandes) et son jumeau ECRIT A
+        # LA MAIN (les lignes d'aide), qui se separent en silence.
+        $fr = Import-PowerShellDataFile (Join-Path $script:Racine 'lang/fr.psd1')
+        $en = Import-PowerShellDataFile (Join-Path $script:Racine 'lang/en.psd1')
+        $sous = InModuleScope DevContext { (Get-CtxSousCommandes).Keys }
+
+        $manquantes = foreach ($k in $sous) {
+            $cle = "ctx.sc.aide.$k"
+            if ($cle -notin $fr.Keys) { "fr : $cle" }
+            if ($cle -notin $en.Keys) { "en : $cle" }
+        }
+        ($manquantes | Sort-Object -Unique) | Should -BeNullOrEmpty
+    }
+
     It 'toute cle appelee dans le code existe dans les deux tables' {
         $fr = Import-PowerShellDataFile (Join-Path $script:Racine 'lang/fr.psd1')
         $en = Import-PowerShellDataFile (Join-Path $script:Racine 'lang/en.psd1')

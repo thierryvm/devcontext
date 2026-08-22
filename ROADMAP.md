@@ -324,6 +324,13 @@ Likely shape: a local web UI served by a `ctx dashboard` command, or Tauri if it
 needs to live in the tray. The decision waits until the CLI surface has settled
 — building a UI over an API that is still moving is how both end up bad.
 
+The options are laid out, with what each one costs in public API, attack surface
+and distribution, in
+[`docs/plans/2026-08-22-forme-du-tableau-de-bord.md`](docs/plans/2026-08-22-forme-du-tableau-de-bord.md).
+It recommends and does not decide: a third option is named there that this file
+does not list — a generated static report, which buys every read-only screen
+without a listening socket, a binary, or a single new exported name.
+
 ---
 
 ## Explicitly out of scope

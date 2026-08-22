@@ -284,3 +284,154 @@ Describe 'Get-CtxDashboardFacts' {
         $tous.Count | Should -BeGreaterThan 0
     }
 }
+
+
+Describe 'Get-CtxDashboardPath' {
+    It 'vit dans les donnees applicatives, jamais dans le dossier courant' {
+        # Le rapport porte la topologie des comptes. Ecrit dans un depot, il
+        # partirait au premier `git add -A` -- et ce depot a deja retire un
+        # document de ce genre de son arbre ET de son historique le 15/08/2026.
+        $chemin = InModuleScope DevContext { Get-CtxDashboardPath -Base 'B:\ailleurs' }
+        $chemin | Should -BeLike '*ailleurs*'
+        $chemin | Should -BeLike '*DevContext*'
+        $chemin | Should -Not -BeLike "$PWD*"
+    }
+
+    It 'ne compose pas le chemin avec Join-Path' {
+        # Join-Path est une applet de FOURNISSEUR : elle resout le lecteur et
+        # rend une CHAINE VIDE quand il n'est pas monte, sans lever. Le module a
+        # deja expedie un `--user-data-dir --extensions-dir .` par ce chemin.
+        $source = Get-Content (Join-Path $script:Racine 'src/Dashboard.ps1') -Raw
+        $fonction = [regex]::Match($source, '(?s)function Get-CtxDashboardPath \{.*?\n\}').Value
+        $fonction | Should -Not -BeLike '*Join-Path*'
+        $fonction | Should -BeLike '*System.IO.Path*'
+    }
+}
+
+Describe 'Invoke-DevContextDashboard' {
+    It 'ecrit a l emplacement d etat et rend son chemin' {
+        $cible = Join-Path $TestDrive 'etat/rapport.html'
+        $r = InModuleScope DevContext -Parameters @{ c = $cible; d = $script:Racine } {
+            param($c, $d)
+            Mock Get-CtxDashboardPath { $c }
+            Mock Start-Process { }
+            # Le rassemblement est teste ailleurs. L'appeler ici ferait tourner
+            # un `ctx doctor` complet par assertion -- 46 s pour ce fichier,
+            # mesure le 22 aout 2026 -- et un test lent devient un test saute.
+            Mock Get-CtxDashboardFacts { [pscustomobject]@{ Dossier = 'D'; Proprietaire = 'p' } }
+            Invoke-DevContextDashboard -Path $d -NoOpen
+        }
+        $r | Should -BeExactly $cible
+        Test-Path -LiteralPath $cible | Should -BeTrue
+        (Get-Content -LiteralPath $cible -Raw) | Should -BeLike '*<!DOCTYPE html>*'
+    }
+
+    It 'reecrit au meme endroit : deux appels laissent UN fichier' {
+        # Chaque copie laissee derriere est une photographie de plus de la
+        # topologie, a oublier quelque part.
+        $dossier = Join-Path $TestDrive 'unique'
+        $cible = Join-Path $dossier 'rapport.html'
+        InModuleScope DevContext -Parameters @{ c = $cible; d = $script:Racine } {
+            param($c, $d)
+            Mock Get-CtxDashboardPath { $c }
+            Mock Start-Process { }
+            # Le rassemblement est teste ailleurs. L'appeler ici ferait tourner
+            # un `ctx doctor` complet par assertion -- 46 s pour ce fichier,
+            # mesure le 22 aout 2026 -- et un test lent devient un test saute.
+            Mock Get-CtxDashboardFacts { [pscustomobject]@{ Dossier = 'D'; Proprietaire = 'p' } }
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen
+        }
+        @(Get-ChildItem -LiteralPath $dossier -File).Count | Should -Be 1
+    }
+
+    It 'restreint le fichier a son proprietaire, et le refait a chaque appel' -Skip:(-not ($IsWindows -or $env:OS -eq 'Windows_NT')) {
+        # PRECONDITION DECLAREE : les listes de controle d'acces sont une notion
+        # Windows. Un test qui les verifie ailleurs mesurerait autre chose.
+        #
+        # « A chaque appel » n'est pas decoratif : Set-Acl reussissait la
+        # PREMIERE fois puis echouait sur le meme fichier, mesure le 22 aout
+        # 2026. Un test a un seul appel serait passe.
+        $cible = Join-Path $TestDrive 'perms/rapport.html'
+        InModuleScope DevContext -Parameters @{ c = $cible; d = $script:Racine } {
+            param($c, $d)
+            Mock Get-CtxDashboardPath { $c }
+            Mock Start-Process { }
+            # Le rassemblement est teste ailleurs. L'appeler ici ferait tourner
+            # un `ctx doctor` complet par assertion -- 46 s pour ce fichier,
+            # mesure le 22 aout 2026 -- et un test lent devient un test saute.
+            Mock Get-CtxDashboardFacts { [pscustomobject]@{ Dossier = 'D'; Proprietaire = 'p' } }
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen
+        }
+        $acl = Get-Acl -LiteralPath $cible
+        $acl.AreAccessRulesProtected | Should -BeTrue -Because 'un heritage conserve annule la restriction'
+        @($acl.Access).Count | Should -Be 1
+        $acl.Access[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]) |
+            Should -Be ([System.Security.Principal.WindowsIdentity]::GetCurrent().User)
+    }
+
+    It 'ouvre le navigateur, sauf avec -NoOpen' {
+        $cible = Join-Path $TestDrive 'ouvre/rapport.html'
+        InModuleScope DevContext -Parameters @{ c = $cible; d = $script:Racine } {
+            param($c, $d)
+            Mock Get-CtxDashboardPath { $c }
+            Mock Start-Process { }
+            # Le rassemblement est teste ailleurs. L'appeler ici ferait tourner
+            # un `ctx doctor` complet par assertion -- 46 s pour ce fichier,
+            # mesure le 22 aout 2026 -- et un test lent devient un test saute.
+            Mock Get-CtxDashboardFacts { [pscustomobject]@{ Dossier = 'D'; Proprietaire = 'p' } }
+
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen
+            Should -Invoke Start-Process -Times 0 -Exactly
+
+            $null = Invoke-DevContextDashboard -Path $d
+            Should -Invoke Start-Process -Times 1 -Exactly
+        }
+    }
+
+    It 'avec -WhatIf, ne lit meme pas la machine' {
+        # LA PREMIERE VERSION DE CE TEST NE MORDAIT PAS, et la preuve l'a dit :
+        # elle verifiait seulement que le fichier n'existe pas, or PowerShell
+        # propage -WhatIf a Set-Content et New-Item tout seul. Retirer la garde
+        # ShouldProcess laissait donc le test vert -- il mesurait le moteur, pas
+        # le code. Mesure le 22 aout 2026.
+        #
+        # Ce que la garde apporte VRAIMENT est ici : sous -WhatIf, on ne
+        # rassemble pas. Le rassemblement fait tourner un diagnostic complet ;
+        # un essai a blanc qui coute quinze secondes de lecture machine n'est
+        # plus un essai a blanc.
+        $cible = Join-Path $TestDrive 'whatif/rapport.html'
+        InModuleScope DevContext -Parameters @{ c = $cible; d = $script:Racine } {
+            param($c, $d)
+            Mock Get-CtxDashboardPath { $c }
+            Mock Start-Process { }
+            Mock Get-CtxDashboardFacts { [pscustomobject]@{ Dossier = 'D'; Proprietaire = 'p' } }
+
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen -WhatIf
+
+            Should -Invoke Get-CtxDashboardFacts -Times 0 -Exactly
+            Should -Invoke Start-Process -Times 0 -Exactly
+        }
+        Test-Path -LiteralPath $cible | Should -BeFalse
+    }
+}
+
+Describe 'La commande, sous ses deux orthographes' {
+    It 'la table declare la sous-commande, donc l alias en decoule' {
+        $table = InModuleScope DevContext { Get-CtxSousCommandes }
+        $table.Keys | Should -Contain 'dashboard'
+        $table['dashboard'] | Should -BeExactly 'Invoke-DevContextDashboard'
+    }
+
+    It 'les deux orthographes existent pour l appelant' {
+        # L'export REEL est l'intersection du psd1 et du psm1 : une commande
+        # ajoutee a une seule des deux listes devient invisible sans erreur.
+        # Mesure le 22 aout 2026 : l'alias etait bien CREE par le psm1 depuis la
+        # table, et absent de la liste ecrite a la main du manifeste. La forme
+        # espacee marchait, la forme a trait d'union n'existait pas.
+        $m = Get-Module DevContext
+        $m.ExportedFunctions.Keys | Should -Contain 'Invoke-DevContextDashboard'
+        $m.ExportedAliases.Keys | Should -Contain 'ctx-dashboard'
+    }
+}

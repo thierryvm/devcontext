@@ -504,6 +504,7 @@
     'dash.entete.dossierSansProprietaire' = 'Dossier {0}, qu aucun contexte ne gouverne : c est l identite git GLOBALE qui signe ici.'
     'dash.entete.actif'       = 'Identite chargee dans le shell : {0}.'
     'dash.pied'               = 'Rapport genere le {0}. Lecture seule : cette page ne decide rien, elle rend ce que la CLI a repondu.'
+    'dash.permsEchec'         = "Les permissions du rapport n ont pas pu etre restreintes a son proprietaire ({0}) : le fichier a ete supprime plutot que laisse lisible. Cause : {1}"
     'dash.oui'                = 'oui'
     'dash.non'                = 'non'
 

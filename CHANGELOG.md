@@ -1,4 +1,49 @@
-﻿## [1.9.5] - 19 August 2026
+﻿## [1.10.0] - 22 August 2026
+
+### Added
+
+- **`ctx dashboard` -- the whole picture as a page.** The commands already knew
+  every context, every account, which folder points where and which MCP servers
+  a project can reach; reading all of it meant running five of them and holding
+  the answers in your head.
+
+  **It decides nothing.** Every verdict on the page comes from `ctx doctor`,
+  and a test asserts the two sets are identical -- because two implementations
+  diverge, and the one people trust is whichever they happened to open. The
+  shortcut section is a partition of the same diagnostic, not a second scan that
+  could one day answer something else.
+
+  **It reaches no network.** Not while gathering -- the diagnostic is not called
+  with `-Live` -- and not from the page, which declares `default-src 'none'` and
+  carries no remote font, script or stylesheet. A page that fetches anything from
+  a credential tool announces its holder's topology to whoever serves it, and
+  this report is opened exactly when something is already doubted.
+
+  **The file is treated as what it is.** It holds which project sits on which
+  account: a reconnaissance document. It lands in your application data, never
+  the current folder, restricted to its owner, and rewritten in place -- each
+  copy left behind is one more photograph to forget somewhere. If the
+  permissions cannot be set, the file is deleted rather than left readable.
+
+  Every empty section names the command that fills it. On a machine with nothing
+  set up the page is not blank, it is a list of next steps.
+
+### Fixed
+
+- **The report's own guard could have published what it guards.** The tests that
+  assert no token reaches an output used `Should -Not -Match`, which prints the
+  actual value on failure -- that is, the output containing the token, into a CI
+  log. They now assert on a boolean. Found by reading the output of a failure
+  provoked on purpose, not by re-reading the code.
+
+- **`Set-Acl` succeeds once, then refuses.** Measured on a throwaway file: the
+  cmdlet works on the first call and fails on the second with *the process does
+  not possess the SeSecurityPrivilege privilege*, with or without inheritance
+  protection. The .NET call works every time. The defect existed only for someone
+  running the command more than once -- which is everyone -- and was invisible on
+  the first try.
+
+## [1.9.5] - 19 August 2026
 
 ### Added
 

@@ -222,6 +222,7 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx` | Do the folder, the identity and the account agree? **GO / NO-GO** |
 | `ctx-doctor` | What works in this folder, and on which account? |
 | `ctx-doctor -Live` | Are the tokens still valid, and do they open the right account? |
+| `ctx-dashboard` | The same answers as a page: every context, account, project and MCP server, read-only |
 | `ctx-sb` | Which Supabase project lives on which account, and which folders point at it |
 | `ctx-mcp` | Write MCP configuration for this project, bound to its own credentials |
 | `ctx-list` | Every context on this machine |
@@ -237,6 +238,13 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 other CLI taught your fingers. They are the same command, derived from one
 table, so they cannot drift apart. `ctx help` lists them, and a typo gets the
 list rather than an error about a function you have never heard of.
+
+**`ctx dashboard` writes the whole picture to a page and opens it.** Read-only,
+and it decides nothing: every verdict on it comes from `ctx doctor`, every row
+from the commands above. The file lands in your application data, restricted to
+you and rewritten each time -- it carries which project sits on which account,
+which is a reconnaissance document if it is left lying about. It reaches no
+network, neither while gathering nor from the page itself.
 
 `ctx-doctor -Json` emits machine-readable output, for CI or for an AI agent.
 

@@ -205,6 +205,27 @@ to the context root.
 folder with another's identity — is exactly the one that sends a client commit
 under your personal name, or the reverse.
 
+### More than a verdict
+
+`ctx` answers yes or no. Three commands answer *why*, and none of them touches
+the network.
+
+```powershell
+ctx-who                 # which context owns THIS folder
+ctx-list                # every context on this machine, and which one is active
+ctx-doctor              # what works here, and on which account
+ctx-dashboard           # all of it as a page, opened in your browser
+```
+
+`ctx-who` is the one to reach for when a folder surprises you: it answers from
+the **path**, so it tells you what will happen there whatever your shell
+currently holds.
+
+`ctx-dashboard` writes a self-contained page to your application data,
+restricted to you and rewritten each time. It carries which project sits on which
+account — treat it as you would any inventory of your accounts, and note that it
+is deliberately **not** written into the folder you are standing in.
+
 ### The environment does not survive between processes
 
 Each new process starts fresh. In a script, a hook, or an AI agent's tool call,
@@ -218,6 +239,14 @@ work perso -NoCd; vercel deploy
 A lone `ctx` right after a successful `work` in a *different* process will say
 NO-GO. That is correct — they are two processes. To check, chain them in one:
 `work perso -NoCd; ctx`.
+
+In a script or a git hook, use `ctx-check` rather than `ctx`: it renders the same
+verdict but **throws** on NO-GO, so the script stops instead of carrying on past
+a warning nobody read.
+
+```powershell
+work perso -NoCd; ctx-check; git push
+```
 
 ### What is protected from which shell
 
@@ -248,6 +277,20 @@ under the machine-wide account, and the refusal names the fix:
 work perso -NoCd
 gh auth login          # lands in this context, from anywhere inside it
 ```
+
+### Leaving a context
+
+```powershell
+ctx-off                 # drop the context from THIS shell
+ctx-end                 # close the active context's working session
+```
+
+`ctx-off` is the small one: this terminal stops carrying an identity, nothing
+else changes. `ctx-end` closes the session — reach for it when you finish a
+mission rather than a task.
+
+Neither is required. A terminal you close takes its environment with it, and the
+next one starts from the folder again, which is the whole point.
 
 ---
 
@@ -319,6 +362,25 @@ your own key.
 
 Read-only by default, and read-only without appeal on a project marked
 production.
+
+### What an agent is allowed to write in
+
+An assistant does not only read: it is granted folders it may write in, and those
+approvals are given for one afternoon and never expire.
+
+```powershell
+ctx-guard
+```
+
+It reports the folders approved at **user scope** — the ones active in *every*
+session, whatever project is open — so you can see what an agent standing in a
+client folder can still reach. What belongs to one project is declared in that
+project's own settings; user scope should carry only what is true everywhere.
+
+It **removes** approvals and never adds one. An earlier design would have written
+deny rules against other contexts' roots, and checking the upstream tracker
+before writing a line showed those rules never match on Windows. A file of inert
+rules is worse than no file: it looks like protection.
 
 ---
 

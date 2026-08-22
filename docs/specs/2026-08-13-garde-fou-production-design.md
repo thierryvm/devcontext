@@ -2,7 +2,7 @@
 
 > **Noms de projets remplacés par des marque-places.** Ce document décrit une
 > investigation réelle ; les noms de projets, de dépôts et de bases y ont été
-> remplacés par demo-app, other-app, 	hird-app. La méthode et les
+> remplacés par demo-app, other-app, third-app. La méthode et les
 > conclusions sont inchangées — seule la topologie réelle a été retirée, parce
 > qu'un document qui explique où se trouve une base de production et comment son
 > garde-fou fonctionne est un document de reconnaissance.

@@ -91,10 +91,17 @@ Describe 'Le tableau des coutures du 2.0' {
                 # Un split sur '|' produit une cellule vide a chaque bout.
                 if ($cellules.Count -lt 7) { continue }
 
-                foreach ($paire in @(@{ Noms = 2; Verdict = 3; Role = 'lit' },
-                                     @{ Noms = 4; Verdict = 5; Role = 'agit' })) {
-                    $commandes = @([regex]::Matches($cellules[$paire.Noms], '`([^`]+)`') |
-                        ForEach-Object { ($_.Groups[1].Value -split '\s+')[0] })
+                # Deux colonnes par rangee : ce qui LIT, et ce par quoi on AGIT.
+                $roles = @(
+                    @{ Noms = 2; Verdict = 3; Role = 'lit' }
+                    @{ Noms = 4; Verdict = 5; Role = 'agit' }
+                )
+                foreach ($paire in $roles) {
+                    # Le premier mot de chaque nom entre accents graves : `ctx
+                    # doctor -Json` et `New-DevShortcut -Force` designent une
+                    # commande, pas une invocation complete.
+                    $trouves = [regex]::Matches($cellules[$paire.Noms], '`([^`]+)`')
+                    $commandes = @($trouves | ForEach-Object { ($_.Groups[1].Value -split '\s+')[0] })
                     if ($commandes.Count -eq 0) { continue }   # la cellule '—'
 
                     $script:Rangees += [pscustomobject]@{
@@ -121,8 +128,10 @@ Describe 'Le tableau des coutures du 2.0' {
         # PRESENTES dans le module, meme si elles n'en sortent pas.
         $absentes = foreach ($r in $script:Rangees) {
             foreach ($c in $r.Commandes) {
-                $connue = ($c -in $script:Joignables) -or
-                          [bool](& (Get-Module DevContext) { param($x) Get-Command $x -ErrorAction SilentlyContinue } $c)
+                $interne = [bool](& (Get-Module DevContext) {
+                        param($x) Get-Command $x -ErrorAction SilentlyContinue
+                    } $c)
+                $connue = ($c -in $script:Joignables) -or $interne
                 if (-not $connue) { "$($r.Ecran) [$($r.Role)] : $c" }
             }
         }

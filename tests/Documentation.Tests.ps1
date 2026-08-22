@@ -56,6 +56,47 @@ Describe 'Commandes citees' {
     }
 }
 
+Describe 'Couverture des commandes par la documentation' {
+    # CE BLOC EXISTE PARCE QUE LA DOC AVAIT SEPT COMMANDES DE RETARD, et que
+    # personne ne l'a su avant que Thierry ne demande, le 22 aout 2026. Mesure
+    # de ce jour-la : le README ignorait `ctx check`, `ctx end`, `ctx guard` et
+    # `ctx off` ; le guide en ignorait sept, dont `ctx dashboard` -- ajoute au
+    # README le matin meme et oublie ici l'apres-midi.
+    #
+    # C'est la meme famille que partout ailleurs dans ce depot : une liste
+    # DERIVEE -- la table des sous-commandes -- et une prose ECRITE A LA MAIN
+    # qui s'en separe en silence. `ctx guard` etait le cas qui coute : sorti en
+    # 1.9.0, il traite les autorisations d'ECRITURE des agents, et il n'etait
+    # documente nulle part.
+    #
+    # CE QUE CE TEST NE GARANTIT PAS, a dire aussi : il verifie la PRESENCE,
+    # jamais la qualite. Une commande jetee dans un tableau le satisfait. Il
+    # ferme la porte du « on a completement oublie », pas celle du « c'est mal
+    # explique ».
+    BeforeAll {
+        Import-Module (Join-Path $script:Racine 'DevContext.psd1') -Force
+        $script:SousCommandes = @(InModuleScope DevContext { (Get-CtxSousCommandes).Keys })
+    }
+
+    It 'la table des sous-commandes est trouvee, et elle n est pas vide' {
+        # Sans cette garde, le test suivant passerait sur zero commande et
+        # dirait « tout est documente » sans avoir rien regarde.
+        $script:SousCommandes.Count | Should -BeGreaterThan 10
+    }
+
+    It 'chaque sous-commande est citee dans <_>' -ForEach @('README.md', 'docs/GUIDE.md') {
+        $contenu = Get-Content (Join-Path $script:Racine $_) -Raw
+        $doc = $_
+
+        $absentes = foreach ($k in $script:SousCommandes) {
+            # Les deux orthographes comptent : la doc emploie l'une ou l'autre
+            # selon le contexte de la phrase, et les deux sont vraies.
+            if ($contenu -notmatch "ctx[- ]$([regex]::Escape($k))(?![a-z])") { "$doc : ctx $k" }
+        }
+        ($absentes | Sort-Object -Unique) | Should -BeNullOrEmpty -Because 'une commande absente de la doc n existe pas pour le lecteur'
+    }
+}
+
 Describe 'Le tableau des coutures du 2.0' {
     # CE BLOC EXISTE PARCE QUE LE TABLEAU S'EST TROUVE FAUX. ROADMAP.md affirmait
     # que chaque ecran du tableau de bord correspondait a une fonction « en

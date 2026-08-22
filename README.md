@@ -220,6 +220,7 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx init` | What is missing on this machine, and the exact command for each |
 | `work <ctx>` | Load an identity into this terminal |
 | `ctx` | Do the folder, the identity and the account agree? **GO / NO-GO** |
+| `ctx-check` | The same verdict, but it **throws** — for scripts and git hooks |
 | `ctx-doctor` | What works in this folder, and on which account? |
 | `ctx-doctor -Live` | Are the tokens still valid, and do they open the right account? |
 | `ctx-dashboard` | The same answers as a page: every context, account, project and MCP server, read-only |
@@ -231,6 +232,9 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx-who` | Which context owns this folder |
 | `ctx-editors` | Which editors are installed, and can each one be isolated? |
 | `ctx-shortcut` | Write a shortcut that opens a project in its own context |
+| `ctx-guard` | Which folders an AI agent is allowed to write in, and what it really sees |
+| `ctx-off` | Drop the context from this shell |
+| `ctx-end` | Close the active context's working session |
 | `code-ctx` | Open an editor with this context's profile and environment |
 
 **Every `ctx-<name>` also works as `ctx <name>`** — `ctx doctor`, `ctx list`,

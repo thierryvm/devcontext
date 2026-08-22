@@ -507,7 +507,7 @@
     'dash.raccourci.titre'    = 'Shortcuts'
     'dash.raccourci.vide'     = 'No context shortcut. To create one: ctx shortcut'
     'dash.supabase.titre'     = 'Supabase projects'
-    'dash.supabase.vide'      = 'No project indexed. To build the index: sb-index'
+    'dash.supabase.vide'      = 'No project indexed for this folder. From a context folder: sb-index'
     'dash.mcp.titre'          = 'MCP servers'
     'dash.mcp.vide'           = 'No MCP server declared for this folder. To declare one: ctx mcp'
 
@@ -524,8 +524,8 @@
     'dash.col.chemin'         = 'Path'
     'dash.col.raccourci'      = 'Shortcut'
     'dash.col.projet'         = 'Project'
-    'dash.col.cle'            = 'Key'
+    'dash.col.ref'            = 'Reference'
     'dash.col.env'            = 'Environment'
     'dash.col.serveur'        = 'Server'
-    'dash.col.client'         = 'Client'
+    'dash.col.portee'         = 'Scope'
 }

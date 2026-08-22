@@ -1,21 +1,39 @@
-# Le tableau de bord : le rendu pur.
+# Le tableau de bord : le rendu pur, puis le rassemblement.
 #
-# Ce fichier ne touche pas le disque, parce que la fonction qu'il teste n'y
-# touche pas non plus. C'est tout l'interet de la separation : la moitie qui
-# decide de ce qui s'affiche se verifie sans machine configuree, sans contexte
-# actif, et sans jeton charge.
+# La premiere moitie ne touche pas le disque, parce que la fonction qu'elle
+# teste n'y touche pas non plus. C'est tout l'interet de la separation : ce qui
+# decide de l'affichage se verifie sans machine configuree, sans contexte actif
+# et sans jeton charge.
 #
-# Trois proprietes sont tenues ici, et elles viennent du plan de la tranche :
-# l'echappement CHAMP PAR CHAMP, l'absence de toute ressource distante, et le
-# fait que chaque section vide nomme la commande suivante.
+# La seconde moitie confronte les champs DECLARES aux objets REELLEMENT rendus
+# par le module. Elle existe parce que la premiere version du rendu lisait des
+# noms de champs inventes -- 'Nom', 'Compte', 'Cle', 'Libelle' -- qui
+# n'existaient sur aucun objet. Les tests etaient verts : ils injectaient les
+# memes noms inventes, donc ils validaient le rendu contre sa propre hypothese.
+
+# --- DECOUVERTE -------------------------------------------------------------
+#
+# La liste des champs est DERIVEE de la table du module, jamais recopiee ici.
+# Ajouter une colonne ajoute donc son test tout seul -- et renommer un champ
+# sans toucher la table fait rougir, au lieu d'afficher une colonne vide.
+Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) 'DevContext.psd1') -Force
+$ChampsDeclares = & (Get-Module DevContext) {
+    $table = Get-CtxDashboardSections
+    foreach ($nom in $table.Keys) {
+        foreach ($c in $table[$nom].Colonnes) {
+            @{ Section = $nom; Champ = $c.Champ; Booleen = $c.ContainsKey('Booleen') }
+        }
+    }
+}
+$SectionsDeclarees = & (Get-Module DevContext) { (Get-CtxDashboardSections).Keys }
 
 BeforeAll {
     $script:Racine = Split-Path $PSScriptRoot -Parent
     Import-Module (Join-Path $script:Racine 'DevContext.psd1') -Force
 
     # Les cinq caracteres qui comptent, dans une seule charge. Un test par
-    # caractere separe dirait moins : ce qui casse en vrai, c'est une valeur
-    # reelle qui les melange.
+    # caractere dirait moins : ce qui casse en vrai, c'est une valeur reelle qui
+    # les melange.
     $script:Charge = '<script>alert("x")&' + "'" + '</script>'
 }
 
@@ -43,8 +61,8 @@ Describe 'Format-CtxDashboardHtml' {
     BeforeAll {
         # Arrange dans la portee du TEST, jamais dans InModuleScope : une
         # fonction definie dans un BeforeAll n'existe pas dans la portee du
-        # module, et l'appeler de la-bas rend un CommandNotFoundException qui
-        # se lit comme une fonction de src/ manquante. Piege consigne dans
+        # module, et l'appeler de la-bas rend un CommandNotFoundException qui se
+        # lit comme une fonction de src/ manquante. Piege consigne dans
         # AGENTS.md, cinq tests rouges le 19 aout 2026.
         function New-FaitsAvecCharge {
             param(
@@ -59,15 +77,7 @@ Describe 'Format-CtxDashboardHtml' {
                 $faits[$Champ] = $Charge
                 return [pscustomobject]$faits
             }
-            $element = switch ($Section) {
-                'Checks' { @{ Domaine = 'd'; Sujet = 's'; Verdict = 'OK'; Detail = ''; Correctif = '' } }
-                'Contextes' { @{ Nom = 'n'; Racine = 'r'; Compte = 'c' } }
-                'Editeurs' { @{ Nom = 'n'; Isolable = $true; Chemin = 'c' } }
-                'Raccourcis' { @{ Sujet = 's'; Verdict = 'OK'; Detail = '' } }
-                'Supabase' { @{ Projet = 'p'; Contexte = 'c'; Cle = 'k'; Env = 'e' } }
-                'Mcp' { @{ Nom = 'n'; Libelle = 'l'; Chemin = 'c' } }
-            }
-            $element[$Champ] = $Charge
+            $element = @{ $Champ = $Charge }
             $faits[$Section] = @([pscustomobject]$element)
             [pscustomobject]$faits
         }
@@ -82,32 +92,20 @@ Describe 'Format-CtxDashboardHtml' {
 
     Context 'Echappement, champ par champ' {
         # UN TEST PAR CHAMP, et non un test global sur une page ou tout est
-        # rempli. Le test global passerait au vert le jour ou un seul champ
-        # cesserait d'etre echappe, tant que les autres le sont encore -- et
-        # c'est exactement le champ qu'on aurait ajoute sans y penser.
-        It '<Section>/<Champ>' -ForEach @(
-            @{ Section = ''; Champ = 'Dossier' }
-            @{ Section = ''; Champ = 'Proprietaire' }
-            @{ Section = ''; Champ = 'Actif' }
-            @{ Section = 'Checks'; Champ = 'Domaine' }
-            @{ Section = 'Checks'; Champ = 'Sujet' }
-            @{ Section = 'Checks'; Champ = 'Detail' }
-            @{ Section = 'Checks'; Champ = 'Correctif' }
-            @{ Section = 'Contextes'; Champ = 'Nom' }
-            @{ Section = 'Contextes'; Champ = 'Racine' }
-            @{ Section = 'Contextes'; Champ = 'Compte' }
-            @{ Section = 'Editeurs'; Champ = 'Nom' }
-            @{ Section = 'Editeurs'; Champ = 'Chemin' }
-            @{ Section = 'Raccourcis'; Champ = 'Sujet' }
-            @{ Section = 'Raccourcis'; Champ = 'Detail' }
-            @{ Section = 'Supabase'; Champ = 'Projet' }
-            @{ Section = 'Supabase'; Champ = 'Contexte' }
-            @{ Section = 'Supabase'; Champ = 'Cle' }
-            @{ Section = 'Supabase'; Champ = 'Env' }
-            @{ Section = 'Mcp'; Champ = 'Nom' }
-            @{ Section = 'Mcp'; Champ = 'Libelle' }
-            @{ Section = 'Mcp'; Champ = 'Chemin' }
-        ) {
+        # rempli. Le test global passerait au vert le jour ou un SEUL champ
+        # cesserait d'etre echappe, tant que les autres le sont -- et c'est
+        # exactement le champ qu'on aurait ajoute sans y penser.
+        #
+        # Preuve de morsure du 22 aout 2026 : retirer l'echappement de l'en-tete
+        # fait rougir exactement les trois champs d'en-tete et laisse les autres
+        # verts ; le retirer des cellules fait l'inverse.
+        It 'en-tete / <_>' -ForEach @('Dossier', 'Proprietaire', 'Actif') {
+            $html = Get-Html (New-FaitsAvecCharge -Section '' -Champ $_ -Charge $script:Charge)
+            $html | Should -Not -BeLike '*<script>*' -Because "l en-tete $_ n est pas echappe"
+            $html | Should -BeLike '*&lt;script&gt;*'
+        }
+
+        It '<Section>/<Champ>' -ForEach ($ChampsDeclares | Where-Object { -not $_.Booleen }) {
             $html = Get-Html (New-FaitsAvecCharge -Section $Section -Champ $Champ -Charge $script:Charge)
 
             $html | Should -Not -BeLike '*<script>*' -Because "le champ $Section/$Champ n est pas echappe"
@@ -123,9 +121,10 @@ Describe 'Format-CtxDashboardHtml' {
         }
 
         It 'ne reference aucune ressource distante' {
-            # Contrainte du plan : une page qui appelle le reseau depuis un
-            # outil d'identifiants annonce la topologie de son porteur a qui
-            # heberge la ressource. Verifie sur la SORTIE, pas sur l'intention.
+            # Une page qui appelle le reseau depuis un outil d'identifiants
+            # annonce la topologie de son porteur a qui heberge la ressource --
+            # et ce rapport s'ouvre precisement quand on doute deja de quelque
+            # chose. Verifie sur la SORTIE, pas sur l'intention.
             foreach ($motif in @('http://', 'https://', 'src="//', 'href="//', '@import')) {
                 $script:Page | Should -Not -BeLike "*$motif*" -Because "'$motif' est une requete sortante"
             }
@@ -154,9 +153,9 @@ Describe 'Format-CtxDashboardHtml' {
         It 'la section vide propose <_>' -ForEach @(
             'ctx doctor', 'ctx init', 'ctx editors', 'ctx shortcut', 'sb-index', 'ctx mcp'
         ) {
-            # L'assertion porte sur la COMMANDE, jamais sur la phrase : la
-            # phrase est traduite, la commande ne l'est pas. Decider sur du
-            # texte affiche est le piege que ce depot a paye quatre fois.
+            # L'assertion porte sur la COMMANDE, jamais sur la phrase : la phrase
+            # est traduite, la commande ne l'est pas. Decider sur du texte
+            # affiche est le piege que ce depot a paye quatre fois.
             $script:Nue | Should -BeLike "*$_*" -Because 'une section vide qui ne dit pas quoi faire est une impasse'
         }
 
@@ -172,13 +171,12 @@ Describe 'Format-CtxDashboardHtml' {
         }
 
         It 'ne lit pas l horloge : sans horodatage fourni, deux appels restent identiques' {
-            # CE TEST EXISTE PARCE QUE LE PRECEDENT NE SUFFISAIT PAS, et la
-            # preuve de morsure l'a dit. Il s'appelait « ne connait pas
-            # l heure » et passait -Genere : une fonction qui aurait lu
-            # l'horloge en repli, quand l'horodatage manque, serait passee au
-            # vert. Mesure le 22 aout 2026 en remettant exactement ce
-            # defaut-la. Le titre promettait ce que l'appel empechait de
-            # verifier -- consigne ici plutot que corrige en silence.
+            # CE TEST EXISTE PARCE QUE LE PRECEDENT NE SUFFISAIT PAS, et c'est la
+            # preuve de morsure qui l'a dit. Il s'appelait « ne connait pas
+            # l heure » et passait -Genere : une fonction lisant l'horloge EN
+            # REPLI, quand l'horodatage manque, serait passee au vert. Mesure le
+            # 22 aout 2026 en remettant exactement ce defaut. Consigne ici
+            # plutot que corrige en silence.
             $faits = [pscustomobject]@{ Dossier = 'D' }
             $a = InModuleScope DevContext -Parameters @{ f = $faits } {
                 param($f) Format-CtxDashboardHtml -Faits $f
@@ -201,9 +199,88 @@ Describe 'Format-CtxDashboardHtml' {
             # les deux langues, et la mise en forme disparaitrait dans l une.
             $faits = [pscustomobject]@{
                 Dossier = 'D'
-                Checks  = @([pscustomobject]@{ Domaine = 'gh'; Sujet = 'global'; Verdict = 'PROBLEME'; Detail = ''; Correctif = '' })
+                Checks  = @([pscustomobject]@{ Domaine = 'gh'; Sujet = 'global'; Verdict = 'PROBLEME' })
             }
             (Get-Html $faits) | Should -BeLike '*v-PROBLEME*'
         }
+    }
+}
+
+Describe 'Get-CtxDashboardFacts' {
+    # ICI ON LIT LA MACHINE. Aucun reseau : le diagnostic est appele sans -Live,
+    # donc ce rapport reste produisible hors ligne.
+    BeforeAll {
+        $script:Dossier = Split-Path $PSScriptRoot -Parent
+        $script:Faits = InModuleScope DevContext -Parameters @{ d = $script:Dossier } {
+            param($d) Get-CtxDashboardFacts -Path $d
+        }
+    }
+
+    It 'ne leve pas quand aucun contexte n est actif' {
+        # CE TEST EXISTE PARCE QUE LA SUITE ETAIT VERTE ICI ET AURAIT ROUGI EN
+        # CI. Get-DevSupabaseMap retombe par defaut sur $env:DEVCTX et LEVE
+        # quand il est vide ; le rassemblement mourait donc sur un dossier
+        # qu'aucun contexte ne gouverne -- exactement le rapport qu'on ouvre
+        # pour comprendre pourquoi on est hors contexte. Trouve le 22 aout 2026
+        # en constatant que le resultat de la suite DEPENDAIT de la presence
+        # d'un contexte dans le shell : 66 verts avec, 23 rouges sans.
+        #
+        # RESTAURER, jamais supprimer : effacer une variable reelle dans un
+        # finally a deja desarme le test de fuite qui tournait apres.
+        $sauvegarde = $env:DEVCTX
+        try {
+            Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue
+            {
+                InModuleScope DevContext -Parameters @{ d = $script:Dossier } {
+                    param($d) Get-CtxDashboardFacts -Path $d
+                }
+            } | Should -Not -Throw -Because 'un rapport doit se produire hors contexte, c est la qu il sert'
+        }
+        finally {
+            if ($null -eq $sauvegarde) { Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue }
+            else { $env:DEVCTX = $sauvegarde }
+        }
+    }
+
+    It 'rend une propriete pour chaque section que la table declare' {
+        foreach ($nom in $SectionsDeclarees) {
+            $script:Faits.PSObject.Properties.Name |
+                Should -Contain $nom -Because 'une section declaree sans faits s afficherait vide, pour toujours'
+        }
+    }
+
+    It 'le champ <Champ> existe sur les objets de <Section>' -ForEach $ChampsDeclares {
+        $elements = @($script:Faits.$Section)
+        if ($elements.Count -eq 0) {
+            # DIT A VOIX HAUTE plutot que passe en silence. Une machine sans
+            # contexte, sans index Supabase ou sans serveur MCP ne peut pas
+            # repondre a cette question -- et un vert qui n'a rien mesure est
+            # pire qu'un rouge.
+            Set-ItResult -Skipped -Because "aucun element dans $Section sur cette machine"
+            return
+        }
+        $elements[0].PSObject.Properties.Name |
+            Should -Contain $Champ -Because "le rendu lit $Section.$Champ ; s il n existe pas, la colonne s affiche VIDE"
+    }
+
+    It 'ne rend aucun verdict que le diagnostic n a pas rendu' {
+        # LE garde-fou de la contrainte centrale : le rapport ne decide rien. Si
+        # ces deux ensembles divergent un jour, c'est qu'une seconde
+        # implementation est apparue quelque part.
+        $duDiagnostic = @(InModuleScope DevContext -Parameters @{ d = $script:Dossier } {
+                param($d) Get-DevContextDoctor -Path $d
+            }) | ForEach-Object { '{0}/{1}={2}' -f $_.Domaine, $_.Sujet, $_.Verdict }
+
+        $duRapport = @(@($script:Faits.Checks) + @($script:Faits.Raccourcis)) |
+            ForEach-Object { '{0}/{1}={2}' -f $_.Domaine, $_.Sujet, $_.Verdict }
+
+        ($duRapport | Sort-Object) | Should -Be ($duDiagnostic | Sort-Object)
+    }
+
+    It 'partitionne les raccourcis sans en perdre ni en dupliquer' {
+        $tous = @(@($script:Faits.Checks) + @($script:Faits.Raccourcis))
+        @($script:Faits.Checks | Where-Object { $_.Domaine -eq 'raccourci' }) | Should -BeNullOrEmpty
+        @($script:Faits.Raccourcis | Where-Object { $_.Domaine -ne 'raccourci' }) | Should -BeNullOrEmpty
+        $tous.Count | Should -BeGreaterThan 0
     }
 }

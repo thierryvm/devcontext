@@ -145,6 +145,65 @@ Describe 'Le tableau des coutures du 2.0' {
     }
 }
 
+Describe 'Aucun caractere avale par un echappement' {
+    # AGENTS.md consigne ce piege depuis le 19 aout 2026 : dans un heredoc, un
+    # printf ou une chaine Python non brute, `\e` `\v` `\a` `\t` `\n` deviennent
+    # des CARACTERES DE CONTROLE. Invisible dans un diff, invisible dans la
+    # plupart des editeurs.
+    #
+    # Le controle qu'il recommandait -- grep -P '[\x00-\x08\x0b\x0c\x0e-\x1f]' --
+    # ne couvre pas \x09. Deux documents portaient donc TAB + "hird-app" depuis
+    # le 13 aout 2026, a la place de "third-app", et ce controle ne pouvait pas
+    # les voir. Un garde-fou avec un trou de la taille du cas le plus courant.
+    #
+    # CE QU'IL NE COUVRE PAS, a dire aussi fort : un `\n` avale devient un vrai
+    # saut de ligne et un `\` avale devient une barre simple. Les deux sont des
+    # caracteres parfaitement ordinaires ; rien ici ne peut les distinguer d'une
+    # frappe voulue. Ce test attrape les caracteres qui n'ont AUCUNE raison
+    # d'etre la, pas la classe entiere.
+    BeforeAll {
+        # Tous les fichiers suivis sont du texte -- verifie le 22 aout 2026 :
+        # .ps1 .psd1 .psm1 .ps1xml .md .yml .cmd .svg .gitignore .gitattributes
+        # .editorconfig et cinq shims sans extension. Aucun binaire, donc aucune
+        # exclusion a maintenir. Le jour ou un binaire est ajoute, ce test le
+        # signalera -- bruyamment, ce qui est le bon sens de l'erreur.
+        $script:Suivis = @(& git -C $script:Racine ls-files)
+    }
+
+    It 'aucun caractere de controle dans un fichier suivi' {
+        $suspects = foreach ($f in $script:Suivis) {
+            $contenu = Get-Content (Join-Path $script:Racine $f) -Raw -ErrorAction SilentlyContinue
+            if (-not $contenu) { continue }
+            if ($contenu -match '[\x00-\x08\x0b\x0c\x0e-\x1f]') { $f }
+        }
+        ($suspects | Sort-Object -Unique) | Should -BeNullOrEmpty
+    }
+
+    It 'aucune tabulation ailleurs qu en tete de ligne, signature du \t avale' {
+        # LA REGLE : une tabulation APRES le debut du contenu de la ligne.
+        # ^\t* laisse passer l'indentation, [^\t\r\n] exige que le contenu ait
+        # commence, et le \t final est celui qui n'a rien a faire la.
+        #
+        # La premiere version de CE test disait '\S\t' -- non blanc, puis
+        # tabulation -- et elle est restee VERTE avec le vrai defaut remis en
+        # place, parce que le caractere qui precedait la tabulation etait une
+        # ESPACE (`other-app, ` + TAB). Elle n'aurait jamais attrape le cas pour
+        # lequel elle etait ecrite. C'est la preuve de morsure qui l'a dit, pas
+        # la relecture : un test vert ne prouve rien tant qu'on ne l'a pas vu
+        # rougir. Consigne ici plutot que corrige en silence.
+        #
+        # DevContext.psm1 indente par tabulation les here-strings qui produisent
+        # .gitconfig et le config SSH, ou la tabulation est la convention du
+        # format. Elles sont en TETE de ligne, donc laissees.
+        $suspects = foreach ($f in $script:Suivis) {
+            $contenu = Get-Content (Join-Path $script:Racine $f) -Raw -ErrorAction SilentlyContinue
+            if (-not $contenu) { continue }
+            if ($contenu -match '(?m)^\t*[^\t\r\n][^\r\n]*\t') { $f }
+        }
+        ($suspects | Sort-Object -Unique) | Should -BeNullOrEmpty
+    }
+}
+
 Describe 'Aucune donnee personnelle' {
     It 'aucun fichier suivi ne porte une adresse e-mail personnelle' {
         # Les adresses d'exemple sont explicitement neutres. Une vraie adresse

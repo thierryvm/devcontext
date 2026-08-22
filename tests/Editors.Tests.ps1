@@ -798,28 +798,45 @@ Describe "Ce que l'editeur ne doit pas heriter" {
     }
 
     Context 'La variable est absente AU MOMENT du lancement' {
-        It "l'editeur est lance sans NO_COLOR, meme si l'appelant l'a" {
-            # LE test qui prouve le correctif. Les autres verifient la decision
-            # et la restauration ; celui-ci verifie ce que l'enfant recoit
-            # REELLEMENT -- la seule chose qui compte pour la fenetre ouverte.
+        It "l'action est executee sans NO_COLOR, meme si l'appelant l'a" {
+            # LE test qui prouve le correctif : ce que l'ENFANT recoit, la seule
+            # chose dont la fenetre se soucie.
+            #
+            # Il vise l'enveloppe et non Open-DevCode. La premiere version
+            # passait par toute la chaine -- Read-CtxManifest, Get-CtxEditorFacts
+            # -- donc elle exigeait un contexte 'perso' ET un editeur installe.
+            # Verte ici, ROUGE en CI, qui n'a ni l'un ni l'autre. Attrapee avant
+            # la fusion le 22 aout 2026 ; consignee plutot que corrigee en
+            # silence.
             $avant = $env:NO_COLOR
             try {
                 $env:NO_COLOR = '1'
                 $vu = InModuleScope DevContext {
-                    $script:VuPendantLancement = '<non execute>'
-                    Mock Find-CtxEditorExecutable { 'C:\faux\Code.exe' }
-                    # Le lancement est remplace par une doublure : on ne lance
-                    # jamais un vrai editeur dans la suite, et ce qu'on veut
-                    # savoir est l'environnement au moment ou il partirait.
-                    Mock Start-Process { $script:VuPendantLancement = [string]$env:NO_COLOR }
-                    Open-DevCode -Name 'perso' -Path $TestDrive
-                    $script:VuPendantLancement
+                    Invoke-CtxSansHeritageNonInteractif -Action { [string]$env:NO_COLOR }
                 }
                 $vu | Should -BeExactly '' -Because 'la fenetre herite de cet environnement pour toute sa vie'
+                $env:NO_COLOR | Should -BeExactly '1' -Because 'et l appelant retrouve le sien'
             }
             finally {
                 if ($null -eq $avant) { Remove-Item Env:NO_COLOR -ErrorAction SilentlyContinue }
                 else { $env:NO_COLOR = $avant }
+            }
+        }
+
+        It 'laisse intactes les variables qui portent le contexte' {
+            # Le pendant du test de decision, mais sur le comportement REEL :
+            # ce que l'action voit, et non ce que la liste dit.
+            $avant = $env:GH_CONFIG_DIR
+            try {
+                $env:GH_CONFIG_DIR = 'F:\CTX\essai\gh'
+                $vu = InModuleScope DevContext {
+                    Invoke-CtxSansHeritageNonInteractif -Action { [string]$env:GH_CONFIG_DIR }
+                }
+                $vu | Should -BeExactly 'F:\CTX\essai\gh' -Because 'sans lui, l isolation ne vaut plus rien'
+            }
+            finally {
+                if ($null -eq $avant) { Remove-Item Env:GH_CONFIG_DIR -ErrorAction SilentlyContinue }
+                else { $env:GH_CONFIG_DIR = $avant }
             }
         }
     }
@@ -833,8 +850,7 @@ Describe "Ce que l'editeur ne doit pas heriter" {
             try {
                 $env:NO_COLOR = '1'
                 InModuleScope DevContext {
-                    Mock Find-CtxEditorExecutable { throw 'panne simulee' }
-                    try { Open-DevCode -Name 'perso' -Path $TestDrive } catch { }
+                    try { Invoke-CtxSansHeritageNonInteractif -Action { throw 'panne simulee' } } catch { }
                 }
                 $env:NO_COLOR | Should -BeExactly '1' -Because 'le shell appelant doit retrouver son environnement'
             }

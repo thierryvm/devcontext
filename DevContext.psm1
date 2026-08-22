@@ -577,6 +577,46 @@ function Get-CtxVariablesNonInteractives {
         ([string]$Environnement['TERM']).Trim() -eq 'dumb') { 'TERM' }
 }
 
+function Invoke-CtxSansHeritageNonInteractif {
+    <#
+      Execute $Action avec l'environnement PRIVE des variables ci-dessus, puis
+      les restaure -- meme si $Action leve.
+
+      FONCTION A PART, ET NON TROIS LIGNES DANS Open-DevCode. Ce qu'elle fait se
+      verifie alors sans contexte declare et sans editeur installe. La premiere
+      version vivait dans Open-DevCode, et son test appelait donc toute la
+      chaine : vert sur la machine de l'auteur, ROUGE en CI, ou il n'existe ni
+      contexte 'perso' ni editeur. C'est le piege qu'AGENTS.md nomme -- un test
+      dont le resultat depend de la machine ne prouve rien ailleurs. La CI l'a
+      attrape avant la fusion, le 22 aout 2026.
+
+      L'appelant garde son environnement : il n'a pas demande qu'on le modifie.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][scriptblock]$Action)
+
+    $vue = @{}
+    foreach ($e in [Environment]::GetEnvironmentVariables().GetEnumerator()) {
+        $vue[[string]$e.Key] = [string]$e.Value
+    }
+
+    $retirees = @{}
+    foreach ($nom in @(Get-CtxVariablesNonInteractives -Environnement $vue)) {
+        $retirees[$nom] = $vue[$nom]
+        Remove-Item -LiteralPath "Env:$nom" -ErrorAction SilentlyContinue
+    }
+    # JAMAIS EN SILENCE. Un environnement modifie sans un mot est exactement le
+    # genre de chose qu'on cherche pendant une heure six mois plus tard.
+    if ($retirees.Count) {
+        Write-Verbose (T 'code.envRetire' (($retirees.Keys | Sort-Object) -join ', '))
+    }
+
+    try { & $Action }
+    finally {
+        foreach ($nom in $retirees.Keys) { Set-Item -LiteralPath "Env:$nom" -Value $retirees[$nom] }
+    }
+}
+
 function Open-DevCode {
     <#
       Ouvre un editeur, detache, sur le profil du contexte.
@@ -649,31 +689,15 @@ function Open-DevCode {
     #
     # L'heritage ci-dessus est voulu pour le contexte. Il transmet aussi ce que
     # l'APPELANT est : lance depuis un agent ou une CI, l'editeur recoit les
-    # variables qui disent « je ne suis pas un terminal humain », et chacun de
-    # ses terminaux integres en herite a son tour, pour toute la session.
+    # variables qui disent qu'il n'est pas un terminal humain, et chacun de ses
+    # terminaux integres en herite a son tour, pour toute la session.
     #
     # Mesure le 22 aout 2026 : une fenetre ouverte depuis la session d'un agent
     # avait tous ses terminaux sans couleur. NO_COLOR=1 -> PowerShell bascule
     # $PSStyle.OutputRendering sur PlainText -> les sequences ANSI du prompt
     # sont retirees au rendu. Le symptome survit a la fermeture du terminal,
-    # puisqu'il vit dans le processus de la fenetre.
-    #
-    # Retire du processus COURANT, puis remis : l'appelant garde son
-    # environnement, seul l'enfant en est prive.
-    $retirees = @{}
-    $vue = @{}
-    foreach ($e in [Environment]::GetEnvironmentVariables().GetEnumerator()) { $vue[[string]$e.Key] = [string]$e.Value }
-    foreach ($nom in @(Get-CtxVariablesNonInteractives -Environnement $vue)) {
-        $retirees[$nom] = $vue[$nom]
-        Remove-Item -LiteralPath "Env:$nom" -ErrorAction SilentlyContinue
-    }
-    # JAMAIS EN SILENCE. Un environnement modifie sans un mot est exactement le
-    # genre de chose qu'on cherche pendant une heure six mois plus tard.
-    if ($retirees.Count) {
-        Write-Verbose (T 'code.envRetire' (($retirees.Keys | Sort-Object) -join ', '))
-    }
-
-    try {
+    # puisqu'il vit dans le processus de la FENETRE.
+    Invoke-CtxSansHeritageNonInteractif -Action {
 
         $exe = Find-CtxEditorExecutable -Editor $editeur
         if ($exe) {
@@ -705,11 +729,6 @@ function Open-DevCode {
             & $codeCmd.Source @codeArgs
         }
 
-    }
-    finally {
-        # Restaurer, toujours -- y compris si le lancement a leve. L'appelant
-        # n'a pas demande qu'on modifie SON environnement.
-        foreach ($nom in $retirees.Keys) { Set-Item -LiteralPath "Env:$nom" -Value $retirees[$nom] }
     }
 }
 

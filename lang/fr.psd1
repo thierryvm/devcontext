@@ -493,4 +493,48 @@
     'editeur.partage.commun'  = 'COMMUN'
     'editeur.partage.sansObjet' = 'sans objet'
     'editeur.sansUserDataDir' = "{0} n'expose pas --user-data-dir : ses sessions restent communes a tous les contextes."
+
+    # --- ctx dashboard ------------------------------------------------------
+    # Rendues dans une PAGE, pas dans un terminal -- mais la table reste en
+    # ASCII comme tout le reste : la regle est tenue par un test qui parcourt
+    # les deux tables entieres, et l'assouplir pour une commande serait la
+    # premiere exception d'une liste.
+    'dash.titre'              = 'DevContext -- etat de cette machine'
+    'dash.entete.dossier'     = 'Dossier {0}, gouverne par le contexte {1}.'
+    'dash.entete.dossierSansProprietaire' = 'Dossier {0}, qu aucun contexte ne gouverne : c est l identite git GLOBALE qui signe ici.'
+    'dash.entete.actif'       = 'Identite chargee dans le shell : {0}.'
+    'dash.pied'               = 'Rapport genere le {0}. Lecture seule : cette page ne decide rien, elle rend ce que la CLI a repondu.'
+    'dash.oui'                = 'oui'
+    'dash.non'                = 'non'
+
+    'dash.diag.titre'         = 'Diagnostic'
+    'dash.diag.vide'          = 'Aucun constat. Depuis un dossier de contexte : ctx doctor'
+    'dash.ctx.titre'          = 'Contextes et comptes'
+    'dash.ctx.vide'           = 'Aucun contexte declare sur cette machine. Pour la mise en place guidee : ctx init'
+    'dash.editeur.titre'      = 'Editeurs'
+    'dash.editeur.vide'       = 'Aucun editeur detecte. Pour voir ce qui est cherche et ou : ctx editors'
+    'dash.raccourci.titre'    = 'Raccourcis'
+    'dash.raccourci.vide'     = 'Aucun raccourci de contexte. Pour en creer un : ctx shortcut'
+    'dash.supabase.titre'     = 'Projets Supabase'
+    'dash.supabase.vide'      = 'Aucun projet indexe. Pour construire l index : sb-index'
+    'dash.mcp.titre'          = 'Serveurs MCP'
+    'dash.mcp.vide'           = 'Aucun serveur MCP declare pour ce dossier. Pour en declarer un : ctx mcp'
+
+    'dash.col.domaine'        = 'Domaine'
+    'dash.col.sujet'          = 'Sujet'
+    'dash.col.verdict'        = 'Verdict'
+    'dash.col.detail'         = 'Detail'
+    'dash.col.correctif'      = 'Correctif'
+    'dash.col.contexte'       = 'Contexte'
+    'dash.col.racine'         = 'Racine'
+    'dash.col.compte'         = 'Compte'
+    'dash.col.editeur'        = 'Editeur'
+    'dash.col.isolable'       = 'Isolable'
+    'dash.col.chemin'         = 'Chemin'
+    'dash.col.raccourci'      = 'Raccourci'
+    'dash.col.projet'         = 'Projet'
+    'dash.col.cle'            = 'Cle'
+    'dash.col.env'            = 'Environnement'
+    'dash.col.serveur'        = 'Serveur'
+    'dash.col.client'         = 'Client'
 }

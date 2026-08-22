@@ -170,6 +170,83 @@ function Format-CtxDashboardSection {
     $sb.ToString()
 }
 
+function Get-CtxDashboardSections {
+    <#
+      PURE. La table des sections : leur ordre, leurs textes, et QUEL CHAMP
+      chaque colonne lit.
+
+      UNE SEULE SOURCE, et c'est tout l'objet de cette fonction. Le rendu la
+      parcourt ; le test qui confronte ces champs aux objets REELLEMENT rendus
+      par le module la parcourt aussi. Une liste recopiee se perime a la
+      premiere renommee -- et elle se perime en SILENCE : une colonne qui lit un
+      champ disparu s'affiche vide, ce qui ressemble a une donnee absente.
+
+      Mesure du 22 aout 2026, et c'est pourquoi cette table existe : la
+      premiere version du rendu lisait 'Nom', 'Compte', 'Cle' et 'Libelle', des
+      noms qui n'existaient sur aucun des objets. Les tests passaient parce
+      qu'ils injectaient les memes noms inventes : ils validaient le rendu
+      contre sa propre hypothese.
+
+      Verdict = l'indice de la colonne qui porte un verdict, ou -1. Booleen
+      marque une colonne qui porte un booleen a traduire en oui/non -- jamais un
+      libelle deja traduit, dont la comparaison est le piege du 15 aout 2026.
+    #>
+    [CmdletBinding()]
+    param()
+    [ordered]@{
+        Checks     = @{
+            Titre = 'dash.diag.titre'; Vide = 'dash.diag.vide'; Verdict = 2
+            Colonnes = @(
+                @{ Cle = 'dash.col.domaine'; Champ = 'Domaine' }
+                @{ Cle = 'dash.col.sujet'; Champ = 'Sujet' }
+                @{ Cle = 'dash.col.verdict'; Champ = 'Verdict' }
+                @{ Cle = 'dash.col.detail'; Champ = 'Detail' }
+                @{ Cle = 'dash.col.correctif'; Champ = 'Correctif' }
+            )
+        }
+        Contextes  = @{
+            Titre = 'dash.ctx.titre'; Vide = 'dash.ctx.vide'; Verdict = -1
+            Colonnes = @(
+                @{ Cle = 'dash.col.contexte'; Champ = 'Contexte' }
+                @{ Cle = 'dash.col.racine'; Champ = 'Racine' }
+                @{ Cle = 'dash.col.compte'; Champ = 'Email' }
+            )
+        }
+        Editeurs   = @{
+            Titre = 'dash.editeur.titre'; Vide = 'dash.editeur.vide'; Verdict = -1
+            Colonnes = @(
+                @{ Cle = 'dash.col.editeur'; Champ = 'Editeur' }
+                @{ Cle = 'dash.col.isolable'; Champ = 'Isole'; Booleen = $true }
+                @{ Cle = 'dash.col.chemin'; Champ = 'Chemin' }
+            )
+        }
+        Raccourcis = @{
+            Titre = 'dash.raccourci.titre'; Vide = 'dash.raccourci.vide'; Verdict = 1
+            Colonnes = @(
+                @{ Cle = 'dash.col.raccourci'; Champ = 'Sujet' }
+                @{ Cle = 'dash.col.verdict'; Champ = 'Verdict' }
+                @{ Cle = 'dash.col.detail'; Champ = 'Detail' }
+            )
+        }
+        Supabase   = @{
+            Titre = 'dash.supabase.titre'; Vide = 'dash.supabase.vide'; Verdict = -1
+            Colonnes = @(
+                @{ Cle = 'dash.col.projet'; Champ = 'Projet' }
+                @{ Cle = 'dash.col.compte'; Champ = 'Compte' }
+                @{ Cle = 'dash.col.ref'; Champ = 'Ref' }
+                @{ Cle = 'dash.col.env'; Champ = 'Env' }
+            )
+        }
+        Mcp        = @{
+            Titre = 'dash.mcp.titre'; Vide = 'dash.mcp.vide'; Verdict = -1
+            Colonnes = @(
+                @{ Cle = 'dash.col.serveur'; Champ = 'Nom' }
+                @{ Cle = 'dash.col.portee'; Champ = 'Portee' }
+            )
+        }
+    }
+}
+
 function Format-CtxDashboardHtml {
     <#
       PURE. Les faits en entree, une page HTML autonome en sortie.
@@ -216,97 +293,98 @@ function Format-CtxDashboardHtml {
     if ($actif) { $entete = $entete + ' ' + (T 'dash.entete.actif' $actif) }
     [void]$sb.AppendLine('<p class="sous">' + (ConvertTo-CtxHtmlTexte $entete) + '</p>')
 
-    # Chaque section est decrite par une table, puis eclatee en parametres.
-    # Pas de continuation de ligne : PSScriptAnalyzer refuse l'alignement qui
-    # en decoule, et le depot a deja paye deux fois pour l'avoir ecrit ainsi.
-    #
-    # L'ordre des sections est celui du plan, et l'ordre des constats DANS le
-    # diagnostic est celui que `ctx doctor` a produit. Le retrier serait une
-    # decision -- donc une seconde implementation.
-    $checks = @(Get-CtxProp $Faits 'Checks' @() | Where-Object { $null -ne $_ })
-    $diagnostic = @{
-        Titre          = T 'dash.diag.titre'
-        Vide           = T 'dash.diag.vide'
-        ColonneVerdict = 2
-        Entetes        = @(
-            (T 'dash.col.domaine'), (T 'dash.col.sujet'), (T 'dash.col.verdict')
-            (T 'dash.col.detail'), (T 'dash.col.correctif')
-        )
-        Lignes         = @($checks | ForEach-Object {
-                , @(
-                    (Get-CtxProp $_ 'Domaine' ''), (Get-CtxProp $_ 'Sujet' ''), (Get-CtxProp $_ 'Verdict' '')
-                    (Get-CtxProp $_ 'Detail' ''), (Get-CtxProp $_ 'Correctif' '')
-                )
-            })
+    # Une boucle sur la table, et non six blocs jumeaux. L'ordre des sections
+    # est celui de la table ; l'ordre des constats DANS le diagnostic est celui
+    # que `ctx doctor` a produit -- le retrier serait une decision, donc une
+    # seconde implementation.
+    foreach ($nom in (Get-CtxDashboardSections).Keys) {
+        $def = (Get-CtxDashboardSections)[$nom]
+        $elements = @(Get-CtxProp $Faits $nom @() | Where-Object { $null -ne $_ })
+        $section = @{
+            Titre          = T $def.Titre
+            Vide           = T $def.Vide
+            ColonneVerdict = $def.Verdict
+            Entetes        = @($def.Colonnes | ForEach-Object { T $_.Cle })
+            Lignes         = @($elements | ForEach-Object {
+                    $element = $_
+                    , @($def.Colonnes | ForEach-Object {
+                            $valeur = Get-CtxProp $element $_.Champ ''
+                            if ($_.ContainsKey('Booleen')) {
+                                # Le BOOLEEN, jamais le libelle deja traduit :
+                                # comparer un libelle affiche rendait chaque
+                                # editeur non isole en anglais, le 15 aout 2026.
+                                if ($valeur) { T 'dash.oui' } else { T 'dash.non' }
+                            }
+                            else { $valeur }
+                        })
+                })
+        }
+        [void]$sb.Append((Format-CtxDashboardSection @section))
     }
-    [void]$sb.Append((Format-CtxDashboardSection @diagnostic))
-
-    $contextes = @(Get-CtxProp $Faits 'Contextes' @() | Where-Object { $null -ne $_ })
-    $sectionContextes = @{
-        Titre   = T 'dash.ctx.titre'
-        Vide    = T 'dash.ctx.vide'
-        Entetes = @((T 'dash.col.contexte'), (T 'dash.col.racine'), (T 'dash.col.compte'))
-        Lignes  = @($contextes | ForEach-Object {
-                , @((Get-CtxProp $_ 'Nom' ''), (Get-CtxProp $_ 'Racine' ''), (Get-CtxProp $_ 'Compte' ''))
-            })
-    }
-    [void]$sb.Append((Format-CtxDashboardSection @sectionContextes))
-
-    $editeurs = @(Get-CtxProp $Faits 'Editeurs' @() | Where-Object { $null -ne $_ })
-    $sectionEditeurs = @{
-        Titre   = T 'dash.editeur.titre'
-        Vide    = T 'dash.editeur.vide'
-        Entetes = @((T 'dash.col.editeur'), (T 'dash.col.isolable'), (T 'dash.col.chemin'))
-        Lignes  = @($editeurs | ForEach-Object {
-                # Le BOOLEEN, jamais le libelle traduit : c'est le piege du
-                # 15 aout 2026, ou une comparaison a un litteral francais
-                # rendait chaque editeur non isole en anglais.
-                $isolable = if (Get-CtxProp $_ 'Isolable' $false) { T 'dash.oui' } else { T 'dash.non' }
-                , @((Get-CtxProp $_ 'Nom' ''), $isolable, (Get-CtxProp $_ 'Chemin' ''))
-            })
-    }
-    [void]$sb.Append((Format-CtxDashboardSection @sectionEditeurs))
-
-    $raccourcis = @(Get-CtxProp $Faits 'Raccourcis' @() | Where-Object { $null -ne $_ })
-    $sectionRaccourcis = @{
-        Titre          = T 'dash.raccourci.titre'
-        Vide           = T 'dash.raccourci.vide'
-        ColonneVerdict = 1
-        Entetes        = @((T 'dash.col.raccourci'), (T 'dash.col.verdict'), (T 'dash.col.detail'))
-        Lignes         = @($raccourcis | ForEach-Object {
-                , @((Get-CtxProp $_ 'Sujet' ''), (Get-CtxProp $_ 'Verdict' ''), (Get-CtxProp $_ 'Detail' ''))
-            })
-    }
-    [void]$sb.Append((Format-CtxDashboardSection @sectionRaccourcis))
-
-    $supabase = @(Get-CtxProp $Faits 'Supabase' @() | Where-Object { $null -ne $_ })
-    $sectionSupabase = @{
-        Titre   = T 'dash.supabase.titre'
-        Vide    = T 'dash.supabase.vide'
-        Entetes = @(
-            (T 'dash.col.projet'), (T 'dash.col.contexte'), (T 'dash.col.cle'), (T 'dash.col.env')
-        )
-        Lignes  = @($supabase | ForEach-Object {
-                , @(
-                    (Get-CtxProp $_ 'Projet' ''), (Get-CtxProp $_ 'Contexte' '')
-                    (Get-CtxProp $_ 'Cle' ''), (Get-CtxProp $_ 'Env' '')
-                )
-            })
-    }
-    [void]$sb.Append((Format-CtxDashboardSection @sectionSupabase))
-
-    $mcp = @(Get-CtxProp $Faits 'Mcp' @() | Where-Object { $null -ne $_ })
-    $sectionMcp = @{
-        Titre   = T 'dash.mcp.titre'
-        Vide    = T 'dash.mcp.vide'
-        Entetes = @((T 'dash.col.serveur'), (T 'dash.col.client'), (T 'dash.col.chemin'))
-        Lignes  = @($mcp | ForEach-Object {
-                , @((Get-CtxProp $_ 'Nom' ''), (Get-CtxProp $_ 'Libelle' ''), (Get-CtxProp $_ 'Chemin' ''))
-            })
-    }
-    [void]$sb.Append((Format-CtxDashboardSection @sectionMcp))
 
     [void]$sb.AppendLine('<footer>' + (ConvertTo-CtxHtmlTexte (T 'dash.pied' $Genere)) + '</footer>')
     [void]$sb.AppendLine('</main></body></html>')
     $sb.ToString()
+}
+
+
+# ---------------------------------------------------------------------------
+# Rassemblement -- au-dela de cette ligne, on lit la machine
+# ---------------------------------------------------------------------------
+
+function Get-CtxDashboardFacts {
+    <#
+      RASSEMBLEMENT. Les faits du tableau de bord, pour un dossier.
+
+      Cette fonction NE DECIDE RIEN. Elle appelle les fonctions qui decident
+      deja, et se contente de les mettre cote a cote. C'est la contrainte
+      centrale du 2.0 : deux implementations divergent, et celle qu'on croit est
+      celle qu'on a ouverte.
+
+      Un seul appel au diagnostic, partitionne ensuite. Les constats des
+      raccourcis ont leur propre section a l'ecran, mais ils viennent de la MEME
+      source que le reste -- pas d'un second balayage qui pourrait, un jour,
+      repondre autre chose que celui affiche juste au-dessus.
+
+      Reseau : aucun. `Get-DevContextDoctor` n'est pas appele avec -Live, donc
+      ce rapport reste produisible hors ligne, dans un train, et dans un hook.
+    #>
+    [CmdletBinding()]
+    param([string]$Path = (Get-Location).Path)
+
+    $dossier = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path } catch { $Path }
+
+    $manifeste = Resolve-DevContextForPath -Path $dossier
+    $proprio = if ($manifeste) { [string](Get-CtxProp $manifeste 'name' '') } else { '' }
+
+    # Le @() au SITE D'APPEL, jamais dans la fonction appelee : PowerShell
+    # deplie un tableau en traversant le flux de sortie, donc zero element
+    # arrive en $null et un seul element arrive en scalaire -- silencieusement.
+    $checks = @(Get-DevContextDoctor -Path $dossier)
+
+    # LE DOSSIER DECIDE, PAS LA SESSION -- et ici ce n'est pas une formule.
+    # Get-DevSupabaseMap retombe par defaut sur $env:DEVCTX et LEVE quand il est
+    # vide. Un rapport produit depuis un dossier qu'aucun contexte ne gouverne
+    # mourait donc sur cette ligne : precisement le rapport qu'on ouvre pour
+    # comprendre POURQUOI on est hors contexte. Mesure le 22 aout 2026 -- la
+    # suite passait sur cette machine et aurait rougi en CI, qui n'a jamais de
+    # contexte actif.
+    #
+    # Le contexte PROPRIETAIRE du dossier est donc passe explicitement. Aucun
+    # repli sur la session : si aucun contexte ne gouverne ce dossier, il n'y a
+    # pas de parc Supabase a montrer pour lui, et la section le dit.
+    $supabase = @()
+    if ($proprio) { $supabase = @(Get-DevSupabaseMap -Name $proprio) }
+
+    [pscustomobject]@{
+        Dossier      = $dossier
+        Proprietaire = $proprio
+        Actif        = [string]$env:DEVCTX
+        Checks       = @($checks | Where-Object { $_.Domaine -ne $script:CtxDomaineRaccourci })
+        Raccourcis   = @($checks | Where-Object { $_.Domaine -eq $script:CtxDomaineRaccourci })
+        Contextes    = @(Get-DevContextList)
+        Editeurs     = @(Get-DevEditorList)
+        Supabase     = $supabase
+        Mcp          = @(Get-CtxMcpFacts -Dossier $dossier)
+    }
 }

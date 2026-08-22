@@ -516,7 +516,7 @@
     'dash.raccourci.titre'    = 'Raccourcis'
     'dash.raccourci.vide'     = 'Aucun raccourci de contexte. Pour en creer un : ctx shortcut'
     'dash.supabase.titre'     = 'Projets Supabase'
-    'dash.supabase.vide'      = 'Aucun projet indexe. Pour construire l index : sb-index'
+    'dash.supabase.vide'      = 'Aucun projet indexe pour ce dossier. Depuis un dossier de contexte : sb-index'
     'dash.mcp.titre'          = 'Serveurs MCP'
     'dash.mcp.vide'           = 'Aucun serveur MCP declare pour ce dossier. Pour en declarer un : ctx mcp'
 
@@ -533,8 +533,8 @@
     'dash.col.chemin'         = 'Chemin'
     'dash.col.raccourci'      = 'Raccourci'
     'dash.col.projet'         = 'Projet'
-    'dash.col.cle'            = 'Cle'
+    'dash.col.ref'            = 'Reference'
     'dash.col.env'            = 'Environnement'
     'dash.col.serveur'        = 'Serveur'
-    'dash.col.client'         = 'Client'
+    'dash.col.portee'         = 'Portee'
 }

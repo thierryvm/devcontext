@@ -20,6 +20,22 @@
 # and repairing shortcuts is a button on a screen calling the same code, never
 # a second implementation of the same rules living in a UI.
 
+# Le domaine que porte chaque constat de raccourci.
+#
+# NOMME UNE FOIS. Le tableau de bord partitionne le diagnostic sur cette valeur
+# pour donner aux raccourcis leur propre section ; deux litteraux recopies se
+# separeraient a la premiere renommee, sans la moindre erreur, avec une section
+# qui s'affiche vide -- ce qui ressemble a « aucun raccourci ».
+#
+# Effet de bord mesure le 22 aout 2026 : le detecteur lexical de
+# tests/Langue.Tests.ps1 signale toute comparaison a une valeur presente dans
+# les tables de textes, et le libelle de colonne « Raccourci » venait d'y
+# entrer. Il ne peut pas distinguer un identifiant de structure d'un libelle
+# affiche -- son propre commentaire dit « presque surement ». Nommer la
+# constante repond aux deux problemes d'une ligne, et le second n'etait pas le
+# motif : un litteral recopie six fois etait deja le defaut.
+$script:CtxDomaineRaccourci = 'raccourci'
+
 function Get-CtxShortcutLocations {
     <#
       Where a shortcut lives on Windows: both desktops, both start menus, and
@@ -151,16 +167,16 @@ function Test-CtxDoctorRaccourci {
 
     if (Test-CtxShortcutIsolated -Target $Target -Arguments $Arguments -ShimDirs $ShimDirs) {
         $ou = if ($Contexte) { T 'rac.doc.dansContexte' $Contexte } else { T 'rac.doc.profilDedie' }
-        return New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'OK' -Detail (T 'rac.doc.isole' $ou)
+        return New-CtxCheck -Domaine $script:CtxDomaineRaccourci -Sujet $Nom -Verdict 'OK' -Detail (T 'rac.doc.isole' $ou)
     }
 
     if ($Contexte) {
-        return New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'PROBLEME' `
+        return New-CtxCheck -Domaine $script:CtxDomaineRaccourci -Sujet $Nom -Verdict 'PROBLEME' `
             -Detail (T 'rac.doc.partage' $Contexte) `
             -Correctif 'ctx-shortcut -Path <projet> -Force'
     }
 
-    New-CtxCheck -Domaine 'raccourci' -Sujet $Nom -Verdict 'ATTENTION' `
+    New-CtxCheck -Domaine $script:CtxDomaineRaccourci -Sujet $Nom -Verdict 'ATTENTION' `
         -Detail (T 'rac.doc.sansDossier') `
         -Correctif (T 'rac.doc.sansDossierFix')
 }
@@ -271,7 +287,7 @@ function Get-CtxRaccourciChecks {
             # colonne par laquelle `ctx doctor -Json` est filtre par un agent ou
             # une CI, et une cle qui change avec la langue du poste ne serait
             # plus une cle. Detail et Correctif, eux, s'adressent a un humain.
-            New-CtxCheck -Domaine 'raccourci' -Sujet 'lanceurs simples' -Verdict 'INFO' `
+            New-CtxCheck -Domaine $script:CtxDomaineRaccourci -Sujet 'lanceurs simples' -Verdict 'INFO' `
                 -Detail (T 'rac.doc.regroupes' $sansDossier.Count $noms) `
                 -Correctif 'ctx-shortcut -Path <projet>'
         }

@@ -170,6 +170,7 @@
     'code.sansCli'            = "'{0}' est installe mais n'expose aucun point d'entree en ligne de commande. Il ne peut pas etre lance par DevContext."
     'code.ouverture'          = '{0} [{1}] -> {2}'
     'code.repliSynchrone'     = "Aucun executable trouve au-dessus de '{0}'. {1} est lance en avant-plan : cette fenetre restera ouverte tant qu'il tournera. 'ctx-editors' dit ce qui a ete detecte."
+    'code.envRetire'          = "Variables non interactives retirees de l environnement transmis a l editeur : {0}. Elles disent 'je ne suis pas un terminal humain' et leur heritage priverait chaque terminal integre de la fenetre."
 
     # --- web-ctx ---------------------------------------------------------------
     'web.aucunActif'          = 'Aucun contexte actif.'

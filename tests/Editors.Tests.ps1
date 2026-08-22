@@ -729,3 +729,121 @@ Describe 'Get-CtxEditorMagasinPartage' {
         }
     }
 }
+
+Describe "Ce que l'editeur ne doit pas heriter" {
+    # CE BLOC EXISTE POUR UN SYMPTOME QUI SURVIT A LA FERMETURE DU TERMINAL.
+    #
+    # Le 22 aout 2026, une fenetre VS Code ouverte depuis la session d'un agent
+    # avait TOUS ses terminaux integres sans couleur, y compris apres
+    # relancement. Cause : l'agent pose NO_COLOR=1 pour obtenir des sorties
+    # propres, PowerShell 7 respecte cette convention en basculant
+    # $PSStyle.OutputRendering sur PlainText, et la variable descendait jusqu'a
+    # chaque terminal -- parce qu'elle vit dans le processus de la FENETRE, pas
+    # dans celui du terminal.
+    #
+    # Le module s'appuie sur cet heritage pour transmettre le contexte. Il
+    # transmettait donc aussi ce que l'appelant EST.
+
+    Context 'La decision, sans processus a fabriquer' {
+        It 'retire <Nom> quand il vaut <Valeur>' -ForEach @(
+            @{ Nom = 'NO_COLOR'; Valeur = '1' }
+            @{ Nom = 'FORCE_COLOR'; Valeur = '1' }
+            @{ Nom = 'CI'; Valeur = 'true' }
+            @{ Nom = 'TERM'; Valeur = 'dumb' }
+        ) {
+            $r = InModuleScope DevContext -Parameters @{ n = $Nom; v = $Valeur } {
+                param($n, $v) @(Get-CtxVariablesNonInteractives -Environnement @{ $n = $v })
+            }
+            $r | Should -Contain $Nom
+        }
+
+        It 'ne touche pas un TERM legitime : <_>' -ForEach @('xterm-256color', 'xterm', 'screen') {
+            # Retirer un TERM qui decrit de vraies capacites casserait ce qu'il
+            # decrit. Seul 'dumb' dit « aucune capacite ».
+            $r = InModuleScope DevContext -Parameters @{ v = $_ } {
+                param($v) @(Get-CtxVariablesNonInteractives -Environnement @{ TERM = $v })
+            }
+            $r | Should -Not -Contain 'TERM'
+        }
+
+        It 'ignore une valeur vide : une variable declaree sans contenu ne dit rien' {
+            $r = InModuleScope DevContext {
+                @(Get-CtxVariablesNonInteractives -Environnement @{ NO_COLOR = ''; CI = '   ' })
+            }
+            $r | Should -BeNullOrEmpty
+        }
+
+        It 'NE TOUCHE JAMAIS ce qui porte le contexte' {
+            # LE test de ce bloc. Un nettoyage qui emporterait GH_CONFIG_DIR ou
+            # SUPABASE_ACCESS_TOKEN detruirait l'isolation que tout le module
+            # existe pour tenir -- et le ferait en silence, puisque l'editeur
+            # s'ouvrirait quand meme.
+            $r = InModuleScope DevContext {
+                @(Get-CtxVariablesNonInteractives -Environnement @{
+                        GH_CONFIG_DIR         = 'F:\CTX\perso\gh'
+                        SUPABASE_ACCESS_TOKEN = 'sbp_exemple'
+                        DEVCTX                = 'perso'
+                        DEVCTX_ROOT_PATH      = 'F:\PROJECTS\Apps'
+                        VERCEL_TOKEN          = 'exemple'
+                        PATH                  = 'C:\'
+                    })
+            }
+            $r | Should -BeNullOrEmpty -Because 'le contexte voyage par heritage : le nettoyer serait detruire l isolation'
+        }
+
+        It 'accepte un environnement nul sans lever' {
+            { InModuleScope DevContext { Get-CtxVariablesNonInteractives -Environnement $null } } |
+                Should -Not -Throw
+        }
+    }
+
+    Context 'La variable est absente AU MOMENT du lancement' {
+        It "l'editeur est lance sans NO_COLOR, meme si l'appelant l'a" {
+            # LE test qui prouve le correctif. Les autres verifient la decision
+            # et la restauration ; celui-ci verifie ce que l'enfant recoit
+            # REELLEMENT -- la seule chose qui compte pour la fenetre ouverte.
+            $avant = $env:NO_COLOR
+            try {
+                $env:NO_COLOR = '1'
+                $vu = InModuleScope DevContext {
+                    $script:VuPendantLancement = '<non execute>'
+                    Mock Find-CtxEditorExecutable { 'C:\faux\Code.exe' }
+                    # Le lancement est remplace par une doublure : on ne lance
+                    # jamais un vrai editeur dans la suite, et ce qu'on veut
+                    # savoir est l'environnement au moment ou il partirait.
+                    Mock Start-Process { $script:VuPendantLancement = [string]$env:NO_COLOR }
+                    Open-DevCode -Name 'perso' -Path $TestDrive
+                    $script:VuPendantLancement
+                }
+                $vu | Should -BeExactly '' -Because 'la fenetre herite de cet environnement pour toute sa vie'
+            }
+            finally {
+                if ($null -eq $avant) { Remove-Item Env:NO_COLOR -ErrorAction SilentlyContinue }
+                else { $env:NO_COLOR = $avant }
+            }
+        }
+    }
+
+    Context "L'environnement de l'appelant est rendu intact" {
+        It 'restaure la variable retiree, meme si le lancement leve' {
+            # L'appelant n'a pas demande qu'on modifie SON environnement. Et le
+            # `finally` n'est pas decoratif : sans lui, un lancement qui echoue
+            # laisserait le shell prive de NO_COLOR sans que rien ne le dise.
+            $avant = $env:NO_COLOR
+            try {
+                $env:NO_COLOR = '1'
+                InModuleScope DevContext {
+                    Mock Find-CtxEditorExecutable { throw 'panne simulee' }
+                    try { Open-DevCode -Name 'perso' -Path $TestDrive } catch { }
+                }
+                $env:NO_COLOR | Should -BeExactly '1' -Because 'le shell appelant doit retrouver son environnement'
+            }
+            finally {
+                # Restaurer, jamais supprimer : effacer une vraie variable dans
+                # un finally a deja desarme un test qui tournait apres.
+                if ($null -eq $avant) { Remove-Item Env:NO_COLOR -ErrorAction SilentlyContinue }
+                else { $env:NO_COLOR = $avant }
+            }
+        }
+    }
+}

@@ -1,6 +1,7 @@
 # Forme du tableau de bord (2.0) — dossier de décision
 
-> **Statut : TRANCHÉ le 22 août 2026. Rien n'est encore implémenté.**
+> **Statut : TRANCHÉ le 22 août 2026, portée comprise. Rien n'est encore
+> implémenté.**
 > La décision est en §0 ; les sections qui suivent sont l'analyse qui y a mené,
 > conservée telle quelle. Une décision sans son raisonnement se rediscute à la
 > première objection.
@@ -64,17 +65,26 @@ soit honnêtement globale : **la casse**, pas l'identité. Un jeton qui expire, 
 raccourci cassé, un compte étranger dans une config globale. Et personne n'a
 besoin de télécharger quoi que ce soit pour avoir le tableau de bord.
 
-### Reste ouvert, et ça ne bloque pas le démarrage
+### La portée : Windows — tranché le 22 août 2026
 
-**« Tout le monde » = sous Windows, ou littéralement multi-plateforme ?** La
-question n'a pas été tranchée, et elle ne conditionne pas le 2.0 : le rapport
-généré tourne partout où le module tourne, quel que soit l'endroit où c'est. Elle
-conditionne le **chantier suivant** :
+*« On va faire pour Windows pour le moment, si j'ai un Mac plus tard, on
+adaptera. »*
 
-- Windows → le prochain chantier est l'interface, et une seule plateforme à signer.
-- Multi-plateforme → le prochain chantier est **le port**, pas l'interface — et il
-  faut soit un Mac pour vérifier, soit assumer « Linux seulement, macOS non
-  essayé », ce que la doctrine du projet impose.
+C'est le bon arbitrage, et pas seulement le pragmatique. La mesure du même jour
+disait que **la portée est limitée par le port, pas par l'interface** : 36 accès
+registre, 81 `.cmd`, 30 chemins Windows, contre six garde-fous de plateforme.
+Choisir une coquille multi-plateforme n'aurait donc acheté **aucune portée
+supplémentaire** — seulement une fenêtre qui s'ouvre sur un module incapable de
+tourner là où elle s'ouvre.
+
+Conséquences, dans l'ordre :
+
+- **Le prochain chantier est l'interface**, pas le port.
+- Le veilleur (2.1) n'aura **qu'une plateforme à signer**.
+- Le port reste une **décision** — il se rouvre le jour où il existe une machine
+  pour le vérifier, ce que la section *Deferred* du ROADMAP posait déjà comme
+  condition. Il ne se rouvre pas par accident, parce qu'une interface l'aurait
+  traîné derrière elle.
 
 ---
 
@@ -257,6 +267,9 @@ décision acquise, et elle se prend avant d'écrire l'UI, pas après.
 3. ~~**Quelqu'un d'autre que toi l'utilisera-t-il ?**~~ → probablement. D'où
    l'installation en une commande pour le 2.0, et le binaire réservé au 2.1.
 
-**Il en reste une, et elle appartient toujours à @thierry** : *« tout le monde »*
-veut-il dire sous Windows, ou littéralement multi-plateforme ? Voir §0. Elle ne
-bloque pas le 2.0 ; elle décide du chantier d'après.
+4. ~~**« Tout le monde » = Windows, ou multi-plateforme ?**~~ → **Windows**,
+   tranché le 22/08/2026. Voir §0. Le port se rouvrira s'il y a un Mac pour le
+   vérifier — jamais par accident.
+
+**Plus aucune question ouverte sur la forme.** Le chantier suivant est du code :
+la première tranche du 2.0.

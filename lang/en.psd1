@@ -39,6 +39,7 @@
     'ctx.sc.verdict'         = 'do folder, identity and account agree?'
     'ctx.sc.tiret'           = 'Each also exists hyphenated: ctx-doctor, ctx-list, ...'
     'ctx.sc.aide.check'      = 'same verdict, but throws (scripts, git hooks)'
+    'ctx.sc.aide.dashboard'  = "the state of this machine, as one page (read-only)"
     'ctx.sc.aide.doctor'     = 'state of this machine: tools, accounts, guards'
     'ctx.sc.aide.editors'    = 'which editors can isolate their profile'
     'ctx.sc.aide.end'        = 'close the active context work session'

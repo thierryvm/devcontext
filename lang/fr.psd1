@@ -39,6 +39,7 @@
     'ctx.sc.verdict'         = "dossier, identite et compte concordent-ils ?"
     'ctx.sc.tiret'           = 'Chacune existe aussi avec un tiret : ctx-doctor, ctx-list, ...'
     'ctx.sc.aide.check'      = 'meme verdict, mais leve une erreur (scripts, hooks git)'
+    'ctx.sc.aide.dashboard'  = "l etat de cette machine, en une page (lecture seule)"
     'ctx.sc.aide.doctor'     = 'etat de la machine : outils, comptes, garde-fous'
     'ctx.sc.aide.editors'    = 'quels editeurs savent isoler leur profil'
     'ctx.sc.aide.end'        = 'fermer la session de travail du contexte actif'

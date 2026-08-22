@@ -149,7 +149,10 @@ tag start the publish.
 ## Deferred — Linux and macOS
 
 **Not scheduled, and that is a decision rather than a backlog accident.**
-Reviewed on 18 August 2026 and deliberately left without a version number:
+Reviewed again on 22 August 2026 when the dashboard's reach was chosen, and left
+where it was: the interface goes first, on Windows, and this waits for a machine
+to verify it on. Originally reviewed on 18 August 2026 and deliberately left
+without a version number:
 nobody has asked for it, the module has been public for three days, and nobody
 working on it has a Mac.
 
@@ -363,13 +366,19 @@ that costs — down to the `Host` header validation a loopback socket needs agai
 DNS rebinding — is laid out in
 [`docs/plans/2026-08-22-forme-du-tableau-de-bord.md`](docs/plans/2026-08-22-forme-du-tableau-de-bord.md).
 
-**Still open, and it gates the reach rather than the shape.** The module is
-nailed to Windows: 36 registry accesses, 81 `.cmd` entry points, `.lnk`
-shortcuts and 30 Windows environment paths, against **six** platform guards in
-total — measured 22 August 2026. *Usable by everyone* is therefore limited by the
-port, not by the interface. A window on macOS would sit over a module that cannot
-run there, which is the same promise-without-verification this file refuses under
-*Deferred*.
+**Reach: Windows, decided 22 August 2026 — and it was a real choice, not an
+omission.** *Usable by everyone* was the requirement; measuring what stands in
+its way settled where the work goes. The module is nailed to Windows: 36 registry
+accesses, 81 `.cmd` entry points, `.lnk` shortcuts and 30 Windows environment
+paths, against **six** platform guards in total. So reach is limited by the
+**port**, not by the interface — a window on macOS would sit over a module that
+cannot run there, which is the promise-without-verification this file refuses
+under *Deferred*.
+
+Windows first therefore costs nothing in reach that a cross-platform shell would
+have bought, and it keeps the port a decision rather than a side effect. It is
+revisited the day there is a machine to verify the port on — the same condition
+*Deferred* already names, unchanged.
 
 ---
 

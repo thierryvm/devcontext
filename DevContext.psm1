@@ -530,6 +530,53 @@ function Clear-DevContext {
 # code-ctx — VS Code isole
 # ---------------------------------------------------------------------------
 
+function Get-CtxVariablesNonInteractives {
+    <#
+      PURE. Les variables qui signifient « je ne suis pas un terminal humain »,
+      et qui n'ont donc rien a faire dans ce qu'un EDITEUR herite.
+
+      POURQUOI CETTE FONCTION EXISTE. Ce module s'appuie sur l'heritage
+      d'environnement pour transmettre le contexte a l'editeur -- c'est ecrit
+      dans Open-DevCode juste en dessous. Le meme heritage transmet tout le
+      reste, y compris ce que l'appelant est.
+
+      Mesure le 22 aout 2026 : une fenetre VS Code ouverte depuis la session d'un
+      agent avait ses terminaux integres sans aucune couleur. Cause : l'agent
+      pose NO_COLOR=1 pour obtenir des sorties propres, PowerShell 7 respecte
+      cette convention en basculant $PSStyle.OutputRendering sur PlainText, et
+      la variable descendait jusqu'a chaque terminal de la fenetre. Le prompt
+      emettait bien ses sequences ANSI ; l'hote les retirait au rendu.
+
+      LISTE FERMEE, jamais une heuristique. « Ce qui ressemble a de
+      l'automatisation » produirait des faux positifs sur des reglages
+      deliberes, et retirer en silence le choix de quelqu'un est pire que le
+      probleme. Quatre entrees, chacune avec sa raison :
+
+        NO_COLOR      n'affiche pas de couleur
+        FORCE_COLOR   le signal miroir, tout aussi peu pertinent dans un editeur
+        CI            ceci est une construction, pas une session
+        TERM=dumb     ce terminal n'a aucune capacite -- et SEULEMENT a 'dumb' :
+                      un TERM legitime ne se touche pas
+
+      Prend l'environnement en argument plutot que de lire $env: : c'est ce qui
+      rend la decision verifiable sans fabriquer un processus.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowNull()][hashtable]$Environnement)
+
+    if (-not $Environnement) { return }
+
+    foreach ($nom in @('NO_COLOR', 'FORCE_COLOR', 'CI')) {
+        if ($Environnement.ContainsKey($nom) -and
+            -not [string]::IsNullOrWhiteSpace([string]$Environnement[$nom])) { $nom }
+    }
+
+    # TERM merite son cas a part : seule la valeur 'dumb' dit « pas de
+    # capacites ». Retirer un TERM=xterm-256color casserait ce qu'il decrit.
+    if ($Environnement.ContainsKey('TERM') -and
+        ([string]$Environnement['TERM']).Trim() -eq 'dumb') { 'TERM' }
+}
+
 function Open-DevCode {
     <#
       Ouvre un editeur, detache, sur le profil du contexte.
@@ -598,34 +645,71 @@ function Open-DevCode {
     # pwsh > cmd > start > Code.exe : c'est lui qui transmet GH_CONFIG_DIR,
     # SUPABASE_ACCESS_TOKEN et la configuration Vercel au terminal integre de
     # VS Code. Sans cet heritage, l'isolation ne vaudrait que pour les extensions.
-    $exe = Find-CtxEditorExecutable -Editor $editeur
-    if ($exe) {
-        # Seules les VALEURS sont guillemetees : un chemin peut contenir une
-        # espace, un flag jamais — et `"--user-data-dir"` ne serait pas reconnu.
-        $quoted = $codeArgs | ForEach-Object { if ($_ -like '--*') { $_ } else { '"{0}"' -f $_ } }
-        # Le `""` qui suit `start` est le titre de la fenetre. Sans lui, cmd prend
-        # le chemin guillemete de Code.exe pour un titre et n'execute rien.
-        $inner = 'start "" "{0}" {1}' -f $exe, ($quoted -join ' ')
-        # Start-Process pour APPELER cmd, et non l'operateur `&`. Avec `&`,
-        # PowerShell ouvre un pipe pour lire la sortie de cmd ; `start` transmet
-        # ce handle a Code.exe, qui le garde ouvert toute sa vie. PowerShell
-        # attend alors un EOF qui n'arrive jamais et le raccourci ne se ferme
-        # plus. Verifie le 2026-08-08 : pwsh survivait, en attente, parent
-        # explorer. Start-Process n'ouvre aucun pipe (UseShellExecute), donc rien
-        # a heriter et rien a attendre.
-        Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $inner" -WindowStyle Hidden
+    # CE QUE L'EDITEUR NE DOIT PAS HERITER.
+    #
+    # L'heritage ci-dessus est voulu pour le contexte. Il transmet aussi ce que
+    # l'APPELANT est : lance depuis un agent ou une CI, l'editeur recoit les
+    # variables qui disent « je ne suis pas un terminal humain », et chacun de
+    # ses terminaux integres en herite a son tour, pour toute la session.
+    #
+    # Mesure le 22 aout 2026 : une fenetre ouverte depuis la session d'un agent
+    # avait tous ses terminaux sans couleur. NO_COLOR=1 -> PowerShell bascule
+    # $PSStyle.OutputRendering sur PlainText -> les sequences ANSI du prompt
+    # sont retirees au rendu. Le symptome survit a la fermeture du terminal,
+    # puisqu'il vit dans le processus de la fenetre.
+    #
+    # Retire du processus COURANT, puis remis : l'appelant garde son
+    # environnement, seul l'enfant en est prive.
+    $retirees = @{}
+    $vue = @{}
+    foreach ($e in [Environment]::GetEnvironmentVariables().GetEnumerator()) { $vue[[string]$e.Key] = [string]$e.Value }
+    foreach ($nom in @(Get-CtxVariablesNonInteractives -Environnement $vue)) {
+        $retirees[$nom] = $vue[$nom]
+        Remove-Item -LiteralPath "Env:$nom" -ErrorAction SilentlyContinue
     }
-    else {
-        # Chemin non standard (autre distribution, autre OS) : on retombe sur le
-        # CLI, quitte a garder le terminal occupe.
-        #
-        # Et on le DIT. Ce repli a ete muet jusqu'au 16 aout 2026, ou il s'est
-        # declenche a tort sur toutes les machines : la fenetre d'un raccourci
-        # restait ouverte pour toute la session d'edition, sans un mot expliquant
-        # pourquoi. Un comportement degrade que rien n'annonce se lit comme une
-        # panne -- et la cause etait ailleurs, deux etages plus haut.
-        Write-Warning (T 'code.repliSynchrone' $codeCmd.Source $editeur.Label)
-        & $codeCmd.Source @codeArgs
+    # JAMAIS EN SILENCE. Un environnement modifie sans un mot est exactement le
+    # genre de chose qu'on cherche pendant une heure six mois plus tard.
+    if ($retirees.Count) {
+        Write-Verbose (T 'code.envRetire' (($retirees.Keys | Sort-Object) -join ', '))
+    }
+
+    try {
+
+        $exe = Find-CtxEditorExecutable -Editor $editeur
+        if ($exe) {
+            # Seules les VALEURS sont guillemetees : un chemin peut contenir une
+            # espace, un flag jamais — et `"--user-data-dir"` ne serait pas reconnu.
+            $quoted = $codeArgs | ForEach-Object { if ($_ -like '--*') { $_ } else { '"{0}"' -f $_ } }
+            # Le `""` qui suit `start` est le titre de la fenetre. Sans lui, cmd prend
+            # le chemin guillemete de Code.exe pour un titre et n'execute rien.
+            $inner = 'start "" "{0}" {1}' -f $exe, ($quoted -join ' ')
+            # Start-Process pour APPELER cmd, et non l'operateur `&`. Avec `&`,
+            # PowerShell ouvre un pipe pour lire la sortie de cmd ; `start` transmet
+            # ce handle a Code.exe, qui le garde ouvert toute sa vie. PowerShell
+            # attend alors un EOF qui n'arrive jamais et le raccourci ne se ferme
+            # plus. Verifie le 2026-08-08 : pwsh survivait, en attente, parent
+            # explorer. Start-Process n'ouvre aucun pipe (UseShellExecute), donc rien
+            # a heriter et rien a attendre.
+            Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $inner" -WindowStyle Hidden
+        }
+        else {
+            # Chemin non standard (autre distribution, autre OS) : on retombe sur le
+            # CLI, quitte a garder le terminal occupe.
+            #
+            # Et on le DIT. Ce repli a ete muet jusqu'au 16 aout 2026, ou il s'est
+            # declenche a tort sur toutes les machines : la fenetre d'un raccourci
+            # restait ouverte pour toute la session d'edition, sans un mot expliquant
+            # pourquoi. Un comportement degrade que rien n'annonce se lit comme une
+            # panne -- et la cause etait ailleurs, deux etages plus haut.
+            Write-Warning (T 'code.repliSynchrone' $codeCmd.Source $editeur.Label)
+            & $codeCmd.Source @codeArgs
+        }
+
+    }
+    finally {
+        # Restaurer, toujours -- y compris si le lancement a leve. L'appelant
+        # n'a pas demande qu'on modifie SON environnement.
+        foreach ($nom in $retirees.Keys) { Set-Item -LiteralPath "Env:$nom" -Value $retirees[$nom] }
     }
 }
 

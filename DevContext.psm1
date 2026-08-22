@@ -2201,7 +2201,7 @@ $exportedFunctions = @(
     'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
     'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh',
     'Invoke-DevCtx', 'Resolve-CtxPathSansVides', 'Invoke-DevContextInit',
-    'Invoke-DevContextGuard'
+    'Invoke-DevContextDashboard', 'Invoke-DevContextGuard'
 )
 # Les alias ctx-<nom> sont DERIVES de la meme table que les alias eux-memes.
 # Ils y etaient recopies a la main jusqu'a la 1.8.0, et le defaut a frappe des

@@ -1,4 +1,4 @@
-# Le tableau de bord : rendu.
+﻿# Le tableau de bord : rendu.
 #
 # TOUT CE FICHIER EST PUR. Il ne lit rien, n'ecrit rien, ne resout aucun chemin
 # et ne connait pas l'heure. Il prend des faits et rend une chaine.
@@ -387,4 +387,159 @@ function Get-CtxDashboardFacts {
         Supabase     = $supabase
         Mcp          = @(Get-CtxMcpFacts -Dossier $dossier)
     }
+}
+
+
+# ---------------------------------------------------------------------------
+# Ecriture -- le seul effet de bord de ce fichier
+# ---------------------------------------------------------------------------
+
+function Get-CtxDashboardPath {
+    <#
+      Ou le rapport est ecrit.
+
+      Aux emplacements que le systeme prevoit pour des donnees applicatives, et
+      nulle part ailleurs. Surtout PAS dans le dossier courant : ce rapport
+      contient la topologie des comptes -- quel projet sur quel compte, quel
+      dossier gouverne par quel contexte. C'est un document de reconnaissance,
+      exactement ce que ce depot a retire de son arbre et de son historique le
+      15 aout 2026. Ecrit dans un depot, il partirait au premier `git add -A`.
+
+      $Base est injectable pour la meme raison que dans Get-CtxShimRacine : un
+      test doit pouvoir verifier la decision sans ecrire dans le vrai profil.
+    #>
+    [CmdletBinding()]
+    param([string]$Base)
+
+    if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+        if (-not $Base) { $Base = $env:LOCALAPPDATA }
+        return [System.IO.Path]::Combine($Base, 'DevContext', 'tableau-de-bord.html')
+    }
+    if (-not $Base) { $Base = [System.IO.Path]::Combine($HOME, '.local', 'state') }
+    [System.IO.Path]::Combine($Base, 'devcontext', 'tableau-de-bord.html')
+}
+
+function Set-CtxFichierPrive {
+    <#
+      Restreint un fichier a son proprietaire, et echoue bruyamment sinon.
+
+      ECHOUER EST LA BONNE REPONSE ICI. Le fichier porte la topologie des
+      comptes ; le laisser avec des permissions inconnues parce qu'un appel a
+      echoue serait exactement le « on verra plus tard » qui produit les fuites.
+      L'appelant supprime alors le fichier plutot que de le laisser en place.
+
+      Hors Windows, rien : les permissions y sont posees a la creation par le
+      umask, et pretendre agir sans mesurer serait pire que de ne rien dire.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)][string]$Chemin)
+
+    if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) { return }
+    if (-not $PSCmdlet.ShouldProcess($Chemin, 'restreindre au proprietaire')) { return }
+
+    $moi = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+
+    # UN DESCRIPTEUR NEUF, et non celui rendu par Get-Acl.
+    #
+    # Mesure le 22 aout 2026, en lancant la commande deux fois de suite : relire
+    # puis reecrire le descripteur complet fait ecrire proprietaire et SACL en
+    # plus de la DACL, et le second appel echoue sur « le processus ne possede
+    # pas le privilege SeSecurityPrivilege ». Le premier passait -- le defaut
+    # n'existait donc que pour quelqu'un qui utilise la commande plus d'une
+    # fois, ce qui est tout le monde.
+    #
+    # Un FileSecurity neuf ne porte ni proprietaire ni regles d'audit, donc
+    # Set-Acl n'ecrit que la DACL : la seule chose qu'on veuille changer.
+    $sd = [System.Security.AccessControl.FileSecurity]::new()
+    # Couper l'heritage ET ne rien reprendre des regles heritees : les conserver
+    # reviendrait a ne rien avoir coupe.
+    $sd.SetAccessRuleProtection($true, $false)
+    $sd.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+            $moi, 'FullControl', 'Allow'))
+
+    # L'API .NET, ET NON Set-Acl. Mesure le 22 aout 2026 sur un fichier jetable,
+    # cinq essais :
+    #
+    #   Set-Acl, fichier neuf ............................. OK
+    #   Set-Acl, deuxieme appel sur le meme fichier ....... ECHEC, SeSecurityPrivilege
+    #   Set-Acl, deuxieme appel SANS protection ........... ECHEC, SeSecurityPrivilege
+    #   SetAccessControl (.NET), premier appel ............ OK
+    #   SetAccessControl (.NET), deuxieme appel ........... OK
+    #
+    # Ce n'est donc pas la protection qui coince, c'est l'applet : elle reussit
+    # une fois puis echoue sur le meme fichier. Le defaut n'existait que pour
+    # quelqu'un lancant la commande plus d'une fois -- c'est-a-dire tout le
+    # monde -- et il ne se voyait pas au premier essai.
+    #
+    # SetAccessControl leve une exception, la : le catch de l'appelant se
+    # declenche vraiment. Set-Acl signalait par une erreur NON TERMINANTE, donc
+    # le catch ne se declenchait pas et le fichier restait sur le disque avec
+    # des permissions inconnues -- l'exact contraire de ce qui est promis ici.
+    [System.IO.FileSystemAclExtensions]::SetAccessControl(
+        [System.IO.FileInfo]::new($Chemin), $sd)
+}
+
+function Invoke-DevContextDashboard {
+    <#
+      .SYNOPSIS
+        Un rapport HTML de l'etat de cette machine, ouvert dans le navigateur.
+
+      .DESCRIPTION
+        Lecture seule. Le rapport ne decide rien : il rend ce que `ctx doctor`,
+        `ctx-list`, `ctx editors`, `ctx-sb` et les serveurs MCP ont deja
+        repondu. Aucune requete sortante, ni pendant la collecte -- le
+        diagnostic n'est pas appele avec -Live -- ni depuis la page produite.
+
+        Le fichier est reecrit a chaque appel, au meme endroit, et restreint a
+        son proprietaire : il porte la topologie des comptes, donc chaque copie
+        laissee derriere est une photographie de plus a oublier quelque part.
+
+      .PARAMETER Path
+        Le dossier a decrire. Par defaut, le dossier courant.
+
+      .PARAMETER NoOpen
+        Produit le fichier sans lancer le navigateur, et rend son chemin.
+        Necessaire en CI, et pratique pour enchainer.
+
+      .EXAMPLE
+        ctx dashboard
+
+      .EXAMPLE
+        ctx dashboard -NoOpen
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [string]$Path = (Get-Location).Path,
+        [switch]$NoOpen
+    )
+
+    $destination = Get-CtxDashboardPath
+    $dossier = Split-Path -Parent $destination
+
+    if (-not $PSCmdlet.ShouldProcess($destination, 'ecrire le rapport')) { return }
+
+    if (-not (Test-Path -LiteralPath $dossier)) {
+        $null = New-Item -ItemType Directory -Path $dossier -Force
+    }
+
+    $faits = Get-CtxDashboardFacts -Path $Path
+    $html = Format-CtxDashboardHtml -Faits $faits -Genere (Get-Date -Format 'yyyy-MM-dd HH:mm')
+
+    # -Encoding utf8 explicite : le navigateur lit le charset declare dans la
+    # page, et un fichier ecrit dans l'encodage du poste le contredirait.
+    Set-Content -LiteralPath $destination -Value $html -Encoding utf8 -NoNewline
+
+    try {
+        Set-CtxFichierPrive -Chemin $destination -Confirm:$false
+    }
+    catch {
+        # Pas d'exception avalee : on retire le fichier AVANT de relayer. Un
+        # rapport dont les permissions n'ont pas pu etre posees ne doit pas
+        # rester sur le disque.
+        Remove-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+        throw (T 'dash.permsEchec' $destination (Protect-CtxMessage $_.Exception.Message))
+    }
+
+    if (-not $NoOpen) { Start-Process -FilePath $destination }
+    $destination
 }

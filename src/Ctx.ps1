@@ -46,7 +46,8 @@
 # La table EST la definition. Les alias ctx-<nom> du psm1 en decoulent, donc
 # ajouter une entree ici suffit pour que les deux orthographes existent.
 $script:CtxSousCommandes = [ordered]@{
-    'check'    = 'Assert-DevContext'
+    'check'     = 'Assert-DevContext'
+    'dashboard' = 'Invoke-DevContextDashboard'
     'doctor'   = 'Get-DevContextDoctor'
     'editors'  = 'Get-DevEditorList'
     'end'      = 'Close-DevContext'

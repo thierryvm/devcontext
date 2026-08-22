@@ -108,9 +108,16 @@ Describe 'le diagnostic ne fuit pas les vrais jetons de la machine' {
             return
         }
 
+        # ON N'ASSERTE PAS SUR LA BOTTE DE FOIN. `Should -Not -Match` imprime la
+        # valeur reelle quand il echoue -- c'est-a-dire, ici, la sortie QUI
+        # CONTIENT LE JETON, dans le journal de CI. Le test qui garde le secret
+        # le publierait au moment precis ou il attrape la fuite. Mesure le
+        # 22 aout 2026 en regardant la sortie d'un echec provoque.
+        #
+        # Un booleen ne dit que vrai ou faux.
         $sortie = (ctx-doctor -Live | ConvertTo-Json -Depth 6)
         foreach ($j in $jetons) {
-            $sortie | Should -Not -Match ([regex]::Escape($j))
+            ($sortie -match [regex]::Escape($j)) | Should -BeFalse -Because 'un jeton ne sort jamais du module'
         }
     }
 
@@ -120,7 +127,62 @@ Describe 'le diagnostic ne fuit pas les vrais jetons de la machine' {
         if (-not $jetons) { Set-ItResult -Skipped -Because 'aucun jeton charge dans ce shell'; return }
 
         $sortie = (ctx-doctor | ConvertTo-Json -Depth 6)
-        foreach ($j in $jetons) { $sortie | Should -Not -Match ([regex]::Escape($j)) }
+        foreach ($j in $jetons) {
+            ($sortie -match [regex]::Escape($j)) | Should -BeFalse -Because 'un jeton ne sort jamais du module'
+        }
+    }
+
+    It 'le rapport du tableau de bord ne recrache aucun jeton charge' {
+        # LE MEME TEST, SUR LA MEME SEVERITE, applique a la nouvelle sortie.
+        #
+        # Elle merite le sien : le diagnostic s'affiche dans un terminal et
+        # disparait avec lui, tandis que le rapport est un FICHIER, qui reste, se
+        # copie, s'attache a un message et se depose sur un bureau. Une fuite y
+        # a une duree de vie que la sortie console n'a pas.
+        $jetons = @(
+            $env:SUPABASE_ACCESS_TOKEN, $env:GH_TOKEN,
+            $env:VERCEL_TOKEN, $env:SUPABASE_DB_PASSWORD
+        ) | Where-Object { $_ -and $_.Length -ge 8 }
+
+        if (-not $jetons) {
+            Set-ItResult -Skipped -Because 'aucun jeton charge dans ce shell : lancer work <contexte> pour que ce test morde'
+            return
+        }
+
+        # Ecrit dans TestDrive plutot qu'a son emplacement reel : un test ne doit
+        # pas ecraser le rapport de l'utilisateur, et surtout pas laisser une
+        # copie de la topologie ailleurs que la ou le module la range.
+        $cible = Join-Path $TestDrive 'securite/rapport.html'
+        InModuleScope DevContext -Parameters @{ c = $cible; d = $script:Racine } {
+            param($c, $d)
+            Mock Get-CtxDashboardPath { $c }
+            Mock Start-Process { }
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen
+        }
+
+        $html = Get-Content -LiteralPath $cible -Raw
+        foreach ($j in $jetons) {
+            ($html -match [regex]::Escape($j)) |
+                Should -BeFalse -Because 'un rapport est un fichier : il survit au terminal'
+        }
+    }
+
+    It 'le rapport ne nomme meme pas la variable qui porterait un jeton' {
+        # Ceinture ET bretelles, comme pour le shim : le nom d'une variable de
+        # secret dans une page qu'on partage indique OU chercher. Le rapport
+        # nomme des CLES -- 'supabase-token' -- jamais des variables
+        # d'environnement.
+        $cible = Join-Path $TestDrive 'securite2/rapport.html'
+        InModuleScope DevContext -Parameters @{ c = $cible; d = $script:Racine } {
+            param($c, $d)
+            Mock Get-CtxDashboardPath { $c }
+            Mock Start-Process { }
+            $null = Invoke-DevContextDashboard -Path $d -NoOpen
+        }
+        $html = Get-Content -LiteralPath $cible -Raw
+        foreach ($v in @('SUPABASE_ACCESS_TOKEN', 'GH_TOKEN', 'VERCEL_TOKEN', 'SUPABASE_DB_PASSWORD')) {
+            $html | Should -Not -BeLike "*$v*"
+        }
     }
 }
 

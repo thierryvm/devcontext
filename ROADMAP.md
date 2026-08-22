@@ -359,11 +359,19 @@ for. A compiled binary replaces *read the source* with *trust the signature*. Fo
 2.1 that trade is worth making, because a tray icon cannot ship any other way.
 For 2.0 it buys nothing.
 
-First slice: a **generated report**, opened in the browser. No listening socket,
-no new exported name, every read-only screen. A local web UI served by
-`ctx dashboard` stays the next step if the second click proves to be wanted; what
-that costs — down to the `Host` header validation a loopback socket needs against
-DNS rebinding — is laid out in
+**First slice shipped, 22 August 2026 — `ctx dashboard`.** A generated report,
+opened in the browser: no listening socket, no per-platform binary, and not one
+new exported name beyond the command itself. Every read-only screen is there, and
+a test asserts its verdicts are identical to the diagnostic's, so a second
+implementation cannot appear quietly.
+
+What it deliberately does **not** do, said before what it does: no second click
+that runs a command, no refresh, no tray. A first step announced as a destination
+is how a roadmap starts lying.
+
+A local web UI served by the same command stays the next step if the second click
+proves to be wanted; what that costs — down to the `Host` header validation a
+loopback socket needs against DNS rebinding — is laid out in
 [`docs/plans/2026-08-22-forme-du-tableau-de-bord.md`](docs/plans/2026-08-22-forme-du-tableau-de-bord.md).
 
 **Reach: Windows, decided 22 August 2026 — and it was a real choice, not an

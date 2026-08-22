@@ -495,6 +495,7 @@
     'dash.entete.dossierSansProprietaire' = 'Folder {0}, governed by no context: the GLOBAL git identity signs here.'
     'dash.entete.actif'       = 'Identity loaded in the shell: {0}.'
     'dash.pied'               = 'Report generated on {0}. Read-only: this page decides nothing, it renders what the CLI answered.'
+    'dash.permsEchec'         = "The report's permissions could not be restricted to its owner ({0}): the file was deleted rather than left readable. Cause: {1}"
     'dash.oui'                = 'yes'
     'dash.non'                = 'no'
 

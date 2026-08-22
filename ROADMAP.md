@@ -212,21 +212,50 @@ Two constraints decided in advance, because they are the ones that get lost:
 -Json` and `ctx-sb` already produce. It adds no logic of its own — otherwise
 the two drift, and the one people trust is whichever they happened to open.
 
-The seams are already in place, and they were built as seams on purpose. Every
-screen the dashboard needs corresponds to a function that exists and is tested:
+The seams were built as seams on purpose. On 22 August 2026 they were
+**measured** rather than trusted, because *the seams are already in place* is
+exactly the shape of claim this project refuses to accept elsewhere. Every
+function named below exists and is tested. Two of them cannot be called from
+outside the module:
 
-| Screen | Reads | Acts through |
+| Screen | Reads | Reachable | Acts through | Reachable |
+|---|---|---|---|---|
+| Contexts and accounts | `ctx-list`, `ctx doctor -Json` | yes | `Use-DevContext` | yes |
+| Editors, and which are isolable | `Get-DevEditorList` | yes | — | — |
+| Shortcuts, and which are broken | `Get-CtxRaccourciChecks` | **no** | `New-DevShortcut -Force` | yes |
+| Projects per Supabase account | `Get-DevSupabaseMap` | yes | `Update-DevSupabaseIndex` | yes |
+| MCP servers per project | `Get-CtxMcpFacts` | **no** | `New-DevProjectMcp` | yes |
+
+`Get-CtxRaccourciChecks` and `Get-CtxMcpFacts` are internal, and named in
+neither export list. The real export is the intersection of the two, so a caller
+outside the module sees nothing and gets no error — the trap `AGENTS.md` records
+under *Export in one list only*, found this time in a plan rather than in code.
+Both subjects are reachable today only through `ctx doctor`, which reports them
+as **checks**, with a verdict and a remedy: the right shape for a diagnostic,
+and not the list a screen would render.
+
+**And `-Json` exists on `ctx doctor` alone.** Every other read returns
+PowerShell objects — machine-readable inside PowerShell, and nowhere else.
+
+That couples the two decisions below, which were written as though they were
+independent:
+
+| If the dashboard is… | it reads by | so it needs |
 |---|---|---|
-| Contexts and accounts | `ctx-list`, `ctx doctor -Json` | `Use-DevContext` |
-| Editors, and which are isolable | `Get-DevEditorList` | — |
-| Shortcuts, and which are broken | `Get-CtxRaccourciChecks` | `New-DevShortcut -Force` |
-| Projects per Supabase account | `Get-DevSupabaseMap` | `Update-DevSupabaseIndex` |
-| MCP servers per project | `Get-CtxMcpFacts` | `New-DevProjectMcp` |
+| a local web UI hosted **by** PowerShell (`ctx dashboard`) | calling the functions in-process | the two missing exports, and no `-Json` at all |
+| Tauri, or anything not PowerShell | running `pwsh` and parsing stdout | `-Json` on every read above, and the two exports |
 
-A "repair this shortcut" button is therefore one call to a function the test
-suite already covers, never a second implementation of the same rules living in
-a UI. That is the whole reason the decisions were kept pure and separate from
-the gathering.
+The shape is therefore not a packaging preference: it decides how much public
+API this module owes, and a published module owes every exported name
+indefinitely. Choosing the shape before adding `-Json` to four commands is the
+difference between an API with a caller and an API with a hope — which is the
+same argument this file already makes for not porting to a platform nobody can
+try.
+
+What does hold, and is the reason the rest is small: a "repair this shortcut"
+button is one call to a function the test suite already covers, never a second
+implementation of the same rules living in a UI. That is why the decisions were
+kept pure and separate from the gathering.
 
 **It runs commands, never a shell.** An embedded terminal was considered and
 deliberately rejected. Not for effort — for what it would undo.
@@ -348,14 +377,18 @@ needs to live in the tray. The decision waits until the CLI surface has settled
   purpose and it reads like a typo, so it was checked rather than inferred:
   download-artifact's own README pairs `@v8` with `upload-artifact@v7` in its
   examples.
-- **The publishing job's first steps are never rehearsed.** A dry run stops at
-  the artifact upload: `publier` is skipped, so `download-artifact`, the
-  preparation read from the *package's own* manifest, and the version assertion
-  only ever run on a real tag. Two of the three failures of 18 August 2026 were
-  in that job — which is precisely the part a rehearsal does not reach. Closing
-  it means a job doing everything `publier` does except the publish, and it has
-  to **share** those steps rather than copy them, or it reintroduces the very
-  defect the shared suite just removed.
+- ~~**The publishing job's first steps are never rehearsed.**~~ **Closed, 19
+  August 2026**, shipped in 1.9.5. A `repetition` job does everything `publier`
+  does except publish, and runs where `publier` cannot: off a tag, with no
+  approval, with no key. Both go through
+  `.github/actions/take-audited-package`, so the rehearsal cannot drift from
+  what it rehearses — a test fails if a copy of those steps reappears in the
+  workflow, and it was watched failing with the copy put back. It runs on any
+  pull request touching the release machinery, so nobody has to remember to
+  launch it. It proves two things nothing proved before: `Publish-PSResource` is
+  present in that environment, and the Gallery key is **unreachable** from a job
+  that names no environment — the claim this workflow's own header makes, and
+  which nothing had ever checked.
 - **WSL is not covered.** Its own `PATH`, its own filesystem view. `ctx doctor`
   reports it rather than closing it. This is the one gap that sits on the
   *author's own* machine — a distribution is used daily for Docker — and it is

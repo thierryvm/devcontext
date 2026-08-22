@@ -1,9 +1,80 @@
 # Forme du tableau de bord (2.0) — dossier de décision
 
-> **Statut : à trancher par @thierry. Rien n'est implémenté.** Ce document ne
-> choisit pas ; il rend le choix décidable en une lecture. Il existe parce que la
-> mesure du 22 août 2026 a montré que la forme n'était pas une préférence
-> d'emballage : elle décide de la dette d'API publique de ce module.
+> **Statut : TRANCHÉ le 22 août 2026. Rien n'est encore implémenté.**
+> La décision est en §0 ; les sections qui suivent sont l'analyse qui y a mené,
+> conservée telle quelle. Une décision sans son raisonnement se rediscute à la
+> première objection.
+
+---
+
+## 0. La décision — 22 août 2026
+
+### Ce que Thierry a répondu
+
+1. *« l'interface tout le monde doit pouvoir l'utiliser »*
+2. *« oui pour la partie barre de système »*
+3. *« probablement oui »* — d'autres l'utiliseront
+
+Ces trois réponses désignent Tauri. **Elles ont été challengées à sa demande, et
+le challenge a tenu sur trois points.**
+
+### Ce que le challenge a trouvé
+
+**La barre de système contredisait le produit.** Une icône de zone de
+notification est globale à la machine et permanente : elle répond à *qui suis-je
+en ce moment*. Or la thèse entière est **le dossier décide, jamais la session**.
+Il n'existe pas de contexte courant au niveau machine. Une icône affichant
+« Perso » réinstallerait dans l'interface le modèle mental que l'outil existe
+pour détruire, et serait fausse dès qu'une seconde fenêtre est ouverte sur un
+dossier client. Même raisonnement que le rejet du terminal embarqué.
+
+**« Tout le monde » est bloqué par le module, pas par la coquille.** Mesuré le
+même jour : 36 accès au registre, 81 points d'entrée `.cmd`, des raccourcis
+`.lnk`, 30 chemins d'environnement Windows — contre **six** garde-fous de
+plateforme en tout. Une fenêtre Tauri sur macOS surplomberait un module qui ne
+peut pas y tourner.
+
+**Un binaire dégrade une propriété de sécurité déjà acquise.** Le module se lit :
+n'importe qui peut vérifier ce que fait l'outil qui tient ses identifiants avant
+de l'exécuter. Compilé, « lis le source » devient « fais confiance à la
+signature ». Pour un gestionnaire d'identités, c'est un recul.
+
+**Et l'audience mesurée ne justifie pas encore le coût.** 17 versions,
+72 téléchargements, 3 à 6 par version. `1.3.0` (dernière version pendant une
+heure) et `1.9.5` (dernière depuis trois jours) en ont exactement cinq chacune.
+**Aucun décalage vers la dernière version** : c'est la signature du miroir
+automatique, pas d'un usage humain.
+
+### La décision : deux produits, pas un
+
+Les trois réponses tiennent toutes dès qu'on cesse de les faire porter par un
+seul objet.
+
+| | **Le tableau de bord (2.0)** | **Le veilleur (2.1)** |
+| --- | --- | --- |
+| Répond à | *ce qui est vrai de ce dossier* | *quelque chose ne va pas sur cette machine* |
+| Ouvert | à la demande | jamais — il est là |
+| Portée | le dossier | la machine |
+| Forme | **dans le module** — rapport généré d'abord | **barre de système**, binaire séparé |
+| Installation | `Install-Module DevContext`, rien de plus | téléchargement optionnel, Windows d'abord |
+| Peut afficher le contexte « actif » | oui — celui du dossier ouvert | **non, jamais** |
+
+Le veilleur donne la barre de système demandée, mais pour la seule chose qui
+soit honnêtement globale : **la casse**, pas l'identité. Un jeton qui expire, un
+raccourci cassé, un compte étranger dans une config globale. Et personne n'a
+besoin de télécharger quoi que ce soit pour avoir le tableau de bord.
+
+### Reste ouvert, et ça ne bloque pas le démarrage
+
+**« Tout le monde » = sous Windows, ou littéralement multi-plateforme ?** La
+question n'a pas été tranchée, et elle ne conditionne pas le 2.0 : le rapport
+généré tourne partout où le module tourne, quel que soit l'endroit où c'est. Elle
+conditionne le **chantier suivant** :
+
+- Windows → le prochain chantier est l'interface, et une seule plateforme à signer.
+- Multi-plateforme → le prochain chantier est **le port**, pas l'interface — et il
+  faut soit un Mac pour vérifier, soit assumer « Linux seulement, macOS non
+  essayé », ce que la doctrine du projet impose.
 
 ---
 
@@ -177,10 +248,15 @@ décision acquise, et elle se prend avant d'écrire l'UI, pas après.
 
 ---
 
-## 7. Ce que je ne peux pas trancher — questions pour @thierry
+## 7. Les questions, et ce qu'elles ont donné
 
-1. **Le tableau de bord doit-il AGIR, ou suffit-il qu'il MONTRE ?** C'est la
-   question qui départage C de A/B, et elle est d'usage, pas de technique.
-2. **Doit-il vivre dans la barre système ?** Si oui → B, et le reste suit.
-3. **Quelqu'un d'autre que toi l'utilisera-t-il ?** Si oui, un binaire signé par
-   plateforme devient une charge d'entretien permanente, pas un coût unique.
+1. ~~**Le tableau de bord doit-il AGIR, ou suffit-il qu'il MONTRE ?**~~ → il
+   montre d'abord. Le second clic viendra si la lecture prouve son usage.
+2. ~~**Doit-il vivre dans la barre système ?**~~ → **oui, mais ce n'est pas lui.**
+   C'est le veilleur (2.1), qui ne montre que la casse et jamais l'identité.
+3. ~~**Quelqu'un d'autre que toi l'utilisera-t-il ?**~~ → probablement. D'où
+   l'installation en une commande pour le 2.0, et le binaire réservé au 2.1.
+
+**Il en reste une, et elle appartient toujours à @thierry** : *« tout le monde »*
+veut-il dire sous Windows, ou littéralement multi-plateforme ? Voir §0. Elle ne
+bloque pas le 2.0 ; elle décide du chantier d'après.

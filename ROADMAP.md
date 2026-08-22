@@ -206,6 +206,28 @@ A visual surface over what the commands already expose: every context, every
 account, every project, which folder points where, which tokens are about to
 expire, which MCP servers a project can reach.
 
+**Split in two on 22 August 2026, and that split is the decision that shapes
+everything below.** What was written as one product is two, because they answer
+questions of different scope:
+
+| | the dashboard (2.0) | the watchman (2.1) |
+|---|---|---|
+| answers | *what is true of this folder* | *something is wrong somewhere on this machine* |
+| opened | on demand | never — it is simply there |
+| scope | the folder | the machine |
+| ships | inside the module | as a separate, optional binary |
+
+Conflating them produced a requirement that contradicts the product: a tray icon
+naming a *current context*. **There is no current context at machine level.** The
+folder decides, never the session — so a tray answering *who am I right now*
+would reinstall, in the interface, the exact mental model this tool exists to
+remove, and it would be wrong the moment a second window sits in a client folder.
+Rejected for the same reason as the embedded terminal below.
+
+What is genuinely machine-wide is not identity, it is **breakage**: a token about
+to expire, a broken shortcut, a foreign account in a global config. That is 2.1,
+and it is small.
+
 Two constraints decided in advance, because they are the ones that get lost:
 
 **The CLI stays the source of truth.** The dashboard reads what `ctx doctor
@@ -320,16 +342,67 @@ The distinction to keep: [`docs/GUIDE.md`](docs/GUIDE.md) teaches **anyone** to
 use the tool and belongs to the project. A personal guide teaches **one person**
 to run their own estate and belongs to them.
 
-Likely shape: a local web UI served by a `ctx dashboard` command, or Tauri if it
-needs to live in the tray. The decision waits until the CLI surface has settled
-— building a UI over an API that is still moving is how both end up bad.
+**Shape, decided 22 August 2026: it ships inside the module.** Not Tauri — and
+not because Tauri is bad, but because a binary is what 2.1 needs and 2.0 does
+not. `Install-Module DevContext` has to be the whole installation for every
+read-only screen. This file already records that adoption died at the first extra
+step, which is why `ctx init` exists; a second artefact to download, per platform
+and signed, is a taller cliff than the one that was just removed.
 
-The options are laid out, with what each one costs in public API, attack surface
-and distribution, in
+The second reason is a security property rather than a convenience. This module
+ships as **readable PowerShell**: anyone can read what the tool holding their
+credentials actually does, before running it — which is what `SECURITY.md` is
+for. A compiled binary replaces *read the source* with *trust the signature*. For
+2.1 that trade is worth making, because a tray icon cannot ship any other way.
+For 2.0 it buys nothing.
+
+First slice: a **generated report**, opened in the browser. No listening socket,
+no new exported name, every read-only screen. A local web UI served by
+`ctx dashboard` stays the next step if the second click proves to be wanted; what
+that costs — down to the `Host` header validation a loopback socket needs against
+DNS rebinding — is laid out in
 [`docs/plans/2026-08-22-forme-du-tableau-de-bord.md`](docs/plans/2026-08-22-forme-du-tableau-de-bord.md).
-It recommends and does not decide: a third option is named there that this file
-does not list — a generated static report, which buys every read-only screen
-without a listening socket, a binary, or a single new exported name.
+
+**Still open, and it gates the reach rather than the shape.** The module is
+nailed to Windows: 36 registry accesses, 81 `.cmd` entry points, `.lnk`
+shortcuts and 30 Windows environment paths, against **six** platform guards in
+total — measured 22 August 2026. *Usable by everyone* is therefore limited by the
+port, not by the interface. A window on macOS would sit over a module that cannot
+run there, which is the same promise-without-verification this file refuses under
+*Deferred*.
+
+---
+
+## 2.1 — the watchman
+
+One job: say that something is wrong, when nobody is looking.
+
+It exists because the failures this module catches are precisely the ones nobody
+was watching for. A foreign account slept in the global `gh` config until a check
+was written for it on 19 August 2026. A secret-scanning alert — a false positive,
+though nobody knew that until someone looked — stayed open for seven days. A
+`PATH` entry pinned to a version number would have disarmed the production guard
+without a single message.
+
+What it may report, and the list is closed on purpose:
+
+| | why it is machine-wide |
+|---|---|
+| a token approaching expiry | the machine has one answer, whatever folder is open |
+| a broken shortcut | `Get-CtxRaccourciChecks` already decides this |
+| a credential outside the partition | `ctx doctor` already decides this |
+| an alert on a watched repository | the forge answers; the module does not decide |
+
+What it may **not** report: which context is *active*. That is the requirement
+rejected under 2.0, and it stays rejected here.
+
+It reads the CLI like everything else, stores nothing, and never acts on its own
+— clicking a notification opens the dashboard or copies a command. Windows first,
+because that is where the module runs. Signed, because an unsigned binary asking
+about credentials is the shape of the thing it exists to warn about.
+
+Not scheduled, and after 2.0: a watchman for a dashboard nobody opened is a
+notification nobody asked for.
 
 ---
 
@@ -340,6 +413,9 @@ without a listening socket, a binary, or a single new exported name.
 - **Being a Claude tool, a Cursor tool, or any vendor's tool.** MCP is an open
   standard and this module treats it as one.
 - **An embedded shell in the dashboard.** Reasoning under 2.0.
+- **A tray icon naming a "current context".** There is none at machine level, and
+  displaying one would teach the opposite of what the tool does. Reasoning under
+  2.0.
 
 ---
 

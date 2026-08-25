@@ -31,25 +31,30 @@ temporairement le code, lance la suite, restaure.
 ## Ce qu'il faut inspecter
 
 ### Branches de décision sans test
+
 Les fonctions `Test-Ctx*` sont des décisions pures : chaque chemin de retour
 doit avoir son test. Liste les chemins non couverts, nommément.
 
 ### Pollution entre tests
+
 Toute écriture dans `$env:`, le registre, le dossier courant ou le PATH doit
 être **restaurée**, pas supprimée. Une variable réelle effacée désarme les
 tests suivants en silence.
 
 ### Incidents sans filet
+
 Chaque incident daté dans `CHANGELOG.md`, `README.md` ou les commentaires du
 code devrait avoir un test qui porte sa date. Signale ceux qui n'en ont pas.
 
 ### Tests qui ne mordent pas
+
 - `Should -Not -Throw` sans assertion sur le résultat
 - assertions sur une collection éventuellement vide (`$vide | Should -Not -Contain x` passe toujours)
 - `-Skipped` posé sur une condition qui est *toujours* vraie sur la machine
 - mocks si larges que la vraie fonction n'est plus jamais exécutée
 
 ### Niveaux manquants
+
 Unitaire (décisions pures) · contrat (parité psd1/psm1, fichier de format) ·
 intégration (monde factice sous `$TestDrive`) · multi-shell (PowerShell, cmd,
 git-bash) · sécurité (aucun secret dans le dépôt ni dans les sorties) ·

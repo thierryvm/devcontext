@@ -206,6 +206,15 @@ Describe 'Aucun caractere avale par un echappement' {
     # le 13 aout 2026, a la place de "third-app", et ce controle ne pouvait pas
     # les voir. Un garde-fou avec un trou de la taille du cas le plus courant.
     #
+    # DEUXIEME TROU, mesure le 25 aout 2026 : la plage s'arretait a \x1f et
+    # laissait passer les caracteres de controle C1, \x7f-\x9f. Ce jour-la, un
+    # chemin Windows ecrit dans une chaine Python non brute a transforme
+    # `\Backups\2026` en un echappement OCTAL : `\202` a produit U+0082, un C1,
+    # au milieu d'un chemin. Le balayage cense l'attraper a rendu « aucun » --
+    # il a EU L'AIR d'avoir regarde. Un octal a trois chiffres depasse \x1f des
+    # que son premier chiffre vaut 1 ou plus, donc la plage d'origine ne pouvait
+    # structurellement pas voir cette famille.
+    #
     # CE QU'IL NE COUVRE PAS, a dire aussi fort : un `\n` avale devient un vrai
     # saut de ligne et un `\` avale devient une barre simple. Les deux sont des
     # caracteres parfaitement ordinaires ; rien ici ne peut les distinguer d'une
@@ -224,7 +233,7 @@ Describe 'Aucun caractere avale par un echappement' {
         $suspects = foreach ($f in $script:Suivis) {
             $contenu = Get-Content (Join-Path $script:Racine $f) -Raw -ErrorAction SilentlyContinue
             if (-not $contenu) { continue }
-            if ($contenu -match '[\x00-\x08\x0b\x0c\x0e-\x1f]') { $f }
+            if ($contenu -match '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]') { $f }
         }
         ($suspects | Sort-Object -Unique) | Should -BeNullOrEmpty
     }

@@ -302,10 +302,26 @@ linked to an account-scoped service — `supabase/.temp/project-ref`, which
 `Get-CtxVerdictVercelSession` has read since 1.11.0.
 
     unconditional                     22 / 22   fires everywhere, says nothing
-    linked to Supabase or Vercel       5 / 22   discriminates
+    linked to Supabase or Vercel       5 / 22   discriminates, but one is a lie
+    linked to Supabase alone           4 / 22   discriminates, and the remedy works
 
-Five out of twenty-two is a signal. And those five are where the exposure is
-concrete rather than theoretical.
+**Four, not five — corrected on 25 August 2026, and the correction matters more
+than the number.** `ctx mcp` knows how to declare exactly two servers: Supabase
+and GitHub. There is no Vercel MCP server in this module. So flagging a project
+linked to Vercel *alone* — `savoora` is the one here — would name a risk and point
+at a remedy that writes nothing. `ctx mcp` there prints *nothing to declare*, and
+rightly. The discriminator is the **Supabase link alone**: the only linked service
+whose MCP server this module can actually pin. Linked is not declarable.
+
+**And the remedy has a silent first run, which nearly shipped a guard pointing at
+an inert command.** `ctx mcp` without `-Client` serves only assistants ALREADY
+present in the folder — it declines to write a `.cursor/` into a repository whose
+team does not use Cursor, which is right, and shared committed files make that
+mess spread on the next pull. But the bootstrap case is exactly the one it
+refuses: with no file anywhere, the first run does nothing on every project, and
+reads as *nothing to do*. That is why `ctx mcp` shows zero adoption on twenty-two
+projects. Whatever this check says, it must name `ctx mcp -Client <assistant>` —
+never the bare command.
 
 **Its scope has to be stated, in the message and in `SECURITY.md`.** The check
 covers projects whose link the module can see. The other seventeen — fourteen of

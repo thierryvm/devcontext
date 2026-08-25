@@ -35,8 +35,10 @@ older lines receive no backports.
   reach tools through environment variables. Nothing is written to disk in
   clear text, and no generated file contains a credential.
 - **Production is guarded.** `supabase db reset` is refused against a project
-  tagged `prod`; `db push` is refused from a branch other than the repository's
-  default. The guard sits in `PATH`, so it applies to every shell — not only
+  tagged `prod` unless the command explicitly targets the local database;
+  `db push` is refused from a branch other than the repository's default.
+  A command whose target cannot be read with certainty is treated as aimed at
+  production, never as harmless. The guard sits in `PATH`, so it applies to every shell — not only
   the one that imported the module. Detection examines every adjacent pair of
   non-option arguments, so placing a global flag before the command does not
   shift it out of view.

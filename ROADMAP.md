@@ -146,6 +146,30 @@ tag start the publish.
 
 ---
 
+## 1.10.0 — shipped, 22 August 2026
+
+`ctx dashboard`: the whole estate as one generated page, opened in a browser. It
+decides nothing — every verdict on it comes from `ctx doctor`, and a test asserts
+the two sets are identical. It reaches no network, and the file it writes is
+treated as what it is: a reconnaissance document.
+
+---
+
+## 1.11.0 — shipped, 25 August 2026
+
+Written from a usage report by an agent working on another project against
+1.10.0. Three defects, all reproduced here before a line was changed, and two of
+the report's own claims measured false and corrected. See `CHANGELOG.md`.
+
+The one worth carrying forward is the second: `ctx` returned GO on a folder where
+`ctx doctor` returned PROBLEME, on the same fact, in the same process. That is the
+**second** time this shape appeared — 19 August fixed it on the ownership axis.
+Fixing the reported instance again would have bought a few weeks, so the family
+was closed instead: every domain `doctor` judges, `ctx` either judges the same way
+or does not display. Closing it surfaced two more instances nobody had reported.
+
+---
+
 ## 1.12.0 — the machine-readable surface
 
 **Decided 25 August 2026**, from two independent requests that arrived within a

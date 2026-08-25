@@ -1,4 +1,6 @@
-﻿## [1.11.0] - 25 August 2026
+﻿## [Unreleased]
+
+## [1.11.0] - 25 August 2026
 
 ### Fixed
 

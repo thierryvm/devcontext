@@ -1360,6 +1360,130 @@ function Get-CtxSupabaseRefDepuisUrl {
     if ($Url -match '://postgres\.([a-z0-9]{20})[:@]')  { return $Matches[1] }
 }
 
+# Les options de la CLI Supabase qui prennent leur valeur en argument SEPARE.
+# Relevees sur `supabase <commande> --help`, version 2.109.1, le 24 aout 2026.
+#
+# Le sens de l'erreur n'est pas symetrique, et c'est lui qui decide du contenu
+# de cette liste. En OUBLIER une, c'est laisser sa valeur passer pour un
+# drapeau : `--profile --local` ferait alors croire a une cible locale alors que
+# la commande part sur la cible par defaut. En ajouter une de TROP, c'est avaler
+# le mot suivant, donc rater un `--local` et refuser une commande inoffensive.
+#
+# La premiere erreur coute une base, la seconde une derogation. En cas de
+# doute : ajouter.
+$script:GuardFlagsAValeur = @(
+    'agent', 'completions', 'db-url', 'dns-resolver', 'last', 'log-level',
+    'network-id', 'output', 'output-format', 'password', 'profile',
+    'sql-paths', 'version', 'workdir'
+)
+$script:GuardFlagsCourtsAValeur = @('o', 'p')
+
+# Les trois drapeaux qui designent la base visee.
+$script:GuardFlagsCible = @('local', 'linked', 'db-url')
+
+# Les ecritures booleennes que cobra accepte. Tout le reste lui est une erreur
+# -- donc, pour nous, une ligne dont on ne sait pas ce qu'elle vise.
+$script:GuardBoolVrai = @('1', 't', 'T', 'TRUE', 'true', 'True')
+$script:GuardBoolFaux = @('0', 'f', 'F', 'FALSE', 'false', 'False')
+
+function Get-CtxSupabaseCible {
+    <#
+      Quelle base cette ligne de commande designe-t-elle EXPLICITEMENT ?
+
+        'locale'   --local, et rien d'autre
+        'liee'     --linked, et rien d'autre
+        'url'      --db-url, et rien d'autre
+        'aucune'   aucun drapeau de cible : la CLI appliquera son defaut
+        'ambigue'  plusieurs cibles a la fois, ou une ecriture illisible
+
+      Rend un ETAT, jamais un verdict : l'appelant decide ce qu'il en fait.
+      Meme separation que Get-CtxVerdictDossier et Test-CtxDoctor*.
+
+      POURQUOI SAUTER LA VALEUR DES OPTIONS
+
+      `db reset --profile --local` ne porte AUCUNE cible locale : cobra consomme
+      '--local' comme valeur de --profile, et la commande part sur la cible par
+      defaut. Lire les mots un a un y verrait un `--local` et laisserait passer.
+      C'est exactement la classe de defaut corrigee le 15 aout 2026 dans
+      Get-CtxSupabasePaires, ou la valeur d'un flag global decalait la fenetre
+      de detection.
+
+      POURQUOI `--local=false` NE COMPTE PAS
+
+      Cobra accepte l'ecriture `--local=false`, qui veut dire le contraire du
+      drapeau nu. La compter comme une cible locale serait le seul faux
+      laissez-passer possible ici. Les deux jeux d'ecritures sont donc lus
+      litteralement, et tout ce qui n'est ni l'un ni l'autre rend 'ambigue'.
+
+      MESURE, CLI 2.109.1, LE 24 AOUT 2026
+
+      Sur `db reset`, `db push` et `migration up`, la CLI declare elle-meme
+      [db-url linked local] mutuellement exclusifs et refuse la combinaison
+      AVANT d'executer quoi que ce soit :
+
+          if any flags in the group [db-url linked local] are set
+          none of the others can be; [db-url linked] were all set
+
+      'ambigue' ne devrait donc jamais atteindre la vraie CLI. C'est une raison
+      de PLUS de ne pas s'y fier : cette exclusion appartient a une version, pas
+      au contrat. Elle confirme ici un choix pris pour une autre raison -- ne
+      jamais laisser passer une ligne dont la cible n'est pas certaine.
+    #>
+    param([string[]]$Arguments = @())
+
+    $cibles  = [System.Collections.Generic.List[string]]::new()
+    $inconnu = $false
+
+    $i = 0
+    while ($i -lt $Arguments.Count) {
+        $a = "$($Arguments[$i])"
+
+        if ($a.StartsWith('--')) {
+            $eg     = $a.IndexOf('=')
+            $nom    = if ($eg -ge 0) { $a.Substring(2, $eg - 2) } else { $a.Substring(2) }
+            $valeur = if ($eg -ge 0) { $a.Substring($eg + 1) } else { $null }
+
+            # -cin et non -in : cobra distingue la casse, et `--LOCAL` lui est
+            # un drapeau inconnu. Le lire comme `--local` serait inventer une
+            # cible locale sur une ligne que la CLI refusera.
+            if ($nom -cin $script:GuardFlagsCible) {
+                if ($nom -eq 'db-url') {
+                    $cibles.Add($nom)
+                    if ($eg -lt 0) { $i++ }   # sa valeur suit en argument separe
+                }
+                elseif ($eg -lt 0)                            { $cibles.Add($nom) }
+                elseif ($valeur -cin $script:GuardBoolVrai)   { $cibles.Add($nom) }
+                elseif ($valeur -cin $script:GuardBoolFaux)   { }   # explicitement desactive
+                else                                          { $inconnu = $true }
+
+                $i++
+                continue
+            }
+
+            if ($eg -lt 0 -and $nom -cin $script:GuardFlagsAValeur) { $i += 2; continue }
+            $i++
+            continue
+        }
+
+        if ($a.Length -eq 2 -and $a[0] -eq '-' -and
+            $a.Substring(1) -cin $script:GuardFlagsCourtsAValeur) { $i += 2; continue }
+
+        $i++
+    }
+
+    if ($inconnu) { return 'ambigue' }
+
+    $distinctes = @($cibles | Sort-Object -Unique)
+    if ($distinctes.Count -eq 0) { return 'aucune' }
+    if ($distinctes.Count -gt 1) { return 'ambigue' }
+
+    switch ($distinctes[0]) {
+        'local'  { 'locale' }
+        'linked' { 'liee' }
+        'db-url' { 'url' }
+    }
+}
+
 function Test-CtxSupabaseGuard {
     <#
       Pure decision. No network, no vault, no filesystem, no git. Everything it
@@ -1419,6 +1543,31 @@ function Test-CtxSupabaseGuard {
     if (-not $destructive -and -not $branchBound) { return (& $pass 'not-guarded') }
 
     if ($Override) { return (& $pass 'override') }
+
+    # --- cible explicitement LOCALE -----------------------------------------
+    #
+    # LE FAUX POSITIF LE PLUS COUTEUX DU GARDE-FOU, mesure le 24 aout 2026.
+    #
+    # `db reset`, `db push` et `migration up` visent la base LOCALE par defaut ;
+    # c'est `--linked` qui est l'opt-in vers le distant. La CLI le dit
+    # elle-meme : « Resets the local database to current migrations. » Ce
+    # garde-fou ne lisait que `--db-url`, jamais `--local`, et refusait donc
+    # `db reset --local` dans tout dossier lie a une production -- sur toutes
+    # les branches, sans condition.
+    #
+    # Quatre refus mesures, un seul vrai positif. Un garde-fou qui casse la ou
+    # il est CERTAIN que la commande est inoffensive s'use exactement comme
+    # celui qui casse quand il hesite : l'un se contourne par `psql`, l'autre
+    # par DEVCTX_ALLOW_PROD=1 -- qui desarme aussi les vrais positifs.
+    #
+    # La regle est CONJONCTIVE, et ce n'est pas un detail : un simple
+    # `if (--local) { passe }` se contourne par `db reset --local --db-url <prod>`.
+    # Get-CtxSupabaseCible rend 'ambigue' des qu'une seconde cible apparait, et
+    # 'ambigue' ne passe pas.
+    #
+    # Jugee AVANT la branche : appliquer une migration a sa base locale depuis
+    # une branche laterale est le travail quotidien, pas une faute.
+    if ((Get-CtxSupabaseCible $Arguments) -eq 'locale') { return (& $pass 'cible-locale') }
 
     if ($destructive) {
         return [pscustomobject]@{

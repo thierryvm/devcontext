@@ -375,7 +375,7 @@
     'doc.gh.dedie'            = 'config dedicated to this context'
     'doc.sb.horsIndex'        = 'project is linked but missing from the index, or its environment is untagged'
     'doc.sb.prod'             = 'this folder targets a PRODUCTION project'
-    'doc.sb.prodFix'          = 'db reset is refused here, and db push outside the default branch too'
+    'doc.sb.prodFix'          = 'db reset is refused here, and db push outside the default branch too -- commands carrying --local go through, they do not target this project'
     'doc.sb.mauvaiseCle'      = 'the loaded token is not the one this project expects'
     'doc.sb.sansJeton'        = 'no token loaded in this shell'
     'doc.vercel.sansSession'  = 'Vercel project linked, but no context session loaded'

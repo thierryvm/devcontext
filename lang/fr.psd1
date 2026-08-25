@@ -375,7 +375,7 @@
     'doc.gh.dedie'            = 'config dediee au contexte'
     'doc.sb.horsIndex'        = "projet lie mais absent de l index, ou environnement non marque"
     'doc.sb.prod'             = 'ce dossier vise un projet de PRODUCTION'
-    'doc.sb.prodFix'          = 'db reset y est refuse, db push hors branche par defaut aussi'
+    'doc.sb.prodFix'          = 'db reset y est refuse, db push hors branche par defaut aussi -- les commandes portant --local passent, elles ne visent pas ce projet'
     'doc.sb.mauvaiseCle'      = "le jeton charge n est pas celui que ce projet attend"
     'doc.sb.sansJeton'        = 'aucun jeton charge dans ce shell'
     'doc.vercel.sansSession'  = 'projet Vercel lie, mais aucune session de contexte chargee'

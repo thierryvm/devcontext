@@ -1,4 +1,64 @@
-﻿## [1.10.0] - 22 August 2026
+﻿## [Unreleased]
+
+### Fixed
+
+- **The guard refused commands that could not reach production.** `supabase db
+  reset --local` was turned away on a folder marked production, though it targets
+  the database running on this machine. A guard that refuses work it has no
+  business refusing is a guard that gets switched off -- and then the refusal
+  that mattered stops happening too.
+
+  The rule was measured against the CLI, not assumed, because the answer decides
+  its shape (2.109.1, 24-25 August 2026): `db reset` is local by default,
+  `--linked` is the remote opt-in, and cobra declares `[db-url linked local]`
+  mutually exclusive on `db reset`, `db push` and `migration up` -- the error
+  comes before any execution.
+
+  It is still not written as `if (--local) { allow }`. That reads one flag and
+  ignores the rest, so `db reset --local --db-url <prod>` would walk through it
+  the day a version stops rejecting the pair. `Get-CtxSupabaseCible` reads the
+  whole argument list the way cobra does -- fourteen options take a separate
+  value, so a value can masquerade as a flag -- and answers with ONE target, or
+  ambiguous. Ambiguous does not pass.
+
+  A bare `db reset`, with no flag at all, stays refused. Its local default is a
+  property of this version of the CLI, not of the command; it has already changed
+  once, and a guard whose safety rests on a default has an expiry date nobody
+  wrote down.
+
+- **One fact, two verdicts.** Same folder, same process: `ctx` returned GO while
+  `ctx doctor` returned PROBLEME on the git identity. The false one was the
+  reassuring one, so it was the one believed. `ctx` printed that identity as a
+  line of information and never compared it to anything.
+
+  The second time this shape appeared -- 19 August 2026 fixed exactly it on the
+  ownership axis. So the decision now lives in one pure function consumed by both
+  commands, with a single table saying what each state is worth on each side.
+
+  Closing the family surfaced two more instances nobody had reported: a push URL
+  carrying `login@` (PROBLEME for `doctor`, silence for `ctx`), and a linked
+  Vercel project with no context session (PROBLEME for `doctor`, "no session"
+  then GO for `ctx`).
+
+- **A folder outside every root loses its remote too, and `ctx` now says so.**
+  The existing remark named only the identity, which is the harmless half. The
+  check reads `git remote get-url --push`, never `remote.origin.url` -- the
+  stored value is identical on both sides of that boundary, so a check built on
+  it would be green everywhere while looking like it worked.
+
+  Whether a credential helper answers is read with `--get-urlmatch`, the only
+  read that resolves URL-scoped helpers. Measured here: `--get-all
+  credential.helper` returns nothing on this machine while a helper does exist
+  under `credential.https://github.com.helper`.
+
+- **A NO-GO no longer proposes a command that fixes nothing.** `work <ctx> -NoCd`
+  removes neither a `user.email` hardcoded in a repository's `.git/config` nor a
+  login from a remote URL. Those problems are counted apart, and the generic fix
+  is withheld when it would be theatre.
+
+---
+
+## [1.10.0] - 22 August 2026
 
 ### Added
 

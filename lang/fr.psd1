@@ -88,6 +88,17 @@
     # personne ne possede ne croise aucune identite, et le refus qu'il produisait
     # proposait un correctif deja applique.
     'ctx.note.sansProprietaire' = "Aucun contexte ne gouverne ce dossier. L identite '{0}' reste chargee, mais c est l identite git GLOBALE qui signera ici : les regles includeIf ne portent que sur les racines de contextes. Rien n est croise -- et rien n est decide non plus."
+    # Le quatrieme axe, 24 aout 2026. Cette ligne etait affichee et jamais
+    # comparee : `ctx` rendait GO la ou `ctx doctor` rendait PROBLEME.
+    'ctx.pb.gitIdentite'      = "L identite git effective ici est '{0}', alors que le contexte '{1}' attend '{2}' -- elle vient de {3}. Si c est le .git/config du depot : 'git config --unset user.email'."
+    'ctx.pb.gitSansEmail'     = "git ne resout aucun user.email dans ce dossier : rien ne partira sous l identite du contexte '{0}'. Verifier la regle includeIf de ~/.gitconfig."
+    'ctx.note.gitEnDur'       = "L identite git porte la bonne adresse, mais elle est ecrite en dur dans le .git/config de ce depot : c est cette ligne qui protege ce dossier, pas la regle includeIf. Si elle etait fausse, rien ne la rattraperait. Rendre la main au mecanisme : 'git config --unset user.email'."
+    # 24 aout 2026 : la remarque « aucun contexte ne gouverne ce dossier » ne
+    # disait que l identite. Le remote est l autre moitie, et c est elle qui casse.
+    'ctx.note.remoteAssiste'  = "Le remote de ce depot ({0}) n est pas reecrit vers la cle SSH d un contexte : un push HTTPS s authentifiera par l assistant d identifiants GLOBAL, donc sous le compte qui y est enregistre -- pas sous celui de ce dossier."
+    'ctx.note.remoteNu'       = "Le remote de ce depot ({0}) n est pas reecrit vers la cle SSH d un contexte, et aucun assistant d identifiants ne repond pour cette URL : un push HTTPS demandera des identifiants, ce qui bloque un shell non interactif."
+    'ctx.pb.remoteLogin'      = "Le remote de push ({0}) porte un login dans l URL : la regle insteadOf est un prefixe de chaine et ne s y applique pas, donc le push partira en HTTPS sous le compte du gh GLOBAL. Corriger avec 'git remote set-url origin https://github.com/<org>/<depot>.git', sans le login@."
+    'ctx.pb.vercelSansSession' = "Ce dossier est lie a un projet Vercel, mais aucune session dediee n est chargee : les commandes vercel partiraient sur la session GLOBALE. Corriger avec 'work {0} -NoCd'."
     'ctx.pb.compteGitHub'     = "Compte GitHub actif '{0}' - le contexte attend '{1}'."
     'ctx.pb.sansLogin'        = "Le contexte n'a pas de 'github.login' dans son manifeste : le compte actif ne peut pas etre verifie, seulement affiche."
     'ctx.pb.ghConfigDir'      = "GH_CONFIG_DIR absent : 'gh' utilise la config GLOBALE de la machine, donc le dernier compte connecte."

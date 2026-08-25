@@ -2116,6 +2116,182 @@ function Get-CtxVercelState {
     T 'vercel.aucune'
 }
 
+function Get-CtxVerdictVercelSession {
+    <#
+      PURE. Ce dossier est-il lie a un projet Vercel sans session de contexte ?
+
+        'sansProjet'   pas de .vercel/project.json : il n'y a rien a dire
+        'sansSession'  un projet Vercel, un proprietaire, et aucune session
+                       dediee -- les commandes partiront sur la session GLOBALE
+        'ok'           rien ne cloche
+
+      EXTRAIT DE src/Doctor.ps1 LE 24 AOUT 2026. La regle y etait ecrite en
+      ligne, donc invisible a `ctx` : celui-ci affichait « vercel : aucune
+      session » et concluait GO pendant que `doctor`, sur le meme dossier,
+      rendait PROBLEME. Le meme defaut que l'identite git, a un jour d'ecart, et
+      le meme correctif : une seule decision, deux lecteurs.
+    #>
+    [CmdletBinding()]
+    param(
+        [switch]$ADossierVercel,
+        [AllowNull()][AllowEmptyString()][string]$Proprietaire,
+        [AllowNull()][AllowEmptyString()][string]$ConfigSession
+    )
+
+    if (-not $ADossierVercel) { return 'sansProjet' }
+    # Sans proprietaire, aucune session dediee n'est attendue : ce dossier
+    # n'appartient a personne, et le dire serait reprocher une absence normale.
+    if ([string]::IsNullOrWhiteSpace($Proprietaire)) { return 'ok' }
+    if ([string]::IsNullOrWhiteSpace($ConfigSession)) { return 'sansSession' }
+    'ok'
+}
+
+function Get-CtxVerdictRemoteSansContexte {
+    <#
+      PURE. Dans un dossier que PERSONNE ne gouverne, par ou part un push ?
+
+        'pasDepot'      aucune URL de push : il n'y a rien a dire
+        'ssh'           URL SSH : l'acces ne depend d'aucun assistant HTTPS
+        'httpsAssiste'  HTTPS, et un assistant repondra -- donc un compte
+                        decide ailleurs que par ce dossier
+        'httpsNu'       HTTPS, et rien ne repondra : l'invite d'identifiants
+                        bloque un shell non interactif
+
+      POURQUOI CET AXE EXISTE, LE 24 AOUT 2026
+
+      La remarque « aucun contexte ne gouverne ce dossier » ne disait que la
+      moitie la plus inoffensive : l'identite retombe sur le ~/.gitconfig
+      global, ce qui est souvent correct. La moitie tue est le REMOTE. Sans
+      contexte, pas de regle `insteadOf`, donc pas de reecriture vers la cle SSH
+      du contexte -- et un push HTTPS s'authentifie par l'assistant GLOBAL,
+      c'est-a-dire sous le compte qui y dort.
+
+      Mesure du 24 aout 2026 : `git config --get-all credential.helper` ne rend
+      RIEN sur cette machine, alors qu'un assistant existe bel et bien sous
+      `credential.https://github.com.helper`. La lecture correcte est
+      `--get-urlmatch`, la seule qui resout la portee par URL. C'est le
+      gatherer qui la fait ; cette fonction-ci ne fait que decider.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()][string]$UrlPush,
+        [switch]$AssistantIdentifiants
+    )
+
+    if ([string]::IsNullOrWhiteSpace($UrlPush)) { return 'pasDepot' }
+
+    # Les deux ecritures SSH : ssh://hote/... et la forme scp git@hote:chemin.
+    # Aucun '@' ne peut preceder le premier '/' d'une URL https://..., donc
+    # cette seconde branche ne peut pas happer un remote HTTPS porteur d'un
+    # login -- lequel reste bien un remote HTTPS, et le piege du 5 aout 2026.
+    if ($UrlPush -match '^ssh://' -or $UrlPush -match '^[^/]+@[^/]+:') { return 'ssh' }
+
+    if ($AssistantIdentifiants) { return 'httpsAssiste' }
+    'httpsNu'
+}
+
+function Get-CtxVerdictGitIdentite {
+    <#
+      PURE. L'identite git effective de ce dossier est-elle celle du contexte
+      qui le gouverne ?
+
+        'horsContexte'  aucun contexte ne gouverne ce dossier : rien a comparer
+        'sansEmail'     git ne resout aucun user.email ici
+        'mauvaisEmail'  une autre adresse que celle du manifeste signera
+        'emailEnDur'    la bonne adresse, mais posee a la main dans .git/config
+        'accord'        la bonne adresse, par le mecanisme
+
+      CE QUE CETTE FONCTION CORRIGE, LE 24 AOUT 2026
+
+      `ctx doctor` jugeait deja cet axe. `ctx` -- la commande que le protocole
+      traite comme un VERDICT, lancee a chaque debut de session -- se contentait
+      de l'AFFICHER :
+
+          Write-Host "  $(T 'ctx.git' (git config user.email))"
+
+      Une ligne d'information au milieu d'un verdict. Resultat mesure le meme
+      jour, dans le meme processus et sur le meme dossier : `ctx` rendait GO
+      pendant que `ctx doctor` rendait PROBLEME. Un seul fait, deux verdicts,
+      dont un faux.
+
+      C'est la deuxieme fois. Le 19 aout 2026, Get-CtxVerdictDossier corrigeait
+      exactement cette forme-la sur l'axe du proprietaire. La cause de fond est
+      la meme : une regle ecrite a deux endroits finit toujours par diverger,
+      et c'est celle qu'on croit qui ment.
+
+      Et le piege attrape ici est nomme depuis longtemps dans la doctrine du
+      projet -- un `user.email` en dur dans .git/config prime sur le includeIf.
+      Le garde-fou quotidien ne le voyait pas.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()][string]$EmailAttendu,
+        [AllowNull()][AllowEmptyString()][string]$EmailReel,
+        [AllowNull()][AllowEmptyString()][string]$Origine
+    )
+
+    if ([string]::IsNullOrWhiteSpace($EmailAttendu)) { return 'horsContexte' }
+    if ([string]::IsNullOrWhiteSpace($EmailReel))    { return 'sansEmail' }
+    if ($EmailReel -ne $EmailAttendu)                { return 'mauvaisEmail' }
+
+    # LA BONNE VALEUR N'EST PAS LA BONNE RAISON. Tant que la ligne recopiee a la
+    # main porte l'adresse juste, rien ne se voit -- et c'est le probleme : ce
+    # qui protege ce depot est cette ligne, pas le mecanisme. Mesure le 18 aout
+    # 2026 sur la machine de l'auteur : six depots dans ce cas, dont un portant
+    # l'adresse d'un autre compte.
+    #
+    # Les separateurs sont normalises plutot que decrits dans le motif : git
+    # rend des slashes sur Windows aujourd'hui, et faire dependre un controle de
+    # cette habitude est le genre d'hypothese qui casse ailleurs.
+    if ("$Origine".Replace([char]92, '/') -match '(?i)(^|/)\.git/config$') { return 'emailEnDur' }
+
+    'accord'
+}
+
+# UNE SEULE TABLE POUR DEUX COMMANDES.
+#
+# Chaque etat de l'identite git y dit ce que `ctx doctor` en rend ET ce que
+# `ctx` en fait. Les deux la LISENT ; aucune des deux ne redecide.
+#
+# C'est ce que le test de coherence eprouve : un fait qui vaut PROBLEME chez
+# l'un ne peut pas etre muet chez l'autre. Une ligne affichee sans etre jugee,
+# dans un ecran qui rend un verdict, se lit comme jugee.
+#
+# ATTENTION n'est deliberement pas un refus : la valeur est juste, il n'y a
+# aucun degat. Ce qui est signale est la FRAGILITE.
+# CE QUE `ctx` AFFICHE, ET PAR QUELLE DECISION IL LE JUGE.
+#
+# C'est le livrable du retour d'usage du 24 aout 2026, et sa phrase tient en une
+# ligne : une ligne affichee sans etre jugee, dans un ecran qui rend un verdict,
+# SE LIT COMME JUGEE. Trois axes etaient dans ce cas le meme jour -- l'identite
+# git, le remote, la session Vercel -- et `ctx doctor` rendait PROBLEME sur les
+# trois pendant que `ctx` rendait GO.
+#
+# Un test derive les DEUX cotes : les lignes reellement affichees sont lues dans
+# les fichiers de langue, les decisions reellement appelees dans la source de
+# Test-DevContext. Seul l'APPARIEMENT est declare ici. Ajouter une ligne sans
+# l'inscrire, ou l'inscrire sans appeler la decision, rend le test rouge.
+#
+# $null n'est pas un passe-droit : c'est l'affirmation qu'il n'y a aucun verdict
+# a rendre sur ce fait -- et elle doit pouvoir se defendre.
+$script:CtxAxesAffiches = [ordered]@{
+    'ctx.actif'    = 'Get-CtxVerdictDossier'
+    'ctx.dossier'  = $null   # le chemin courant : un fait sur l'endroit, pas sur l'identite
+    'ctx.git'      = 'Get-CtxVerdictGitIdentite'
+    'ctx.gh'       = 'Resolve-CtxGhLoginObserve'
+    'ctx.vercel'   = 'Get-CtxVerdictVercelSession'
+    'ctx.supabase' = 'Resolve-CtxSupabaseKey'
+    'ctx.remote'   = 'Test-CtxDoctorRemote'
+}
+
+$script:CtxAxeGitIdentite = [ordered]@{
+    horsContexte = @{ Doctor = 'INFO';      Ctx = 'rien' }
+    sansEmail    = @{ Doctor = 'PROBLEME';  Ctx = 'probleme' }
+    mauvaisEmail = @{ Doctor = 'PROBLEME';  Ctx = 'probleme' }
+    emailEnDur   = @{ Doctor = 'ATTENTION'; Ctx = 'remarque' }
+    accord       = @{ Doctor = 'OK';        Ctx = 'rien' }
+}
+
 function Get-CtxVerdictDossier {
     <#
       PURE. Le dossier courant et l'identite active s'accordent-ils ?
@@ -2194,6 +2370,11 @@ function Test-DevContext {
     # que rien n'est croise.
     $remarques = @()
 
+    # Combien de $problems qu'un `work` ne reglerait PAS. Sert au seul endroit
+    # ou le correctif generique est propose : quand il ne reste que ceux-la, le
+    # proposer serait envoyer vers une commande sans effet.
+    $problemsHorsWork = 0
+
     $owner    = Resolve-DevContextForPath
     $here     = (Get-Location).Path
 
@@ -2249,10 +2430,49 @@ function Test-DevContext {
     # designait le ~/.gitconfig GLOBAL. Un depot client egare hors des racines
     # se voit a cette ligne.
     $proprietaire = Get-CtxProp $owner 'name'
-    switch (Get-CtxVerdictDossier -Proprietaire $proprietaire -Actif $env:DEVCTX) {
+    $etatDossier = Get-CtxVerdictDossier -Proprietaire $proprietaire -Actif $env:DEVCTX
+    switch ($etatDossier) {
         'dossierSansActif' { $problems += T 'ctx.pb.dossierSansActif' $proprietaire }
         'dossierAutre' { $problems += T 'ctx.pb.dossierAutre' $proprietaire $env:DEVCTX }
         'sansProprietaire' { $remarques += T 'ctx.note.sansProprietaire' $env:DEVCTX }
+    }
+
+    # --- 1 bis. Ce que ce dossier est un depot git change ce qui s'y joue ----
+    #
+    # Lu une seule fois, et reutilise plus bas pour l'affichage : deux lectures
+    # locales, aucun reseau.
+    #
+    # `remote get-url --push`, JAMAIS `remote.origin.url`. La regle `insteadOf`
+    # reecrit l'URL au moment de l'usage : la valeur STOCKEE peut rester
+    # https://github.com/... alors que le push part par la cle SSH du contexte.
+    # Un controle bati sur la valeur stockee serait donc vert des deux cotes de
+    # la frontiere -- et il aurait l'air de marcher.
+    $estDepot = (git rev-parse --is-inside-work-tree 2>$null) -eq 'true'
+    $gitEmail = if ($estDepot -or $env:DEVCTX) { (git config user.email 2>$null) } else { $null }
+    $urlPush  = if ($estDepot) { (git remote get-url --push origin 2>$null) } else { $null }
+
+    # --- 1 ter. Hors de toute racine, le REMOTE echappe aussi au contexte ----
+    #
+    # Ajoute le 24 aout 2026. La remarque ci-dessus ne disait que la moitie la
+    # plus inoffensive : l'identite retombe sur le ~/.gitconfig global, ce qui
+    # est souvent correct. C'est le remote NON REECRIT qui casse -- pas
+    # d'`insteadOf`, donc un push HTTPS, donc un compte decide ailleurs qu'ici.
+    #
+    # Mesure du 24 aout 2026 : sur cette machine il n'existe aucun
+    # `credential.helper` global, mais un `credential.https://github.com.helper`
+    # -- portee par URL, invisible a `git config --get-all credential.helper`.
+    # D'ou `--get-urlmatch`, la seule lecture qui resout cette portee. Croire
+    # « aucun assistant » sur la foi de l'autre commande, c'est annoncer une
+    # invite bloquante la ou le push part en silence sous le compte global.
+    if ($etatDossier -eq 'sansProprietaire' -and $urlPush) {
+        $assiste = $false
+        if ($urlPush -match '^https://') {
+            $assiste = -not [string]::IsNullOrWhiteSpace((git config --get-urlmatch credential.helper $urlPush 2>$null))
+        }
+        switch (Get-CtxVerdictRemoteSansContexte -UrlPush $urlPush -AssistantIdentifiants:$assiste) {
+            'httpsAssiste' { $remarques += T 'ctx.note.remoteAssiste' $urlPush }
+            'httpsNu' { $remarques += T 'ctx.note.remoteNu' $urlPush }
+        }
     }
 
     # --- 2. Le compte GitHub actif est-il celui attendu ? ---
@@ -2322,8 +2542,76 @@ function Test-DevContext {
         }
     }
 
+    # --- 4. L'identite git effective est-elle celle du contexte ? -----------
+    #
+    # LE QUATRIEME AXE, ajoute le 24 aout 2026. Les trois autres jugeaient le
+    # proprietaire du dossier, le compte GitHub et la cle Supabase. L'identite
+    # git, elle, etait AFFICHEE et jamais comparee -- une ligne d'information au
+    # milieu d'un ecran qui rend un verdict.
+    #
+    # Or c'est le scenario fondateur du module : le depot porte un article
+    # intitule committed-under-the-wrong-identity.md, et la commande lancee a
+    # chaque debut de session etait muette precisement la-dessus. Mesure du
+    # 24 aout 2026, meme dossier, meme processus : `ctx` GO, `ctx doctor`
+    # PROBLEME.
+    #
+    # La decision n'est pas reecrite ici. Get-CtxVerdictGitIdentite est la meme
+    # fonction que consomme `doctor`, $script:CtxAxeGitIdentite le meme tableau,
+    # et un test refuse desormais qu'un etat vaille PROBLEME chez l'un et rien
+    # chez l'autre.
+    if ($proprietaire) {
+        $origine = ((git config --show-origin user.email 2>$null) -split '\s')[0] -replace '^file:', ''
+        $etatGit = Get-CtxVerdictGitIdentite -EmailAttendu (Get-CtxProp $owner 'email') `
+            -EmailReel $gitEmail -Origine $origine
+        switch ($script:CtxAxeGitIdentite[$etatGit].Ctx) {
+            'probleme' {
+                if ($etatGit -eq 'sansEmail') { $problems += T 'ctx.pb.gitSansEmail' $proprietaire }
+                else { $problems += T 'ctx.pb.gitIdentite' $gitEmail $proprietaire (Get-CtxProp $owner 'email') $origine }
+                # `work` NE CORRIGE PAS celui-ci, et c'est tout l'interet de le
+                # compter. Le correctif generique affiche sous un NO-GO suppose
+                # que « presque tous se reglent par un work » ; cet axe-ci est le
+                # premier a le contredire, et proposer une commande qui ne
+                # change rien est le cri au loup retourne contre le module --
+                # exactement ce qui a ete corrige le 19 aout 2026. Le vrai
+                # correctif est nomme dans le message ci-dessus.
+                $problemsHorsWork++
+            }
+            'remarque' { $remarques += T 'ctx.note.gitEnDur' }
+        }
+    }
+
+    # --- 5. Le remote de push porte-t-il un login dans l'URL ? --------------
+    #
+    # Le piege du 5 aout 2026 : `https://login@github.com/...` ne matche pas la
+    # regle `insteadOf`, qui est un prefixe de chaine. Le push part alors en
+    # HTTPS sous le compte du `gh` GLOBAL -- silencieusement, et sous la
+    # mauvaise identite.
+    #
+    # `doctor` le juge PROBLEME depuis ce jour-la. `ctx` affichait la meme URL
+    # sans rien en dire. La decision n'est pas recopiee : c'est la fonction de
+    # `doctor` qui est appelee, telle quelle.
+    if ($urlPush) {
+        $alias = if ($proprietaire) { "github-$proprietaire" } else { $null }
+        if ((Test-CtxDoctorRemote -UrlPush $urlPush -AliasAttendu $alias).Verdict -eq 'PROBLEME') {
+            $problems += T 'ctx.pb.remoteLogin' $urlPush
+            $problemsHorsWork++   # se corrige par `git remote set-url`, pas par `work`
+        }
+    }
+
+    # --- 6. Un projet Vercel sans session de contexte ? ---------------------
+    #
+    # Meme famille que l'axe 4, trouve en fermant celle-ci : `ctx` affichait
+    # « vercel : aucune session » et concluait GO la ou `doctor` rendait
+    # PROBLEME. Ici `work` EST le correctif, donc il reste propose.
+    $aProjetVercel = Test-Path -LiteralPath (Join-Path $here '.vercel' 'project.json')
+    $etatVercel = Get-CtxVerdictVercelSession -ADossierVercel:$aProjetVercel `
+        -Proprietaire $proprietaire -ConfigSession $env:DEVCTX_VERCEL_CONFIG
+    if ($etatVercel -eq 'sansSession') {
+        $problems += T 'ctx.pb.vercelSansSession' $proprietaire
+    }
+
     if (-not $Quiet) {
-        Write-Host "  $(T 'ctx.git' (git config user.email 2>$null))"
+        Write-Host "  $(T 'ctx.git' $gitEmail)"
         # Trois etats, trois phrases. « (non authentifie) » servait aux trois, et
         # c'est ce qui a fait passer une panne de GitHub pour un compte manquant.
         $ghAffiche = if ($ghObserve.Etat -eq 'connu') {
@@ -2339,8 +2627,11 @@ function Test-DevContext {
             if ($env:DEVCTX_SUPABASE_KEY) { T 'ctx.supabase.chargeCle' $env:DEVCTX_SUPABASE_KEY } else { T 'ctx.supabase.charge' }
         } else { T 'ctx.supabase.aucun' }
         Write-Host "  $(T 'ctx.supabase' $sbState)"
-        if (Test-Path .git) {
-            Write-Host "  $(T 'ctx.remote' (git remote get-url --push origin 2>$null))"
+        # `Test-Path .git` ne voyait pas un sous-dossier de depot, ni un
+        # worktree lie, ou .git est un FICHIER. La question est deja repondue
+        # plus haut, par git lui-meme, et l'URL deja lue : on l'affiche.
+        if ($estDepot -and $urlPush) {
+            Write-Host "  $(T 'ctx.remote' $urlPush)"
         }
         Write-Host ""
         if ($problems.Count -eq 0) {
@@ -2372,7 +2663,11 @@ function Test-DevContext {
             # la syntaxe au pire moment. Presque tous les NO-GO se reglent par un
             # `work`, et quand le dossier designe son proprietaire, on peut meme
             # le nommer.
-            $correctif = if ($owner) { "work $($owner.name) -NoCd" }
+            # ... sauf quand AUCUN des problemes n'est de ceux-la. Le message du
+            # probleme porte alors son propre correctif, et une commande sans
+            # effet ne vient plus s'interposer.
+            $correctif = if ($problems.Count -eq $problemsHorsWork) { $null }
+            elseif ($owner) { "work $($owner.name) -NoCd" }
             elseif ($env:DEVCTX) { "work $env:DEVCTX -NoCd" }
             if ($correctif) {
                 Write-Host ""

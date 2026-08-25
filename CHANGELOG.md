@@ -51,6 +51,14 @@
   credential.helper` returns nothing on this machine while a helper does exist
   under `credential.https://github.com.helper`.
 
+- **A diagnostic could name the wrong file.** `git config --show-origin`
+  separates the file from the value with a tab; two places split it on any
+  whitespace, so `C:/Users/John Doe/.gitconfig` was truncated to
+  `C:/Users/John`. The verdict was never wrong -- a repository's own config is
+  rendered as a relative path, so detecting a hardcoded identity could not
+  misfire -- but the path printed in the message was. No machine of the author's
+  has a space in these paths, which is exactly why it is fixed rather than left.
+
 - **A NO-GO no longer proposes a command that fixes nothing.** `work <ctx> -NoCd`
   removes neither a `user.email` hardcoded in a repository's `.git/config` nor a
   login from a remote URL. Those problems are counted apart, and the generic fix

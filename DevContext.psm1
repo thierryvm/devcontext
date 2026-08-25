@@ -2190,6 +2190,34 @@ function Get-CtxVerdictRemoteSansContexte {
     'httpsNu'
 }
 
+function Get-CtxOrigineConfigGit {
+    <#
+      PURE. Le FICHIER d'ou vient une valeur, dans une ligne de
+      `git config --show-origin <cle>`.
+
+      Le separateur est une TABULATION, et c'etait ecrit `-split '\s'` d'un cote,
+      `-replace '\s.*$'` de l'autre : deux ecritures du meme decoupage, fragiles
+      de la meme facon. Un chemin contenant une espace -- 'C:/Users/John
+      Doe/.gitconfig', un nom d'utilisateur Windows tout a fait ordinaire --
+      etait tronque a 'C:/Users/John', et le diagnostic designait alors un
+      fichier qui n'existe pas.
+
+      Mesure le 25 aout 2026 : le cas qui compte, lui, est sauf. git rend le
+      config d'un depot en chemin RELATIF ('file:.git/config'), depuis la racine
+      comme depuis un sous-dossier ; la detection d'une identite ecrite en dur ne
+      pouvait donc pas se tromper de verdict. Ce qui se trompait etait le chemin
+      AFFICHE -- envoyer quelqu'un corriger le mauvais fichier.
+
+      Aucune machine de l'auteur n'a d'espace dans ces chemins. C'est
+      exactement pourquoi ceci se corrige maintenant : le module est publie, et
+      ce qui casse est ce qu'on n'est pas en position de voir.
+    #>
+    param([AllowNull()][string]$Ligne)
+
+    if ([string]::IsNullOrWhiteSpace($Ligne)) { return '' }
+    ($Ligne -split "`t")[0] -replace '^file:', ''
+}
+
 function Get-CtxVerdictGitIdentite {
     <#
       PURE. L'identite git effective de ce dossier est-elle celle du contexte
@@ -2560,7 +2588,7 @@ function Test-DevContext {
     # et un test refuse desormais qu'un etat vaille PROBLEME chez l'un et rien
     # chez l'autre.
     if ($proprietaire) {
-        $origine = ((git config --show-origin user.email 2>$null) -split '\s')[0] -replace '^file:', ''
+        $origine = Get-CtxOrigineConfigGit (git config --show-origin user.email 2>$null)
         $etatGit = Get-CtxVerdictGitIdentite -EmailAttendu (Get-CtxProp $owner 'email') `
             -EmailReel $gitEmail -Origine $origine
         switch ($script:CtxAxeGitIdentite[$etatGit].Ctx) {

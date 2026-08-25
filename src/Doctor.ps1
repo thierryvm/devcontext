@@ -483,7 +483,7 @@ function Get-DevContextDoctor {
         $estDepot = (git rev-parse --is-inside-work-tree 2>$null) -eq 'true'
         if ($estDepot) {
             $emailReel = (git config user.email 2>$null)
-            $origine   = (git config --show-origin user.email 2>$null) -replace '\s.*$', '' -replace '^file:', ''
+            $origine   = Get-CtxOrigineConfigGit (git config --show-origin user.email 2>$null)
             $emailAttendu = if ($manifeste) { Get-CtxProp $manifeste 'email' } else { $null }
             $checks.Add((Test-CtxDoctorIdentiteGit -EmailAttendu $emailAttendu `
                         -EmailReel $emailReel -Origine $origine))

@@ -194,12 +194,22 @@ deploy, a migration.
 
 ### GO and NO-GO
 
-**GO** means the folder you are in, the identity loaded in this terminal, and the
-account actually authenticated all agree.
+**GO** means everything `ctx` can check about this folder agrees: the context that
+owns it, the identity loaded in this terminal, the account actually
+authenticated — and, since 1.11.0, the git identity that will really sign here,
+where it comes from, the remote your pushes will really leave by, and whether a
+linked Vercel project has a session of its own.
 
-**NO-GO** means they do not, and it prints the command that fixes it — almost
-always `work <context> -NoCd`. `-NoCd` keeps you where you are instead of jumping
-to the context root.
+**NO-GO** means something does not agree, and it names the command that fixes it.
+That is usually `work <context> -NoCd` — `-NoCd` keeps you where you are instead
+of jumping to the context root.
+
+**Usually, not always, and that difference is deliberate.** `work` cannot remove
+a `user.email` written by hand into a repository's own `.git/config`, and it
+cannot take a login out of a remote URL. When every problem on screen is one of
+those, `ctx` says nothing about `work` rather than offering a command that would
+change nothing. A tool that suggests a remedy which does not work teaches you to
+stop reading it.
 
 **Never work around a NO-GO.** The state it catches — standing in one context's
 folder with another's identity — is exactly the one that sends a client commit
@@ -386,9 +396,14 @@ rules is worse than no file: it looks like protection.
 
 ## 7. The production guard
 
-`supabase db reset` is refused against a project tagged `prod`. `db push`,
-`migration repair` and `migration up` are refused from any branch other than the
-repository's default. Everything else passes through untouched.
+`supabase db reset` is refused against a project tagged `prod` — unless the
+command explicitly says it targets the database on your own machine, which
+`--local` does. `db push`, `migration repair` and `migration up` are refused from
+any branch other than the repository's default. Everything else passes through
+untouched.
+
+A command whose target cannot be read with certainty counts as aimed at
+production. That is the only direction in which a doubt is allowed to fall.
 
 For it to know which projects are production:
 

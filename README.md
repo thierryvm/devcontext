@@ -219,7 +219,7 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 |---|---|
 | `ctx init` | What is missing on this machine, and the exact command for each |
 | `work <ctx>` | Load an identity into this terminal |
-| `ctx` | Do the folder, the identity and the account agree? **GO / NO-GO** |
+| `ctx` | Do the folder, the identity, the account, the git signature, the push remote and the Vercel session agree? **GO / NO-GO** |
 | `ctx-check` | The same verdict, but it **throws** — for scripts and git hooks |
 | `ctx-doctor` | What works in this folder, and on which account? |
 | `ctx-doctor -Live` | Are the tokens still valid, and do they open the right account? |
@@ -407,13 +407,21 @@ No token value is ever printed. Only the name of the key holding it.
 
 Against a Supabase project tagged `prod`:
 
-- `supabase db reset` — **refused**, unconditionally. There is no legitimate use
-  for it against production, so the guard costs nothing and prevents everything.
+- `supabase db reset` — **refused**, unless the command says in so many words
+  that it targets the database on your own machine. `--local` passes; a bare
+  `db reset` does not, because *local by default* is a property of the CLI version
+  you happen to have installed, not of the command.
 - `supabase db push`, `migration repair`, `migration up` — **refused** from any
   branch other than the repository's default. This is the worktree case: three
   folders, one linked project, one of them holding fewer migrations than the
   others.
 - Everything else passes through untouched.
+
+The command line is read the way the CLI reads it, which is the part that is easy
+to get wrong: fourteen options take a **separate** value, so in
+`db reset --profile --local` the word `--local` is the value of `--profile` and
+aims at nothing local. When the reading is uncertain — an unknown flag, two
+targets at once — the answer is *ambiguous*, and ambiguous is refused.
 
 Any uncertainty passes through. A guard that blocks whenever it hesitates gets
 uninstalled within the week, and an uninstalled guard protects nothing.

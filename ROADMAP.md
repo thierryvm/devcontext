@@ -146,6 +146,134 @@ tag start the publish.
 
 ---
 
+## 1.10.0 — shipped, 22 August 2026
+
+`ctx dashboard`: the whole estate as one generated page, opened in a browser. It
+decides nothing — every verdict on it comes from `ctx doctor`, and a test asserts
+the two sets are identical. It reaches no network, and the file it writes is
+treated as what it is: a reconnaissance document.
+
+---
+
+## 1.11.0 — shipped, 25 August 2026
+
+Written from a usage report by an agent working on another project, measured
+against 1.10.0. Three defects, all reproduced here before a line was changed, and
+two of the report's own claims measured false and corrected. See `CHANGELOG.md`.
+
+The one worth carrying forward is the second: `ctx` returned GO on a folder where
+`ctx doctor` returned PROBLEME, on the same fact, in the same process. That is the
+**second** time this shape appeared — 19 August fixed it on the ownership axis.
+Fixing the reported instance again would have bought a few weeks, so the family
+was closed instead: every domain `doctor` judges, `ctx` either judges the same way
+or does not display. Closing it surfaced two more instances nobody had reported.
+
+---
+
+## 1.12.0 — the machine-readable surface
+
+**Decided 25 August 2026**, from two independent requests that arrived within a
+day of each other and asked for the same thing: the usage report above, and an
+orchestrator being built to run sessions across a machine's projects. Two callers
+who had never spoken is the strongest argument this roadmap has seen for a
+surface. It is also the reason to design both halves together rather than dribble
+them out — they serve one audience and should read as one surface.
+
+Nothing here is bent for one caller. Each item is defended on its own below, and
+the third is deliberately **not** built the way it was asked for.
+
+### `ctx -Json` — yes
+
+**The first objection was wrong, and it is worth recording as wrong.** It ran: a
+second JSON producer means two answers to one question, the exact family closed in
+1.11.0. That does not hold. Since 1.11.0 both commands consume the *same* pure
+decisions, so a second rendering cannot disagree unless someone writes it to.
+
+The rule that must hold is therefore narrower and stricter than "don't": the JSON
+is a **rendering** of the same problems and remarks the human output already
+carries — never a second computation — and a test asserts the two cannot diverge.
+
+It is needed because `ctx doctor -Json` answers a different question. `doctor`
+reports what works here and on which account; it returns INFO and ATTENTION on
+axes `ctx` deliberately stays silent about. A caller that wants *is this folder GO
+or NO-GO* cannot get it from `doctor` without re-deciding — which is the defect
+itself.
+
+What it must carry: the verdict, the failing axes by **stable identifier** rather
+than by translated sentence, and the remedy. The identifiers are the point: a
+caller that greps a message is a caller that breaks the day the message is
+reworded, or reads it in the other language.
+
+### `ctx exec <command>` — yes, and it is a security feature
+
+The report argues it well: the cost of `work <ctx> -NoCd;` is not the typing, it
+is that **forgetting it is silent**. A command without the prefix produces no
+signal. `ctx exec` replaces *did I remember?* — a question answered wrong once in
+fifty — with an invariant that can be grepped in a transcript afterwards.
+
+The sharper argument was found while answering the orchestrator, on 25 August
+2026, and it is not in the report. A child process inherits `DEVCTX_ALLOW_PROD`,
+which is this module's own documented bypass of the production guard. Also
+`DEVCTX_ALLOW_GH` and `DEVCTX_ALLOW_VERCEL`. So today every tool that spawns a
+child is reimplementing the sanitising, and getting it wrong in the single way
+that matters: a human disarms the guard once, deliberately, in their session — and
+everything launched from there carries the disarmed guard into a folder that never
+consented to it. That is the incident this module exists to prevent, produced by
+the tool meant to prevent it.
+
+Constraints that must hold, or it should not ship:
+
+- The child's environment is built by **allow-list from the target context**,
+  never by copying the parent's and patching it. Copy-then-patch always leaks the
+  variable nobody thought of, and there are twenty-eight touched by this module
+  alone.
+- The three `DEVCTX_ALLOW_*` bypasses are **cleared, always**, with no flag to
+  keep them. A bypass is a deliberate gesture inside one session; inheriting it is
+  not that gesture.
+- The context is resolved from the **folder**, never from `$env:DEVCTX` — the
+  doctrine of the whole module, and the only reading a child can trust.
+- The child's exit code is returned unchanged. A wrapper that swallows an exit
+  code is a wrapper that hides a failure.
+- A folder no context owns is a **refusal**, not a guess, and the exit code says
+  which.
+
+Not proposed, and the report is right to rule it out: automatic loading from a
+profile. A context that loads itself is a context nobody can name.
+
+### Naming a remote MCP connector — yes, but not as asked
+
+The gap is real, and the report states it more honestly than most: `ctx doctor`
+sees MCP servers declared in a **file**, and cannot see connectors authenticated
+at the assistant's **account** level. Those are nowhere on disk. Such a connector
+slips past every net at once — `ctx` says GO, no PATH is involved so no shim is in
+the call chain, and an application preflight cannot see it either.
+
+The proposed check compares *this project declares no project-scoped MCP file*
+against *the machine knows remote connectors of the same family*.
+
+**The second half is refused.** "Of the same family" requires a maintained list of
+MCP server families, and this repository's own doctrine is that a list a human
+must remember to complete is a list that will be incomplete. It has already cost
+this project a session twice — the analysed-files list, and the exported-aliases
+list. A check that rots silently is worse than an absent one.
+
+The version that cannot rot drops the families entirely. What makes the risk real
+is not which server it is; it is that **this machine uses MCP at all, and this
+folder declares nothing of its own**. Both halves are derivable, and neither needs
+a list.
+
+Kept from the proposal, because it is the best part of it: the wording says a
+remote connector **may** cover this project under another account. The check
+proves the absence of a local guard. It proves nothing about an account, and must
+never sound as though it does.
+
+**One question to answer with a measurement before this ships**, not with an
+opinion: how many folders on an ordinary machine would this fire on? A remark that
+appears everywhere is noise, and noise is how a guard gets uninstalled — which
+this file says elsewhere and would be foolish to forget here. Count first.
+
+---
+
 ## Deferred — Linux and macOS
 
 **Not scheduled, and that is a decision rather than a backlog accident.**

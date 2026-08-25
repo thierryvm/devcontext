@@ -281,13 +281,48 @@ remote connector **may** cover this project under another account. The check
 proves the absence of a local guard. It proves nothing about an account, and must
 never sound as though it does.
 
-**That makes one measurement decisive rather than merely prudent.** With the
-machine-side condition gone, the check fires on every folder holding no MCP file
-— which on an ordinary machine may be most of them. So before a line is written:
-count. If it speaks everywhere it says nothing, and noise is how a guard gets
-uninstalled, which this file says elsewhere and would be foolish to forget here.
-If the count is bad, the honest outcome is to record the gap under *Known gaps*
-and ship nothing — an unnamed risk is better than a remark people learn to skip.
+**Counted on 25 August 2026, before writing a line — and the count changed the
+answer twice.**
+
+Unconditional, the check fires on **22 folders out of 22**. Not one project on
+this machine declares a project-scoped MCP configuration. A remark that appears
+everywhere discriminates nothing, and noise is how a guard gets uninstalled. On
+that number alone the honest outcome was to ship nothing.
+
+The same pass measured the other half, and the risk is not hypothetical: **eight
+MCP servers are declared machine-wide**, across four configuration files, and
+several are exactly the account-authenticated kind — Linear, Coda, Notion,
+GitHub, Supabase. Every project here inherits whichever account was connected
+last, and none of them carries a local declaration to pin it.
+
+What rescues the check is a narrowing that **derives from evidence this module
+already reads**, with no list to maintain: a project the module can prove is
+linked to an account-scoped service — `supabase/.temp/project-ref`, which
+`Resolve-CtxSupabaseRef` already resolves, or `.vercel/project.json`, which
+`Get-CtxVerdictVercelSession` has read since 1.11.0.
+
+    unconditional                     22 / 22   fires everywhere, says nothing
+    linked to Supabase or Vercel       5 / 22   discriminates
+
+Five out of twenty-two is a signal. And those five are where the exposure is
+concrete rather than theoretical.
+
+**Its scope has to be stated, in the message and in `SECURITY.md`.** The check
+covers projects whose link the module can see. The other seventeen — fourteen of
+them git repositories — may be just as exposed through a GitHub, Linear or Notion
+connector, and the check will stay silent about them. That is a declared limit,
+not a misreading: it does not fail *because* the risk is hidden, it simply does
+not claim ground it cannot stand on. Rejecting the earlier condition was right
+for the opposite reason — that one read *false* exactly where the danger lived.
+
+Verdict level: **ATTENTION**, and it clears when `ctx mcp` is run. A warning with
+a remedy that visibly removes it is the kind people act on.
+
+**One finding from the count is worth more than the check itself.** `ctx mcp`
+ships in this module and has been used on **zero** of the twenty-two projects on
+the machine that wrote it. That is this repository's recurring pattern — what
+breaks is what the author is not in a position to see — arriving from the inside
+this time.
 
 ---
 

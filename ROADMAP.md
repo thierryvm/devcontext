@@ -146,30 +146,6 @@ tag start the publish.
 
 ---
 
-## 1.10.0 — shipped, 22 August 2026
-
-`ctx dashboard`: the whole estate as one generated page, opened in a browser. It
-decides nothing — every verdict on it comes from `ctx doctor`, and a test asserts
-the two sets are identical. It reaches no network, and the file it writes is
-treated as what it is: a reconnaissance document.
-
----
-
-## 1.11.0 — shipped, 25 August 2026
-
-Written from a usage report by an agent working on another project, measured
-against 1.10.0. Three defects, all reproduced here before a line was changed, and
-two of the report's own claims measured false and corrected. See `CHANGELOG.md`.
-
-The one worth carrying forward is the second: `ctx` returned GO on a folder where
-`ctx doctor` returned PROBLEME, on the same fact, in the same process. That is the
-**second** time this shape appeared — 19 August fixed it on the ownership axis.
-Fixing the reported instance again would have bought a few weeks, so the family
-was closed instead: every domain `doctor` judges, `ctx` either judges the same way
-or does not display. Closing it surfaced two more instances nobody had reported.
-
----
-
 ## 1.12.0 — the machine-readable surface
 
 **Decided 25 August 2026**, from two independent requests that arrived within a
@@ -257,20 +233,37 @@ must remember to complete is a list that will be incomplete. It has already cost
 this project a session twice — the analysed-files list, and the exported-aliases
 list. A check that rots silently is worse than an absent one.
 
-The version that cannot rot drops the families entirely. What makes the risk real
-is not which server it is; it is that **this machine uses MCP at all, and this
-folder declares nothing of its own**. Both halves are derivable, and neither needs
-a list.
+The version that cannot rot drops the families entirely — and a first attempt at
+replacing them was **wrong, caught in review on 25 August 2026**. It proposed
+firing when *this machine uses MCP at all, and this folder declares nothing of its
+own*. The first half does not derive: a connector authenticated at the assistant's
+account leaves nothing on disk, so on the machine where the whole risk lives —
+account-level connector, no file anywhere — the condition reads false and the
+check stays silent. A proxy that fails in exactly the configuration it exists for
+is worse than no check, because it reports having looked.
+
+What is left is the only half that cannot produce that false negative: **this
+folder declares no project-scoped MCP configuration**. No machine-side condition,
+no list, nothing to derive from evidence that is not there.
+
+Its limit has to be written into the message, not just into this file: the check
+sees **file-backed** MCP configuration only. Account-level connectors are not
+observable from this machine and are not covered — which is also why the wording
+says a remote connector **may** cover this project under another account. It
+proves the absence of a local guard. It proves nothing about an account.
 
 Kept from the proposal, because it is the best part of it: the wording says a
 remote connector **may** cover this project under another account. The check
 proves the absence of a local guard. It proves nothing about an account, and must
 never sound as though it does.
 
-**One question to answer with a measurement before this ships**, not with an
-opinion: how many folders on an ordinary machine would this fire on? A remark that
-appears everywhere is noise, and noise is how a guard gets uninstalled — which
-this file says elsewhere and would be foolish to forget here. Count first.
+**That makes one measurement decisive rather than merely prudent.** With the
+machine-side condition gone, the check fires on every folder holding no MCP file
+— which on an ordinary machine may be most of them. So before a line is written:
+count. If it speaks everywhere it says nothing, and noise is how a guard gets
+uninstalled, which this file says elsewhere and would be foolish to forget here.
+If the count is bad, the honest outcome is to record the gap under *Known gaps*
+and ship nothing — an unnamed risk is better than a remark people learn to skip.
 
 ---
 

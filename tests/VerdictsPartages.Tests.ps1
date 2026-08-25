@@ -299,3 +299,40 @@ Describe 'un NO-GO ne propose pas une commande sans effet' {
         $source | Should -Match '\$problemsHorsWork\+\+'
     }
 }
+
+Describe 'Get-CtxOrigineConfigGit' {
+    # Le separateur de `git config --show-origin` est une TABULATION. Deux
+    # ecritures maison le decoupaient sur '\s', et tronquaient donc tout chemin
+    # portant une espace -- 'C:/Users/John Doe/.gitconfig' devenait
+    # 'C:/Users/John', un fichier qui n'existe pas.
+    It 'rend "<Attendu>" pour <Cas>' -ForEach @(
+        @{ Cas = 'un chemin ordinaire'
+            L = "file:C:/Users/x/.gitconfig`tx@y.z"; Attendu = 'C:/Users/x/.gitconfig' }
+        @{ Cas = 'un chemin AVEC UNE ESPACE'
+            L = "file:C:/Users/John Doe/.gitconfig`tx@y.z"; Attendu = 'C:/Users/John Doe/.gitconfig' }
+        @{ Cas = 'le config relatif d un depot'
+            L = "file:.git/config`tx@y.z"; Attendu = '.git/config' }
+        # Une valeur peut elle aussi porter des espaces : le decoupage ne doit
+        # regarder que la PREMIERE tabulation.
+        @{ Cas = 'une valeur contenant des espaces'
+            L = "file:F:/CTX/perso/gitconfig`tJohn Doe <j@d.z>"; Attendu = 'F:/CTX/perso/gitconfig' }
+        @{ Cas = 'rien du tout'; L = ''; Attendu = '' }
+        @{ Cas = 'null'; L = $null; Attendu = '' }
+    ) {
+        InModuleScope DevContext -Parameters @{ l = $L; att = $Attendu } {
+            param($l, $att)
+            Get-CtxOrigineConfigGit $l | Should -BeExactly $att
+        }
+    }
+
+    It 'est la SEULE ecriture de ce decoupage' {
+        # Deux exemplaires d'une meme regle finissent toujours par diverger --
+        # c'est le sujet meme de ce fichier. Celui-ci a diverge en fragilite
+        # identique plutot qu'en comportement, ce qui est encore plus discret.
+        foreach ($f in @('Test-DevContext', 'Get-DevContextDoctor')) {
+            $src = Get-CtxSourceSansCommentaires $f
+            $src | Should -Not -Match 'show-origin[^\r\n]*-split' -Because "dans $f"
+            $src | Should -Not -Match 'show-origin[^\r\n]*-replace' -Because "dans $f"
+        }
+    }
+}

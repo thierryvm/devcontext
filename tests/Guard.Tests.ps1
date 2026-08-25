@@ -88,7 +88,11 @@ Describe 'contournement par reciblage de la commande' {
     }
 }
 
-Describe 'Get-CtxSupabaseCible' {
+# Ce bloc s'appelait 'Get-CtxSupabaseCible' alors qu'il n'eprouvait ni cette
+# fonction -- qui n'existait pas -- ni rien qui s'en approche. Renomme le
+# 24 aout 2026 pour ce qu'il mesure vraiment, le nom etant desormais pris par
+# une fonction reelle, juste en dessous.
+Describe 'lecture des arguments Supabase' {
     BeforeAll { Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force }
 
     It 'extrait le project-ref d une URL de connexion directe' {
@@ -249,5 +253,113 @@ Describe 'Test-CtxSupabaseGuard — commandes hors liste noire' {
     It 'laisse passer projects list' {
         (Test-CtxSupabaseGuard -Arguments @('projects', 'list', '-o', 'json') -Environment 'prod' `
          -CurrentBranch 'feat/x' -DefaultBranch 'main').Allowed | Should -BeTrue
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 24 aout 2026 -- le faux positif le plus couteux du garde-fou.
+#
+# `db reset` vise la base LOCALE par defaut ; la CLI l'ecrit elle-meme. Le
+# garde-fou ne lisait que `--db-url` et refusait donc `db reset --local` dans
+# tout dossier lie a une production, sur toutes les branches. Quatre refus
+# mesures ce jour-la, un seul vrai positif.
+# ---------------------------------------------------------------------------
+
+Describe 'Get-CtxSupabaseCible' {
+    BeforeAll { Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force }
+
+    It '"<ligne>" vise <attendu>' -ForEach @(
+        # Aucun drapeau de cible : c'est la CLI qui decidera, pas nous.
+        @{ ligne = 'db reset';                                  attendu = 'aucune' }
+        @{ ligne = 'db reset --local';                          attendu = 'locale' }
+        @{ ligne = 'db reset --linked';                         attendu = 'liee' }
+        @{ ligne = 'db push --local --dry-run';                 attendu = 'locale' }
+        @{ ligne = 'migration up --local --include-all';        attendu = 'locale' }
+        @{ ligne = 'db reset --db-url postgresql://x';          attendu = 'url' }
+        @{ ligne = 'db reset --db-url=postgresql://x';          attendu = 'url' }
+
+        # Combinaisons que la CLI 2.109.1 refuse elle-meme, mesure du
+        # 24 aout 2026. On ne s'y fie pas : elles doivent deja etre illisibles
+        # ICI, sans quoi la regle dependrait d'une version de la CLI.
+        @{ ligne = 'db reset --local --linked';                 attendu = 'ambigue' }
+        @{ ligne = 'db reset --local --db-url postgresql://x';  attendu = 'ambigue' }
+        @{ ligne = 'db reset --linked --db-url=postgresql://x'; attendu = 'ambigue' }
+
+        # Ecritures booleennes de cobra. `--local=false` dit le CONTRAIRE du
+        # drapeau nu : le lire comme une cible locale serait le seul faux
+        # laissez-passer possible dans cette fonction.
+        @{ ligne = 'db reset --local=true';                     attendu = 'locale' }
+        @{ ligne = 'db reset --local=false';                    attendu = 'aucune' }
+        @{ ligne = 'db reset --local=oui';                      attendu = 'ambigue' }
+
+        # La valeur d'une option n'est pas un drapeau : cobra consomme le mot
+        # suivant, et la commande part alors sur la cible par DEFAUT.
+        @{ ligne = 'db reset --profile --local';                attendu = 'aucune' }
+        @{ ligne = '--workdir --local db reset';                attendu = 'aucune' }
+        @{ ligne = 'db push -p --local';                        attendu = 'aucune' }
+        # ... alors que la forme --option=valeur ne consomme rien.
+        @{ ligne = 'db reset --profile=x --local';              attendu = 'locale' }
+
+        # Cobra distingue la casse : `--LOCAL` lui est un drapeau inconnu.
+        @{ ligne = 'db reset --LOCAL';                          attendu = 'aucune' }
+        # Repete, un drapeau reste le meme drapeau.
+        @{ ligne = 'db reset --local --local';                  attendu = 'locale' }
+    ) {
+        InModuleScope DevContext -Parameters @{ a = ($ligne -split ' '); att = $attendu } {
+            param($a, $att)
+            Get-CtxSupabaseCible $a | Should -Be $att
+        }
+    }
+}
+
+Describe 'Test-CtxSupabaseGuard — une cible locale n est pas une production' {
+    BeforeAll { Import-Module (Join-Path $PSScriptRoot '..' 'DevContext.psd1') -Force }
+
+    # Branche LATERALE et index contenant une production : le cas le plus
+    # defavorable. Avant le 24 aout 2026 les quatre lignes etaient refusees.
+    It 'laisse passer "<_>" sur un projet de production' -ForEach @(
+        'db reset --local'
+        'db push --local'
+        'migration up --local'
+        'migration repair --local'
+    ) {
+        InModuleScope DevContext -Parameters @{ a = ($_ -split ' ') } { param($a)
+            $r = Test-CtxSupabaseGuard -Arguments $a -Environment 'prod' `
+                -CurrentBranch 'feat/chantier' -DefaultBranch 'main' -IndexContientProd
+            $r.Allowed | Should -BeTrue
+            $r.Rule    | Should -Be 'cible-locale'
+        }
+    }
+
+    It 'refuse toujours "<_>" — la cible n est pas certaine' -ForEach @(
+        # Le contournement que la regle conjonctive existe pour fermer : un
+        # `if (--local) { passe }` naif aurait laisse partir celui-ci.
+        'db reset --local --db-url postgresql://postgres.abcdefghijklmnopqrst:x@aws-0.pooler.supabase.com:5432/postgres'
+        'db reset --local --linked'
+        'db reset --local=false'
+        # Un profil nomme '--local' n'a aucune forme realiste, mais nous ne
+        # savons pas lire cette ligne : faute de certitude, on refuse.
+        'db reset --profile --local'
+        # Sans drapeau, la cible depend du DEFAUT de la CLI -- une propriete de
+        # sa version, pas de la commande. Le refus reste.
+        'db reset'
+        'db reset --linked'
+    ) {
+        InModuleScope DevContext -Parameters @{ a = ($_ -split ' ') } { param($a)
+            (Test-CtxSupabaseGuard -Arguments $a -Environment 'prod' `
+                -CurrentBranch 'feat/chantier' -DefaultBranch 'main' -IndexContientProd).Allowed |
+                Should -BeFalse
+        }
+    }
+
+    It 'ne desarme pas le garde-fou des qu un --local traine dans les arguments' {
+        # `--local` porte par une AUTRE commande de la ligne ne doit rien
+        # ouvrir : ici il n y a qu une commande, et elle est gardee.
+        InModuleScope DevContext {
+            $r = Test-CtxSupabaseGuard -Arguments @('--workdir', '--local', 'db', 'reset') `
+                -Environment 'prod' -CurrentBranch 'main' -DefaultBranch 'main' -IndexContientProd
+            $r.Allowed | Should -BeFalse
+            $r.Rule    | Should -Be 'db-reset-prod'
+        }
     }
 }

@@ -88,6 +88,17 @@
     # owns crosses no identity, and the refusal it produced offered a fix the
     # user had already applied.
     'ctx.note.sansProprietaire' = "No context governs this folder. Identity '{0}' stays loaded, but the GLOBAL git identity is what will sign here: includeIf rules only cover context roots. Nothing is crossed -- and nothing is decided either."
+    # The fourth axis, 24 August 2026. This line was displayed and never
+    # compared: `ctx` answered GO where `ctx doctor` answered PROBLEME.
+    'ctx.pb.gitIdentite'      = "The effective git identity here is '{0}', while context '{1}' expects '{2}' -- it comes from {3}. If that is the repository .git/config: 'git config --unset user.email'."
+    'ctx.pb.gitSansEmail'     = "git resolves no user.email in this folder: nothing will be signed under context '{0}'. Check the includeIf rule in ~/.gitconfig."
+    'ctx.note.gitEnDur'       = "The git identity carries the right address, but it is written into this repository .git/config: that line is what protects this folder, not the includeIf rule. Were it wrong, nothing would catch it. To hand control back to the mechanism: 'git config --unset user.email'."
+    # 24 August 2026: the "no context governs this folder" remark only spoke of
+    # the identity. The remote is the other half, and it is the half that breaks.
+    'ctx.note.remoteAssiste'  = "This repository remote ({0}) is not rewritten to a context SSH key: an HTTPS push will authenticate through the GLOBAL credential helper, therefore as whichever account it holds -- not as this folder's."
+    'ctx.note.remoteNu'       = "This repository remote ({0}) is not rewritten to a context SSH key, and no credential helper answers for this URL: an HTTPS push will ask for credentials, which blocks a non-interactive shell."
+    'ctx.pb.remoteLogin'      = "The push remote ({0}) carries a login in the URL: the insteadOf rule is a string prefix and does not apply to it, so the push will leave over HTTPS as the GLOBAL gh account. Fix with 'git remote set-url origin https://github.com/<org>/<repo>.git', without the login@."
+    'ctx.pb.vercelSansSession' = "This folder is linked to a Vercel project, but no dedicated session is loaded: vercel commands would use the GLOBAL session. Fix with 'work {0} -NoCd'."
     'ctx.pb.compteGitHub'     = "Active GitHub account '{0}' - this context expects '{1}'."
     'ctx.pb.sansLogin'        = "This context has no 'github.login' in its manifest: the active account can only be reported, never verified."
     'ctx.pb.ghConfigDir'      = "GH_CONFIG_DIR is unset: 'gh' uses the machine-wide config, therefore the last account you logged into."

@@ -156,51 +156,33 @@ function Test-CtxDoctorBinaire {
 }
 
 function Test-CtxDoctorIdentiteGit {
+    <#
+      NE DECIDE PLUS RIEN depuis le 24 aout 2026. L'etat vient de
+      Get-CtxVerdictGitIdentite et le verdict de $script:CtxAxeGitIdentite --
+      les deux memes que `ctx` consomme desormais.
+
+      Ce qui reste ici est la mise en mots : un etat, une phrase, un correctif.
+      La decision, elle, n'a plus qu'un seul exemplaire, et c'etait tout
+      l'enjeu : `ctx` rendait GO la ou cette fonction rendait PROBLEME.
+    #>
     param(
         [AllowNull()][string]$EmailAttendu,
         [AllowNull()][string]$EmailReel,
         [AllowNull()][string]$Origine
     )
-    if (-not $EmailAttendu) {
-        return New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict 'INFO' `
-            -Detail (T 'doc.git.horsContexte')
-    }
-    if (-not $EmailReel) {
-        return New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict 'PROBLEME' `
-            -Detail (T 'doc.git.sansEmail') `
-            -Correctif (T 'doc.git.sansEmailFix')
-    }
-    if ($EmailReel -ne $EmailAttendu) {
-        return New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict 'PROBLEME' `
-            -Detail (T 'doc.git.mauvaisEmail' $EmailReel $EmailAttendu $Origine) `
-            -Correctif (T 'doc.git.mauvaisEmailFix')
-    }
-    # LA BONNE VALEUR N'EST PAS LA BONNE RAISON.
-    #
-    # Un `user.email` ecrit en dur dans le .git/config du depot PRIME sur la
-    # regle `includeIf` par chemin. Tant qu'il porte la bonne adresse, rien ne
-    # se voit -- et c'est exactement le probleme : ce qui protege ce depot est
-    # alors une ligne recopiee a la main, pas le mecanisme.
-    #
-    # Mesure le 18 aout 2026 sur la machine de l'auteur : SIX depots dans ce
-    # cas. Cinq portaient la bonne valeur, un portait une adresse d'un autre
-    # compte -- et `ctx` repondait GO sur les six, puisqu'il ne compare que la
-    # valeur. La regle par dossier etait morte dans un quart des depots sans que
-    # rien ne le dise.
-    #
-    # ATTENTION et non PROBLEME : aujourd'hui la valeur est juste, il n'y a
-    # aucun degat. Ce qui est signale est la FRAGILITE, pas une faute.
-    # Les separateurs sont normalises plutot que decrits dans le motif : git
-    # rend des slashes sur Windows aujourd'hui, et faire dependre un controle
-    # de cette habitude est exactement le genre d'hypothese qui casse ailleurs.
-    $chemin = "$Origine".Replace([char]92, '/')
-    if ($chemin -match '(?i)(^|/)\.git/config$') {
-        return New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict 'ATTENTION' `
-            -Detail (T 'doc.git.emailEnDur' $EmailReel) `
-            -Correctif (T 'doc.git.emailEnDurFix')
+
+    $etat    = Get-CtxVerdictGitIdentite -EmailAttendu $EmailAttendu -EmailReel $EmailReel -Origine $Origine
+    $verdict = $script:CtxAxeGitIdentite[$etat].Doctor
+
+    $detail, $correctif = switch ($etat) {
+        'horsContexte' { (T 'doc.git.horsContexte'), '' }
+        'sansEmail'    { (T 'doc.git.sansEmail'), (T 'doc.git.sansEmailFix') }
+        'mauvaisEmail' { (T 'doc.git.mauvaisEmail' $EmailReel $EmailAttendu $Origine), (T 'doc.git.mauvaisEmailFix') }
+        'emailEnDur'   { (T 'doc.git.emailEnDur' $EmailReel), (T 'doc.git.emailEnDurFix') }
+        'accord'       { $EmailReel, '' }
     }
 
-    New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict 'OK' -Detail $EmailReel
+    New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict $verdict -Detail $detail -Correctif $correctif
 }
 
 function Test-CtxDoctorRemote {
@@ -595,14 +577,17 @@ function Get-DevContextDoctor {
     if ($wsl) { $checks.Add($wsl) }
 
     # --- vercel ------------------------------------------------------------
-    $vercelProjet = Join-Path $dossier '.vercel\project.json'
-    if (Test-Path -LiteralPath $vercelProjet) {
-        if ($proprio -and -not $env:DEVCTX_VERCEL_CONFIG) {
+    # La decision est sortie d'ici le 24 aout 2026 : ecrite en ligne, elle etait
+    # invisible a `ctx`, qui affichait « aucune session » et concluait GO.
+    $vercelProjet = Join-Path $dossier '.vercel' 'project.json'
+    switch (Get-CtxVerdictVercelSession -ADossierVercel:(Test-Path -LiteralPath $vercelProjet) `
+            -Proprietaire $proprio -ConfigSession $env:DEVCTX_VERCEL_CONFIG) {
+        'sansSession' {
             $checks.Add((New-CtxCheck -Domaine 'vercel' -Sujet 'session' -Verdict 'PROBLEME' `
                         -Detail (T 'doc.vercel.sansSession') `
                         -Correctif "work $proprio -NoCd"))
         }
-        else {
+        'ok' {
             $checks.Add((New-CtxCheck -Domaine 'vercel' -Sujet 'session' -Verdict 'OK' `
                         -Detail (T 'doc.vercel.ok')))
         }

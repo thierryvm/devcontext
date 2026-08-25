@@ -1309,6 +1309,7 @@ tokens now, which cannot mistake an explanation for a comparison.
 403 tests, zero analyser findings.
 
 ---
+
 ## [1.2.0] — 15 August 2026
 
 The release where isolation stopped depending on launching things our way.

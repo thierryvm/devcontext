@@ -81,11 +81,13 @@ quatrième consommateur externe à chemin absolu, à inscrire dans
 ### Tâche 1 : la décision pure et le harnais de tests
 
 **Fichiers :**
+
 - Modifier : `DevContext.psm1` (insérer avant `function Invoke-DevSupabase`, ligne 614)
 - Créer : `tests/Guard.Tests.ps1`
 - Créer : `tests/RunTests.ps1`
 
 **Interfaces :**
+
 - Consomme : rien.
 - Produit : `Test-CtxSupabaseGuard` — paramètres `[string[]]$Arguments`,
   `[string]$Environment`, `[string]$CurrentBranch`, `[string]$DefaultBranch`,
@@ -360,11 +362,13 @@ appellerait le shim au lieu du binaire. Il faut un résolveur qui exclut le
 dossier des shims.
 
 **Fichiers :**
+
 - Modifier : `DevContext.psm1` (ligne 520 dans `Update-DevSupabaseIndex`,
   ligne 618 dans `Invoke-DevSupabase`, + nouvelle fonction)
 - Créer : `tests/Executable.Tests.ps1`
 
 **Interfaces :**
+
 - Consomme : rien.
 - Produit : `Get-CtxSupabaseExe` — paramètre `[string]$ExcludeDir` (optionnel,
   défaut `$script:ShimDir`). Renvoie un `[string]` : chemin complet du binaire
@@ -491,10 +495,12 @@ ligne 526) et l'écrit par-dessus l'ancien. Un `env` posé à la main serait eff
 au premier `sb-index`. La fusion doit être explicite.
 
 **Fichiers :**
+
 - Modifier : `DevContext.psm1` (`Update-DevSupabaseIndex`, lignes 515-558)
 - Créer : `tests/SupabaseIndex.Tests.ps1`
 
 **Interfaces :**
+
 - Consomme : `Get-CtxSupabaseIndexPath` (existant).
 - Produit : `Get-CtxSupabaseEnvGuess` — `[string]$ProjectName` → `[string]`
   (`'prod'`, `'dev'`, ou `$null`).
@@ -733,12 +739,14 @@ git commit -m "feat: tag production projects in the supabase index, preserving m
 ### Tâche 4 : le shim, joignable depuis n'importe quel shell
 
 **Fichiers :**
+
 - Créer : `shims/supabase.ps1`
 - Créer : `shims/supabase.cmd`
 - Créer : `shims/supabase`
 - Créer : `tests/Shim.Tests.ps1`
 
 **Interfaces :**
+
 - Consomme : `Test-CtxSupabaseGuard`, `Get-CtxSupabaseEnv`,
   `Resolve-CtxSupabaseRef`, `Get-CtxSupabaseExe` (tâches 1 à 3).
 - Produit : trois exécutables nommés `supabase` dans `shims/`. Code de sortie
@@ -945,10 +953,12 @@ git commit -m "feat: add a PATH shim so the guard covers every shell, not just P
 ### Tâche 5 : `ctx-sb`, voir le parc d'un coup d'œil
 
 **Fichiers :**
+
 - Modifier : `DevContext.psm1` (nouvelle fonction + alias + exports)
 - Créer : `tests/SupabaseMap.Tests.ps1`
 
 **Interfaces :**
+
 - Consomme : `Get-CtxSupabaseIndexPath`, `Get-CtxPath`, `Read-CtxManifest`,
   `Get-CtxProp` (existants).
 - Produit : `Get-DevSupabaseMap` — paramètre `[string]$Name = $env:DEVCTX`.
@@ -1132,10 +1142,12 @@ Modelé sur `installer-uri-router.ps1`, qui a déjà les bons réflexes : un mod
 `-Verifier`, un mode `-Restaurer`, et une sauvegarde de l'état d'avant.
 
 **Fichiers :**
+
 - Créer : `installer-shims.ps1`
 - Créer : `tests/Installer.Tests.ps1`
 
 **Interfaces :**
+
 - Consomme : `shims/` (tâche 4).
 - Produit : `installer-shims.ps1`, trois modes — sans paramètre (pose),
   `-Verifier` (rapporte), `-Restaurer` (retire).
@@ -1184,6 +1196,7 @@ la copie hors profil, conservée selon la convention de `F:\Backups\`.
 Les terminaux déjà ouverts gardent l'ancien PATH : le retrait ne prend effet
 qu'à l'ouverture d'un terminal neuf.
 '@ | Set-Content (Join-Path $sauvegarde 'README.md') -Encoding UTF8
+
 ```
 
 - [ ] **Étape 2 : écrire les tests qui échouent**
@@ -1370,9 +1383,11 @@ jamais rejouées depuis. Le garde-fou s'appuie dessus : si elles se trompent, il
 protège la mauvaise base.
 
 **Fichiers :**
+
 - Créer : `tests/ContextResolution.Tests.ps1`
 
 **Interfaces :**
+
 - Consomme : `Resolve-DevContextForPath`, `Get-CtxManifests`,
   `Resolve-CtxSupabaseKey`, `Resolve-CtxSupabaseRef`,
   `Get-CtxSupabaseIndexPath` (tous existants, aucun à créer).
@@ -1530,6 +1545,7 @@ chemin absolu. Les trois premiers ont cassé en silence le 13 août. Celui-ci do
 naître documenté.
 
 **Fichiers :**
+
 - Modifier : `INSTALLATION.md` (tableau des consommateurs externes, ligne 74)
 - Modifier : `README.md` (commandes du quotidien, ligne 104 ; nouveau garde-fou)
 - Modifier : `CHANGELOG.md` (nouvelle version)
@@ -1613,6 +1629,7 @@ Vérifier qu'il est en place :
 ```powershell
 .\installer-shims.ps1 -Verifier
 ```
+
 ```
 
 - [ ] **Étape 3 : mettre à jour la section « ce qui est vérifié »**
@@ -1662,6 +1679,7 @@ entrées.
 Comprendre la cause avant de toucher au code, et ne jamais ajuster l'attendu au
 résultat obtenu. Ces tests décrivent des règles de sécurité : un test qui échoue
 est une information, pas un obstacle.
+
 ```
 
 - [ ] **Étape 5 : journaliser la version**

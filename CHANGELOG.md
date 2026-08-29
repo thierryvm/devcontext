@@ -1,5 +1,7 @@
 ﻿## [Unreleased]
 
+## [1.11.1] - 29 August 2026
+
 ### Fixed
 
 - **A shortcut written by `ctx-shortcut` carried no icon.** It arrived wearing

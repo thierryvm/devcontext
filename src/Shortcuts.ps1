@@ -91,6 +91,28 @@ function Test-CtxShortcutIsolated {
     $false
 }
 
+function Get-CtxShortcutIcon {
+    <#
+      PURE. The icon a shortcut carries, given the editor's executable.
+
+      An icon has to be an absolute path, which reads like a contradiction a
+      hundred lines above a function that refuses one for the target. The
+      difference is what going stale costs. A stale TARGET stops isolating, in
+      silence, and that is the entire bug this file exists for. A stale ICON
+      costs a picture: the shell falls back to the launcher's own and the
+      shortcut keeps working.
+
+      Returns an EMPTY string when no executable was found, never ',0'. Those
+      two look alike and mean different things: ',0' names index 0 of a file it
+      does not name. It is also exactly what the shortcut written on 22 August
+      2026 carries -- the shape a shortcut has when nobody set an icon at all.
+    #>
+    param([AllowNull()][AllowEmptyString()][string]$Executable)
+
+    if ([string]::IsNullOrWhiteSpace($Executable)) { return '' }
+    "$Executable,0"
+}
+
 function Test-CtxShortcutLaunchesEditor {
     <#
       PURE. Is this shortcut about an editor at all?
@@ -388,6 +410,12 @@ function Get-CtxRaccourciChecks {
             $raccourci.Arguments = '-NoLogo -ExecutionPolicy Bypass -File "{0}" -Path "{1}" -Editor {2}' -f $lanceur, $projet, $choisi.Name
             $raccourci.WorkingDirectory = $projet
             $raccourci.Description = "DevContext : $projet (contexte $contexte)"
+            # L'executable est deja resolu ailleurs pour lancer l'editeur
+            # detache : le raccourci reutilise cette reponse au lieu d'en
+            # fabriquer une deuxieme, qui divergerait au premier editeur range
+            # autrement. Un raccourci sans icone porte celle de pwsh et se perd
+            # au milieu de ceux qu'il remplace -- assez pour ne pas etre clique.
+            $raccourci.IconLocation = Get-CtxShortcutIcon (Find-CtxEditorExecutable -Editor $choisi)
             $raccourci.Save()
         }
         finally {

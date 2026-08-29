@@ -1,5 +1,26 @@
 ﻿## [Unreleased]
 
+### Fixed
+
+- **A shortcut written by `ctx-shortcut` carried no icon.** It arrived wearing
+  the PowerShell prompt's icon, among a folder of editor icons -- which is
+  enough for it not to be clicked, and a launcher nobody clicks isolates
+  nothing. Measured on the shortcut written 22 August 2026: its icon field held
+  `,0`, the shape that field has when it was never set at all.
+
+  An icon has to be an absolute path, which reads like a contradiction beside a
+  function that refuses one for the target on principle. The difference is what
+  going stale costs. A stale target stops isolating, in silence; a stale icon
+  costs a picture, and the shell falls back to the launcher's own. So the rule
+  is stated once, in a pure function: an executable becomes `<path>,0`, and no
+  executable becomes an EMPTY string -- never `,0`, which sends the shell
+  looking for index 0 of a file it does not name.
+
+  The executable is not resolved a second time. `Find-CtxEditorExecutable`
+  already answers that question for the detached launch, and two resolutions of
+  one fact diverge at the first editor laid out differently -- Cursor puts its
+  `.cmd` four levels under its `.exe` where VS Code puts it two.
+
 ## [1.11.0] - 25 August 2026
 
 ### Fixed

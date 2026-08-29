@@ -107,6 +107,38 @@ Describe 'Test-CtxShortcutIsolated' {
     }
 }
 
+Describe 'Get-CtxShortcutIcon' {
+    It 'pointe l executable de l editeur, index 0' {
+        InModuleScope DevContext {
+            Get-CtxShortcutIcon 'C:\Programs\Microsoft VS Code\Code.exe' |
+                Should -Be 'C:\Programs\Microsoft VS Code\Code.exe,0'
+        }
+    }
+
+    It 'rend une chaine VIDE quand aucun executable n a ete trouve' {
+        # Et non ',0'. C est la difference entre ne pas poser d icone et en
+        # poser une qui ne designe rien : le second envoie le shell chercher
+        # l index 0 d un fichier sans nom. Le raccourci ecrit le 22 aout 2026
+        # portait exactement cette valeur, faute d avoir ete pose du tout.
+        InModuleScope DevContext {
+            foreach ($vide in @($null, '', '   ')) {
+                $icone = Get-CtxShortcutIcon $vide
+                $icone | Should -Be '' -Because "aucun executable ne se traduit pas par une icone"
+                $icone | Should -Not -Be ',0'
+            }
+        }
+    }
+
+    It 'ne fabrique pas sa propre resolution d executable' {
+        # L icone reutilise Find-CtxEditorExecutable, deja utilisee pour lancer
+        # l editeur detache. Deux resolutions du meme fait divergent au premier
+        # editeur range autrement -- Cursor met son .cmd quatre niveaux sous son
+        # .exe la ou VS Code en met deux.
+        $source = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..' 'src' 'Shortcuts.ps1') -Raw
+        $source | Should -Match 'IconLocation\s*=\s*Get-CtxShortcutIcon \(Find-CtxEditorExecutable'
+    }
+}
+
 Describe 'Test-CtxDoctorRaccourci' {
     It 'PROBLEME : ouvre un projet de contexte sur le profil partage' {
         # LE bug quotidien. Se connecter a GitHub la deconnecte des autres

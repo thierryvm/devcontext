@@ -43,6 +43,7 @@
     'ctx.sc.aide.doctor'     = 'etat de la machine : outils, comptes, garde-fous'
     'ctx.sc.aide.editors'    = 'quels editeurs savent isoler leur profil'
     'ctx.sc.aide.end'        = 'fermer la session de travail du contexte actif'
+    'ctx.sc.aide.exec'       = 'lancer une commande sous le contexte de ce dossier'
     'ctx.sc.aide.guard'      = 'dossiers approuves pour les agents : que voient-ils vraiment'
     'ctx.sc.aide.init'       = 'mettre en place DevContext sur cette machine'
     'ctx.sc.aide.list'       = 'lister les contextes de cette machine'
@@ -551,4 +552,12 @@
     'dash.col.env'            = 'Environnement'
     'dash.col.serveur'        = 'Serveur'
     'dash.col.portee'         = 'Portee'
+
+    # --- ctx exec ---
+    'exec.usage'              = 'Usage : ctx exec <commande> [arguments...]'
+    'exec.horsContexte'       = "ctx exec : aucun contexte ne possede ce dossier ({0}). Commande non lancee."
+    'exec.horsContexteFix'    = 'Lancez-la depuis le dossier d un contexte, ou creez-en un : ctx new'
+    'exec.tampon'             = "ctx exec : contexte '{0}' - secrets : {1}"
+    'exec.demarrage'          = 'ctx exec : impossible de lancer pwsh : {0}'
+    'exec.aucunSecret'        = 'aucun'
 }

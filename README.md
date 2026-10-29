@@ -235,6 +235,7 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx-guard` | Which folders an AI agent is allowed to write in, and what it really sees |
 | `ctx-off` | Drop the context from this shell |
 | `ctx-end` | Close the active context's working session |
+| `ctx-exec` | Run one command under the context that owns this folder, with none of the caller's bypasses |
 | `code-ctx` | Open an editor with this context's profile and environment |
 
 **Every `ctx-<name>` also works as `ctx <name>`** — `ctx doctor`, `ctx list`,

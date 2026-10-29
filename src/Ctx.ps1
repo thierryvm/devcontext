@@ -51,6 +51,7 @@ $script:CtxSousCommandes = [ordered]@{
     'doctor'   = 'Get-DevContextDoctor'
     'editors'  = 'Get-DevEditorList'
     'end'      = 'Close-DevContext'
+    'exec'     = 'Invoke-DevContextExec'
     'guard'    = 'Invoke-DevContextGuard'
     'init'     = 'Invoke-DevContextInit'
     'list'     = 'Get-DevContextList'

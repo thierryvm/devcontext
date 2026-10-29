@@ -130,8 +130,9 @@ Describe 'les alias ne mangent pas les options courtes' {
             (Join-Path $racine 'DevContext.psm1')
             (Join-Path $racine 'src' 'Gh.ps1')
             (Join-Path $racine 'src' 'Ctx.ps1')
+            (Join-Path $racine 'src' 'Exec.ps1')
         )
-        $attendus = @('Invoke-DevGh', 'Invoke-DevSupabase', 'Invoke-DevVercel', 'Invoke-DevCtx')
+        $attendus = @('Invoke-DevGh', 'Invoke-DevSupabase', 'Invoke-DevVercel', 'Invoke-DevCtx', 'Invoke-DevContextExec')
         $vus = @()
         foreach ($f in $fichiers) {
             $ast = [System.Management.Automation.Language.Parser]::ParseFile($f, [ref]$null, [ref]$null)

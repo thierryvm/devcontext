@@ -41,6 +41,7 @@ src/                         DOT-SOURCED. Never invoked directly.
   Chemins.ps1                Path rules shared by the module and the installer
   Langue.ps1                 Key lookup, and the fallback that renders [the.key]
   Ctx.ps1                    ctx — the subcommand table, and the dispatcher behind it
+  Exec.ps1                   ctx exec — build the child's environment, start it apart
   Init.ps1                   ctx init — what is missing here, and the command for each
   Doctor.ps1                 ctx doctor — what works here, and on which account
   Fix.ps1                    ctx doctor -Fix — the repairs, and what stays manual
@@ -66,6 +67,7 @@ shims/                       INVOKED BY PATH, by any shell.
   vscode-uri-router.ps1      What that registry key points AT
   lancer-editeur.ps1         Detached launch for shortcuts. Deduces the context.
   lancer-vscode.ps1          The 8 Aug 2026 launcher, named by shortcuts already on disk
+  lancer-commande.ps1        What `ctx exec` runs in the child pwsh: resolve, run, translate the exit code
 
 tools/Build-Package.ps1      Assembles the published package from git ls-files
 tests/                       See tests/README.md
@@ -76,7 +78,7 @@ Files under `src/` are **dot-sourced** into the module rather than declared as
 and the internal helpers — and a single `Export-ModuleMember` remains the one
 place that decides what leaves.
 
-### Why five scripts sit at the root
+### Why six scripts sit at the root
 
 Because each is named, by absolute path, by something that is not PowerShell: a
 human typing a command, `HKCU\Software\Classes\vscode\...`, or a `.lnk` file on
@@ -95,6 +97,14 @@ any move.
 The `lancer-*` names are French in an otherwise English-facing package. That is
 a wart, and it stays one: renaming them would break every shortcut already
 written, which is a real cost paid to fix an aesthetic one.
+
+`lancer-commande.ps1` is the sixth, and the exception to the paragraph above.
+The module itself names it, when `ctx exec` starts a child `pwsh`; nothing
+outside the module holds its path, so it can move with the module. It sits here
+because of the property that defines the zone: it is run, never dot-sourced.
+It runs in a process that has not loaded the module, which is the point: the
+command it launches must not see the module's scope. Its name follows its
+neighbours'.
 
 ---
 

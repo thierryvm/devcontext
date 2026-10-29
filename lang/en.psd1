@@ -43,6 +43,7 @@
     'ctx.sc.aide.doctor'     = 'state of this machine: tools, accounts, guards'
     'ctx.sc.aide.editors'    = 'which editors can isolate their profile'
     'ctx.sc.aide.end'        = 'close the active context work session'
+    'ctx.sc.aide.exec'       = 'run a command under the context that owns this folder'
     'ctx.sc.aide.guard'      = 'folders trusted for agents: what can they actually reach'
     'ctx.sc.aide.init'       = 'set DevContext up on this machine'
     'ctx.sc.aide.list'       = 'list the contexts on this machine'
@@ -542,4 +543,12 @@
     'dash.col.env'            = 'Environment'
     'dash.col.serveur'        = 'Server'
     'dash.col.portee'         = 'Scope'
+
+    # --- ctx exec ---
+    'exec.usage'              = 'Usage: ctx exec <command> [arguments...]'
+    'exec.horsContexte'       = "ctx exec: no context owns this folder ({0}). Command not run."
+    'exec.horsContexteFix'    = 'Run it from a context folder, or create one: ctx new'
+    'exec.tampon'             = "ctx exec: context '{0}' - secrets: {1}"
+    'exec.demarrage'          = 'ctx exec: could not start pwsh: {0}'
+    'exec.aucunSecret'        = 'none'
 }

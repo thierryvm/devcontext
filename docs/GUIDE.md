@@ -239,11 +239,47 @@ is deliberately **not** written into the folder you are standing in.
 ### The environment does not survive between processes
 
 Each new process starts fresh. In a script, a hook, or an AI agent's tool call,
-prefix outgoing commands:
+run outgoing commands through `ctx exec`:
+
+```powershell
+ctx exec gh pr create ...
+ctx exec vercel deploy
+```
+
+`ctx exec` takes the context from the **folder** you are standing in — not from
+whatever the session holds — and runs the command in a separate process, as a
+fresh terminal would after `work <that context>`. The environment is *built*,
+not inherited: the registry's variables, a short fixed list of values Windows
+computes and console settings from the caller, then the context's own. The
+three `DEVCTX_ALLOW_*` bypasses are never passed on, so a guard you disarmed for
+one command in your session stays armed for everything you launch from it. Your
+session itself is never modified.
+
+**The output goes straight to the console.** `$x = ctx exec ...` captures
+nothing inside PowerShell, and `ctx exec gh api user | ConvertFrom-Json` gets
+nothing either. A script that reads that silence as *nothing to do* is wrong. From
+an agent's shell or `pwsh -c`, the output is ordinary stdout of the process.
+
+Arguments arrive exactly as typed, with one exception that PowerShell imposes
+before `ctx exec` ever sees them: a bare `--` is consumed at the call. Quote it,
+`'--'`, when the command needs it, as in `ctx exec git checkout '--' file`.
+
+The price of that guarantee: whatever the calling session added on its own — an
+activated virtualenv, an `fnm env` `Path`, an exported `NODE_ENV` — is not there
+either. That is what *a fresh terminal* means.
+
+`$LASTEXITCODE` is the command's own exit code. A cmdlet that fails gives 1,
+as under `pwsh -Command`. `ctx exec` uses two codes of its own:
+**125** when it refuses (no context owns this folder, or no command was given)
+and **127** when the command cannot be found. From another shell, `pwsh -c` does
+not pass a function's exit code through, so write
+`pwsh -c 'ctx exec gh pr create; exit $LASTEXITCODE'`.
+
+The older form still works, and is the one to use when you need `work`'s effect
+on the session itself:
 
 ```powershell
 work perso -NoCd; gh pr create ...
-work perso -NoCd; vercel deploy
 ```
 
 A lone `ctx` right after a successful `work` in a *different* process will say

@@ -754,12 +754,9 @@ function Test-CtxDoctorGardeFou {
     # outil. N'en surveiller qu'une rendrait « actif dans tous les shells » a
     # quelqu'un dont le garde-fou gh est desarme depuis son $PROFILE -- soit
     # exactement le mensonge que ce fichier existe pour empecher.
-    $derogations = @(
-        'DEVCTX_ALLOW_PROD'
-        'DEVCTX_ALLOW_GH'
-        'DEVCTX_ALLOW_VERCEL'
-    )
-    $desarmes = @($derogations | Where-Object { [Environment]::GetEnvironmentVariable($_) -eq '1' })
+    #
+    # La liste vit dans le psm1 : `ctx exec` retire les memes a l'enfant.
+    $desarmes = @($script:CtxDerogations | Where-Object { [Environment]::GetEnvironmentVariable($_) -eq '1' })
     if ($desarmes.Count -gt 0) {
         return New-CtxCheck -Domaine 'garde-fou' -Sujet 'portee' -Verdict 'ATTENTION' `
             -Detail (T 'doc.garde.desarme' ($desarmes -join ', ')) `

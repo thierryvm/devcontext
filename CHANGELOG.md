@@ -1,5 +1,128 @@
 ﻿## [Unreleased]
 
+### Added
+
+- **`ctx exec <command>`: one command, under the context that owns the
+  folder.** It replaces the `work <ctx> -NoCd;` prefix, whose failure mode was
+  silence: a command typed without it ran under whatever the shell happened to
+  hold, and nothing said so.
+
+  It exists for a sharper reason too. A child process inherited
+  `DEVCTX_ALLOW_PROD`, `DEVCTX_ALLOW_GH` and `DEVCTX_ALLOW_VERCEL`, this module's
+  own documented bypasses. Disarming a guard once, deliberately, in a session
+  therefore disarmed it for everything launched from that session, in folders
+  that never consented to it. `ctx exec` never passes them on, and has no flag
+  to keep them.
+
+  The child's environment is **built**, not copied and patched. It starts from
+  the registry, composed the way Windows does it at logon. From the caller, only
+  a closed list of values Windows computes and those describing the console
+  come through. The context's variables go on top. Nothing the calling
+  *session* carried can leak through. `GITHUB_TOKEN` is the example that decided
+  it, since it outranks `GH_CONFIG_DIR` for `gh` and nothing here sets it.
+  Neither do `HOME`, `PSModulePath` or `DEVCTX_ROOT` come through: the first
+  steers which `~/.gitconfig` picks the identity, the second which module a
+  child loads, and the child receives the root that **decided**. The context
+  comes from the folder, never from `$env:DEVCTX`.
+
+  The command runs in a **separate process**, started by `lancer-commande.ps1`
+  with the environment handed over at creation. The caller's environment is
+  never written. Its output therefore goes to the console, and
+  `$x = ctx exec ...` captures nothing. The exit code is the command's own. A
+  cmdlet that fails gives 1, as it would under `pwsh -Command`. `ctx exec` has
+  two codes of its own: 125 when it refuses or cannot start, 127 when the
+  command is not found.
+
+  The arguments reach the command **exactly as typed**. They travel encoded in
+  the child's environment, not on its command line, and the launcher erases
+  them before anything runs. A native program or a parameterless script
+  receives each argument byte for byte. A cmdlet or a function with parameters
+  receives the names bare and every value as a quoted literal, so no argument
+  is ever evaluated.
+
+### Fixed
+
+- **The first design of `ctx exec` was wrong, and the security audit said so
+  before it shipped.** It ran the command in the caller's process, with the
+  environment swapped and restored in a `finally`. An environment belongs to the
+  process and is shared by every runspace in it. Two `ctx exec` running in
+  parallel therefore handed each other the parent's bypass and token, and left
+  the parent on another context. A script launched that way also ran in the
+  module's scope, where it read the parent's environment snapshot and could call
+  `Get-CtxSecret`. A `DEVCTX_ROOT` changed after import blinded the child's
+  production guard: a decoy `db reset` against a prod project went through. All
+  of it was reproduced, and none of it could be patched while the command shared
+  the caller's process. A test now watches the parent's environment from a
+  second runspace for the whole run.
+
+- **The second design rewrote arguments, and the second audit said so too.**
+  Passed after `pwsh -File`, the arguments were re-read by pwsh's own parameter
+  parser. `--title=fix(exec): x` reached the command as two arguments, and
+  `--output=C:\x` became `--output=C` and `\x`: the command sent to GitHub or
+  Supabase was no longer the one typed. The launcher also depended on the
+  execution policy, which made a refused launcher look like a failed command.
+  A path that never reached the child also left the previous command's exit
+  code in place.
+
+- **The third audit found what the second fix introduced.** The arguments now
+  travelled as JSON, and `ConvertFrom-Json` turns a date-shaped string into a
+  `DateTime`. `--since 2026-01-01T00:00:00` therefore reached the command as
+  `01/01/2026 00:00:00`, in whatever the machine's culture was, and a trailing
+  `Z` vanished. The launcher now reads the array with `System.Text.Json`, which
+  interprets nothing. Two minor defects came out of the same pass:
+  - `-ErrorVariable __etat` overwrote the status variable of the generated
+    call, so a failing cmdlet returned 0;
+  - reading a script's `.Parameters` to choose a route ran its `dynamicparam`
+    block a second time.
+
+  The generated names are now unique per run, and a script's route is read
+  from its syntax tree. The text builder itself held. No value escaped its
+  quoting: ASCII and typographic quotes, NUL, CR/LF, backticks, `$(...)` and
+  60,000-character values all arrived byte for byte.
+
+  It was replaced all the same, by something that needs no quoting at all. The
+  values no longer enter the generated text: each one is a reference to its slot
+  in an array passed as data. A script block log therefore records `$argv[3]`
+  rather than the value, which was the one residual risk the audit could not
+  measure.
+
+- **A test for this feature went green on a leaking implementation, during its
+  own writing.** PowerShell turns `$null` into an empty string when it calls a
+  .NET method, so `[Environment]::SetEnvironmentVariable($name, $null)` did not
+  remove anything. Every parent variable stayed in place, with an empty value,
+  and the test checked only the value. The swap now uses `[NullString]::Value`,
+  and the tests assert that the variable is **absent**. That code went away with
+  the separate process, but the lesson stayed in the tests.
+
+  Fourteen defects were then put back one at a time:
+  - bypasses kept;
+  - parent copied;
+  - context read from the session;
+  - the session's `DEVCTX_ROOT` passed on;
+  - a failed cmdlet not translated;
+  - a wildcard not escaped;
+  - the key name written in place of the Supabase token;
+  - the argument channel left for the command to inherit;
+  - a value written into the generated text instead of referenced;
+  - every argument passed as a raw string;
+  - a stale exit code kept;
+  - dates re-read by `ConvertFrom-Json`;
+  - a fixed status name in the generated call;
+  - a script's route chosen through `.Parameters`.
+
+  Each turns the suite red. Two of them only did so
+  after a test was added: the per-folder Supabase token had no test at all, and
+  a failing-script test was green without the translation it claimed to check,
+  because a terminating error makes `pwsh` exit 1 on its own.
+
+### Changed
+
+- `work` and `ctx exec` compute a context's variables in one function,
+  `Get-CtxVariablesContexte`. Otherwise a field added to one would be missing
+  from the other, which is the family of defects 1.11.0 closed for verdicts.
+  The same applies to the per-folder Supabase token (`Get-CtxVariablesSupabase`)
+  and to the list of bypasses, which `ctx doctor` now reads from the same place.
+
 ## [1.11.1] - 29 August 2026
 
 ### Fixed

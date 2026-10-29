@@ -182,6 +182,12 @@ $script:SecretMap = [ordered]@{
     'sentry-token'   = 'SENTRY_READ_TOKEN'
 }
 
+# Les derogations documentees des garde-fous, une par outil. UNE liste : `ctx
+# doctor` la lit pour dire lesquelles sont posees, `ctx exec` pour les retirer a
+# l'enfant. Deux copies divergeraient a la premiere derogation ajoutee, et celle
+# qui manquerait a `ctx exec` passerait a l'enfant sans un mot.
+$script:CtxDerogations = @('DEVCTX_ALLOW_PROD', 'DEVCTX_ALLOW_GH', 'DEVCTX_ALLOW_VERCEL')
+
 # ---------------------------------------------------------------------------
 # Modules de fonctionnalités
 # ---------------------------------------------------------------------------
@@ -192,7 +198,7 @@ $script:SecretMap = [ordered]@{
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Agents.ps1', 'Shortcuts.ps1', 'Dashboard.ps1', 'Gh.ps1', 'Vercel.ps1', 'Init.ps1', 'Ctx.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Agents.ps1', 'Shortcuts.ps1', 'Dashboard.ps1', 'Gh.ps1', 'Vercel.ps1', 'Init.ps1', 'Exec.ps1', 'Ctx.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -367,6 +373,67 @@ function Get-DevContextList {
 # work <contexte>  — activation
 # ---------------------------------------------------------------------------
 
+function Get-CtxVariablesContexte {
+    <#
+      PURE, au lecteur de secret pres. Les variables d'environnement qu'un
+      contexte pose, et la valeur de chacune -- $null voulant dire « retire-la ».
+
+      UNE question, UNE fonction : `work` les applique a la session, `ctx exec`
+      les donne a un enfant. Si chacun les calculait de son cote, un champ ajoute
+      a l'un manquerait a l'autre, et celui qu'on croit proteger serait celui
+      qu'on n'a pas relu.
+
+      Chaque variable de $script:SecretMap y figure, meme sans secret dans le
+      coffre : $null est une instruction, pas un oubli. Sans elle, le jeton d'un
+      autre contexte resterait en place.
+
+      -LireSecret recoit (contexte, cle) et rend la valeur ou rien. Injecte pour
+      que la decision se verifie sans coffre ; pas de fermeture
+      (GetNewClosure), qui perdrait la portee du module et ne verrait plus
+      Get-CtxSecret.
+
+      -NomCoffre : le nom sous lequel le coffre range les secrets. Par defaut
+      le champ `name` du manifeste ; `work` passe le nom qu'on lui a DONNE,
+      celui qui a designe le dossier du contexte, comme avant la mise en commun.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Manifeste,
+        [Parameter(Mandatory)][string]$DossierContexte,
+        [Parameter(Mandatory)][scriptblock]$LireSecret,
+        [string]$NomCoffre
+    )
+
+    $nom = [string]$Manifeste.name
+    $coffre = if ($NomCoffre) { $NomCoffre } else { $nom }
+    $v = [ordered]@{}
+
+    # --- Identite ---
+    $v['DEVCTX']           = $nom
+    $v['DEVCTX_LABEL']     = Get-CtxProp $Manifeste 'label' $nom
+    $v['DEVCTX_DIR']       = $DossierContexte
+    $v['DEVCTX_ROOT_PATH'] = Get-CtxProp $Manifeste 'root'
+    $v['DEVCTX_GH_LOGIN']  = Get-CtxProp $Manifeste 'github.login'
+
+    # --- GitHub CLI : dossier de config dedie, plus jamais de 'gh auth switch' ---
+    $v['GH_CONFIG_DIR'] = [System.IO.Path]::Combine($DossierContexte, 'gh')
+
+    # --- Vercel : dossier de config dedie + scope ---
+    # NB : la CLI Vercel ne lit AUCUNE variable d'environnement pour son dossier
+    # de config — seulement `-Q, --global-config=DIR`. La variable ci-dessous ne
+    # vaut donc que par le wrapper et le shim `vercel`, qui l'injectent.
+    $v['DEVCTX_VERCEL_CONFIG'] = [System.IO.Path]::Combine($DossierContexte, 'vercel')
+    $v['VERCEL_ORG_ID']        = Get-CtxProp $Manifeste 'vercel.orgId'
+    $v['DEVCTX_VERCEL_SCOPE']  = Get-CtxProp $Manifeste 'vercel.scope'
+
+    # --- Secrets depuis le coffre ---
+    foreach ($key in $script:SecretMap.Keys) {
+        $valeur = & $LireSecret $coffre $key
+        $v[$script:SecretMap[$key]] = if ($valeur) { $valeur } else { $null }
+    }
+    $v
+}
+
 function Use-DevContext {
     [CmdletBinding()]
     param(
@@ -378,37 +445,21 @@ function Use-DevContext {
     $ctx = Get-CtxPath $Name
     Test-CtxVault
 
-    # --- Identite ---
-    $env:DEVCTX       = $m.name
-    $env:DEVCTX_LABEL = Get-CtxProp $m 'label' $m.name
-    $env:DEVCTX_DIR   = $ctx
-    $env:DEVCTX_ROOT_PATH = Get-CtxProp $m 'root'
-    $env:DEVCTX_GH_LOGIN  = Get-CtxProp $m 'github.login'
-
-    # --- GitHub CLI : dossier de config dedie, plus jamais de 'gh auth switch' ---
-    $env:GH_CONFIG_DIR = Join-Path $ctx 'gh'
-
-    # --- Vercel : dossier de config dedie + scope ---
-    # NB : la CLI Vercel ne lit AUCUNE variable d'environnement pour son dossier
-    # de config — seulement `-Q, --global-config=DIR`. La variable ci-dessous ne
-    # vaut donc que par le wrapper `vercel` defini plus bas, qui l'injecte.
-    $env:DEVCTX_VERCEL_CONFIG = Join-Path $ctx 'vercel'
-    $orgId = Get-CtxProp $m 'vercel.orgId'
-    if ($orgId) { $env:VERCEL_ORG_ID = $orgId } else { Remove-Item Env:VERCEL_ORG_ID -ErrorAction SilentlyContinue }
-    $scope = Get-CtxProp $m 'vercel.scope'
-    if ($scope) { $env:DEVCTX_VERCEL_SCOPE = $scope } else { Remove-Item Env:DEVCTX_VERCEL_SCOPE -ErrorAction SilentlyContinue }
-
-    # --- Secrets depuis le coffre ---
+    # Les secrets sous le nom DONNE a `work`, comme avant la mise en commun :
+    # c'est lui qui a designe le dossier du contexte, et c'est la que le coffre
+    # les range. Le champ `name` du manifeste ne le remplace pas.
+    $variables = Get-CtxVariablesContexte -Manifeste $m -DossierContexte $ctx -NomCoffre $Name -LireSecret {
+        param($Contexte, $Cle) Get-CtxSecret -Name $Contexte -Key $Cle
+    }
     $loaded = @()
-    foreach ($key in $script:SecretMap.Keys) {
-        $envVar = $script:SecretMap[$key]
-        $value  = Get-CtxSecret -Name $Name -Key $key
-        if ($value) {
-            Set-Item -Path "Env:$envVar" -Value $value
-            $loaded += $envVar
+    foreach ($nomVar in $variables.Keys) {
+        $valeur = $variables[$nomVar]
+        if ($valeur) {
+            Set-Item -LiteralPath "Env:$nomVar" -Value $valeur
+            if ($script:SecretMap.Values -contains $nomVar) { $loaded += $nomVar }
         }
         else {
-            Remove-Item -Path "Env:$envVar" -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath "Env:$nomVar" -ErrorAction SilentlyContinue
         }
     }
 
@@ -1198,13 +1249,20 @@ function Get-DevSupabaseMap {
 function Resolve-CtxSupabaseKey {
     # Quelle cle de secret ce dossier attend-il ? Renvoie $null si le projet est
     # lie mais absent de l'index (l'appelant doit alors alerter, pas deviner).
-    param([string]$Path = (Get-Location).Path)
+    #
+    # -Contexte existe pour `ctx exec`, qui decide d'apres le DOSSIER et ne doit
+    # donc jamais lire la variable de la session. Le defaut garde l'appel
+    # historique de `work` et du hook de changement de dossier.
+    param(
+        [string]$Path = (Get-Location).Path,
+        [string]$Contexte = $env:DEVCTX
+    )
 
     $ref = Resolve-CtxSupabaseRef -Path $Path
     if (-not $ref) { return 'supabase-token' }
-    if (-not $env:DEVCTX) { return 'supabase-token' }
+    if (-not $Contexte) { return 'supabase-token' }
 
-    $indexPath = Get-CtxSupabaseIndexPath $env:DEVCTX
+    $indexPath = Get-CtxSupabaseIndexPath $Contexte
     if (-not (Test-Path $indexPath)) { return $null }
 
     try {
@@ -1235,18 +1293,41 @@ function Sync-CtxSupabaseEnv {
 
     if (-not $env:DEVCTX) { return }
 
-    $key = Resolve-CtxSupabaseKey -Path $Path
-    if (-not $key) { return }   # index absent ou projet inconnu : on ne devine pas
+    $variables = Get-CtxVariablesSupabase -Contexte $env:DEVCTX -Chemin $Path -LireSecret {
+        param($Contexte, $Cle) Get-CtxSecret -Name $Contexte -Key $Cle
+    }
+    foreach ($nomVar in $variables.Keys) {
+        if ($variables[$nomVar]) { Set-Item -LiteralPath "Env:$nomVar" -Value $variables[$nomVar] }
+        else { Remove-Item -LiteralPath "Env:$nomVar" -ErrorAction SilentlyContinue }
+    }
+}
 
-    $token = Get-CtxSecret -Name $env:DEVCTX -Key $key
-    if ($token) {
-        $env:SUPABASE_ACCESS_TOKEN = $token
-        $env:DEVCTX_SUPABASE_KEY   = $key
-    }
-    else {
-        Remove-Item Env:SUPABASE_ACCESS_TOKEN -ErrorAction SilentlyContinue
-        Remove-Item Env:DEVCTX_SUPABASE_KEY   -ErrorAction SilentlyContinue
-    }
+function Get-CtxVariablesSupabase {
+    <#
+      Le jeton Supabase qu'attend ce dossier, pour ce contexte -- en variables,
+      sans rien poser. `work` et le hook de dossier les appliquent a la session
+      (Sync-CtxSupabaseEnv), `ctx exec` les donne a un enfant.
+
+      Rend un dictionnaire VIDE quand l'index est absent ou le projet inconnu :
+      on ne devine pas, et l'appelant garde le jeton par defaut du contexte.
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowEmptyString()][string]$Contexte,
+        [Parameter(Mandatory)][string]$Chemin,
+        [Parameter(Mandatory)][scriptblock]$LireSecret
+    )
+
+    $v = [ordered]@{}
+    if (-not $Contexte) { return $v }
+
+    $key = Resolve-CtxSupabaseKey -Path $Chemin -Contexte $Contexte
+    if (-not $key) { return $v }
+
+    $token = & $LireSecret $Contexte $key
+    $v['SUPABASE_ACCESS_TOKEN'] = if ($token) { $token } else { $null }
+    $v['DEVCTX_SUPABASE_KEY']   = if ($token) { $key } else { $null }
+    $v
 }
 
 # ---------------------------------------------------------------------------
@@ -2776,7 +2857,7 @@ $exportedFunctions = @(
     'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
     'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh',
     'Invoke-DevCtx', 'Resolve-CtxPathSansVides', 'Invoke-DevContextInit',
-    'Invoke-DevContextDashboard', 'Invoke-DevContextGuard'
+    'Invoke-DevContextDashboard', 'Invoke-DevContextGuard', 'Invoke-DevContextExec'
 )
 # Les alias ctx-<nom> sont DERIVES de la meme table que les alias eux-memes.
 # Ils y etaient recopies a la main jusqu'a la 1.8.0, et le defaut a frappe des

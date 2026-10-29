@@ -206,6 +206,15 @@ reworded, or reads it in the other language.
 
 ### `ctx exec <command>` — yes, and it is a security feature
 
+**Built on 27 September 2026, unreleased.** Every constraint below holds and is
+tested. One reading was settled while building it. *By allow-list from the target
+context* became **a fresh terminal plus the context**: the registry environment,
+a closed list of values Windows computes and console settings, then the
+context's own. Anything narrower broke processes that need `SystemRoot`. Anything
+wider was copy-then-patch under another name. The command runs in a separate
+process. The first, in-process version was rejected by the security audit
+before it shipped. See `CHANGELOG.md`.
+
 The report argues it well: the cost of `work <ctx> -NoCd;` is not the typing, it
 is that **forgetting it is silent**. A command without the prefix produces no
 signal. `ctx exec` replaces *did I remember?* — a question answered wrong once in

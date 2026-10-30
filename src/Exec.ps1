@@ -279,8 +279,23 @@ function Invoke-DevContextExec {
 
     $nom = [string]$m.name
     $lire = { param($Contexte, $Cle) Get-CtxSecret -Name $Contexte -Key $Cle }
-    $variables = Get-CtxVariablesContexte -Manifeste $m -DossierContexte (Get-CtxPath $nom) -LireSecret $lire
-    $supabase = Get-CtxVariablesSupabase -Contexte $nom -Chemin $ici -LireSecret $lire
+    # Un coffre qui n'a pas pu etre LU est un refus, et non une exception :
+    # sous `pwsh -c 'ctx exec ...; exit $LASTEXITCODE'`, une exception arrete la
+    # ligne avant `exit`, et l'orchestrateur lit 1 -- "la commande a echoue" --
+    # pour une commande jamais lancee. Et jamais un $null : l'enfant partirait
+    # sans son jeton, et sa CLI retomberait sur sa connexion globale.
+    try {
+        $variables = Get-CtxVariablesContexte -Manifeste $m -DossierContexte (Get-CtxPath $nom) -LireSecret $lire
+        $supabase = Get-CtxVariablesSupabase -Contexte $nom -Chemin $ici -LireSecret $lire
+    }
+    catch {
+        if (-not (Test-CtxSecretIllisible $_)) { throw }
+        # Le message ne porte que le NOM de la cle, et sa cause est deja passee
+        # par Protect-CtxMessage dans New-CtxSecretIllisibleError.
+        Write-CtxExecLigne (T 'exec.secretIllisible' $_.Exception.Message)
+        $global:LASTEXITCODE = $script:CtxExecRefus
+        return
+    }
     foreach ($k in $supabase.Keys) { $variables[$k] = $supabase[$k] }
 
     # La racine qui vient de DECIDER, et non le DEVCTX_ROOT de la session : une

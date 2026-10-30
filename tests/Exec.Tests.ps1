@@ -822,6 +822,50 @@ exit `$LASTEXITCODE
         Test-Path -LiteralPath $script:Sortie | Should -BeFalse
     }
 
+    It 'un coffre illisible est un REFUS (125), pas une exception, et la commande ne part pas' {
+        # Lu en $null, un secret illisible partait comme un secret absent : la
+        # ligne de tampon disait "aucun", et l'enfant tournait sans son jeton --
+        # la CLI retombait sur sa connexion globale. Mesure le 27 septembre 2026.
+        InModuleScope DevContext -Parameters $script:Monde {
+            Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+            Mock Get-CtxSecret {
+                if ($Key -eq 'github-token') {
+                    throw (& (Get-Module DevContext) { New-CtxSecretIllisibleError -Key 'github-token' -Cause 'Unable to get secret' })
+                }
+            }
+            Push-Location $Projet
+            try { { Invoke-DevCtx exec $Pwsh -NoProfile -Command "Set-Content -LiteralPath '$Sortie' x" } | Should -Not -Throw }
+            finally { Pop-Location }
+            $LASTEXITCODE | Should -Be 125
+        }
+        Test-Path -LiteralPath $script:Sortie | Should -BeFalse
+    }
+
+    It 'sous la forme d un orchestrateur, un coffre illisible rend 125 et nomme la cle sur stderr' {
+        # La promesse reelle : `pwsh -c 'ctx exec ...; exit $LASTEXITCODE'`. Une
+        # exception arretait la ligne avant `exit` et le processus rendait 1 --
+        # "la commande a echoue" -- pour une commande jamais lancee (audit du 29
+        # octobre 2026). Un vrai processus, sans coffre : Get-CtxSecret y est
+        # remplace.
+        $module = (Resolve-Path (Join-Path $PSScriptRoot '..' 'DevContext.psd1')).Path
+        $erreur = Join-Path $TestDrive 'stderr-coffre.txt'
+        $script = Join-Path $TestDrive 'coffre-illisible.ps1'
+        Set-Content -LiteralPath $script -Value @"
+Import-Module '$module' -Force
+& (Get-Module DevContext) {
+    function script:Get-CtxSecret { param(`$Name, `$Key) if (`$Key -eq 'github-token') { throw (New-CtxSecretIllisibleError -Key 'github-token' -Cause 'Unable to get secret') } }
+    function script:Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = '$($script:Racine)' } }
+}
+Set-Location -LiteralPath '$($script:Projet)'
+Invoke-DevCtx exec '$($script:Pwsh)' -NoProfile -Command "Set-Content -LiteralPath '$($script:Sortie)' x"; exit `$LASTEXITCODE
+"@
+        $p = Start-Process -FilePath $script:Pwsh -ArgumentList @('-NoProfile', '-File', $script) `
+            -RedirectStandardError $erreur -RedirectStandardOutput (Join-Path $TestDrive 'stdout-coffre.txt') -Wait -PassThru -NoNewWindow
+        $p.ExitCode | Should -Be 125
+        Get-Content -LiteralPath $erreur -Raw | Should -Match 'github-token'
+        Test-Path -LiteralPath $script:Sortie | Should -BeFalse
+    }
+
     It 'un echec avant le lancement ne laisse pas un code de sortie perime' {
         $global:LASTEXITCODE = 42
         InModuleScope DevContext -Parameters $script:Monde {

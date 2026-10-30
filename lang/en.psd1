@@ -565,5 +565,6 @@
     'exec.tampon'             = "ctx exec: context '{0}' - secrets: {1}"
     'exec.demarrage'          = 'ctx exec: could not start pwsh: {0}'
     'exec.plateforme'         = 'ctx exec: Windows only for now -- the base environment is read from the registry. Command not run.'
+    'exec.secretIllisible'    = "ctx exec: {0} Command not run: without that secret it would run under another account, or none. Run it again; if the vault is locked: Unlock-SecretStore."
     'exec.aucunSecret'        = 'none'
 }

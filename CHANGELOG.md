@@ -223,6 +223,12 @@
     is no longer listed as loaded.
   - `ctx-off`, which activates the home context through `work`, fails the
     same way.
+  - `ctx exec` refuses with 125, names the key on stderr, and does not start
+    the command. Before, its stamp line said "secrets: none" and the child ran
+    without its token. A refusal rather than an exception, because under
+    `pwsh -c 'ctx exec ...; exit $LASTEXITCODE'` an exception stops the line
+    before `exit`, and the orchestrator read 1 -- "the command failed" -- for a
+    command that never ran.
   - The folder-change hook clears the Supabase token BEFORE reporting --
     raising first would have left the previous project's token loaded, which
     is worse than the silence it replaces -- and warns instead of logging to

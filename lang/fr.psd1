@@ -574,5 +574,6 @@
     'exec.tampon'             = "ctx exec : contexte '{0}' - secrets : {1}"
     'exec.demarrage'          = 'ctx exec : impossible de lancer pwsh : {0}'
     'exec.plateforme'         = 'ctx exec : Windows seulement pour l instant -- l environnement de base se lit dans le registre. Commande non lancee.'
+    'exec.secretIllisible'    = "ctx exec : {0} Commande non lancee : sans ce secret, elle partirait sur un autre compte ou sur aucun. Relancer ; si le coffre est verrouille : Unlock-SecretStore."
     'exec.aucunSecret'        = 'aucun'
 }

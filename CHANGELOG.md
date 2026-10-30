@@ -86,6 +86,34 @@
   rather than the value, which was the one residual risk the audit could not
   measure.
 
+- **The pull request's review found three more, all fixed before merge.**
+  - **Execution policy bypassed.** The launcher ran under
+    `-ExecutionPolicy Bypass`, and a policy applies to the process, so a
+    script the user's policy would have blocked ran anyway through `ctx exec`.
+    The launcher is now read as the module code it is, by a fixed bootstrap,
+    and the command meets the configured policy. The child's process scope
+    stays empty.
+  - **Attached values bound to the wrong parameter.** `-Value:x` reaches
+    `ctx exec` already split in two, and the value went in positionally. It is
+    now glued back onto its parameter, and an attached `True` or `False`
+    becomes a boolean again, since a switch refuses the string.
+  - **Outside Windows, the command started without `Path` or `HOME`.** It now
+    stops with its own refusal (125) before anything is read.
+  - **Then the security audit of those fixes (30 October 2026) found four
+    more, also fixed before merge.** The launcher had moved to
+    `-EncodedCommand`, and pwsh started that way writes its errors, warnings
+    and progress as CLIXML whenever stderr is redirected -- exactly how an
+    agent calls `ctx exec`; `-NoProfile -EncodedCommand <base64>` is also
+    the signature antivirus and EDR rules flag. It is now `-Command`, with the
+    same fixed text. The two "closed" patterns that decide what may become a
+    parameter name accepted one trailing newline, since .NET's `$` matches
+    before it: the newline split the generated statement, and a failing
+    cmdlet returned 0. They now end in `\z`. An attached `'tRuE'` was turned
+    into a boolean; only the exact `True` and `False` a real boolean
+    flattens to are now. And the guide said native programs received
+    `-name:value` whole; they receive it split in two, which it now says,
+    with the remedy.
+
 - **A test for this feature went green on a leaking implementation, during its
   own writing.** PowerShell turns `$null` into an empty string when it calls a
   .NET method, so `[Environment]::SetEnvironmentVariable($name, $null)` did not

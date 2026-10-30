@@ -550,5 +550,6 @@
     'exec.horsContexteFix'    = 'Run it from a context folder, or create one: ctx new'
     'exec.tampon'             = "ctx exec: context '{0}' - secrets: {1}"
     'exec.demarrage'          = 'ctx exec: could not start pwsh: {0}'
+    'exec.plateforme'         = 'ctx exec: Windows only for now -- the base environment is read from the registry. Command not run.'
     'exec.aucunSecret'        = 'none'
 }

@@ -182,6 +182,14 @@ function Get-CtxEnvironnementExec {
     $resultat
 }
 
+function Test-CtxExecPlateforme {
+    # Une fonction, et non $IsWindows lu en ligne : c'est ce qui permet a un
+    # test de construire le cas "ailleurs que Windows" sur une machine Windows.
+    [OutputType([bool])]
+    param()
+    [bool]$IsWindows
+}
+
 function Write-CtxExecLigne {
     # Sur stderr : un orchestrateur lit la sortie de l'ENFANT sur stdout, et une
     # ligne de `ctx exec` melee a un JSON le rendrait illisible.
@@ -237,6 +245,16 @@ function Invoke-DevContextExec {
         return
     }
 
+    # Le registre Windows fournit l'environnement de base. Ailleurs, l'enfant
+    # partirait sans Path ni HOME et echouerait a mi-chemin, sur un message qui
+    # ne nommerait pas la cause (revue Sourcery de la PR #55). Avant de lire
+    # quoi que ce soit, et surtout avant le coffre.
+    if (-not (Test-CtxExecPlateforme)) {
+        Write-CtxExecLigne (T 'exec.plateforme')
+        $global:LASTEXITCODE = $script:CtxExecRefus
+        return
+    }
+
     $ici = (Get-Location).ProviderPath
     $m = if ((Get-Location).Provider.Name -eq 'FileSystem') { Resolve-DevContextForPath -Path $ici }
     if (-not $m) {
@@ -280,16 +298,27 @@ function Invoke-DevContextExec {
     $psi = [System.Diagnostics.ProcessStartInfo]::new($pwsh)
     $psi.UseShellExecute = $false
     $psi.WorkingDirectory = $ici
-    # -ExecutionPolicy Bypass, comme les shims : sans lui, une strategie
-    # AllSigned ou une marque "venu d'Internet" sur le module refusait le
-    # lanceur, et l'orchestrateur lisait 1 -- "la commande a echoue" -- pour
-    # une commande jamais lancee. Une strategie posee par GPO l'emporte encore.
-    $lanceur = [System.IO.Path]::Combine($PSScriptRoot, '..', 'lancer-commande.ps1')
-    foreach ($a in @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceur)) { $psi.ArgumentList.Add($a) }
+    # Ni -File ni -ExecutionPolicy Bypass. Avec eux, la strategie Bypass
+    # s'appliquait au processus qui lance la commande demandee : un script que
+    # la strategie de l'utilisateur aurait bloque s'executait quand meme (revue
+    # Sourcery de la PR #55). Le lanceur est lu comme le code du module qu'il
+    # est, par un amorcage FIXE -- aucun texte venu de l'appelant n'y entre, son
+    # chemin voyage dans l'environnement -- et la commande qu'il lance reste
+    # soumise a la strategie configuree.
+    $enfant['DEVCTX_EXEC_LANCEUR'] = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($PSScriptRoot, '..', 'lancer-commande.ps1'))
+    #
+    # -Command et non -EncodedCommand. Lance encode, pwsh ecrit ses erreurs en
+    # CLIXML des que stderr est redirige -- le cas meme d'un agent -- et
+    # `-NoProfile -EncodedCommand <base64>` est la signature que les regles des
+    # antivirus et EDR signalent, sur des machines de clients (audit du 30
+    # octobre 2026). Le texte est fixe, sans guillemet : ArgumentList le cite
+    # correctement, et il reste lisible dans la liste des processus.
+    $amorce = '& ([scriptblock]::Create([System.IO.File]::ReadAllText($env:DEVCTX_EXEC_LANCEUR)))'
+    foreach ($a in @('-NoLogo', '-NoProfile', '-Command', $amorce)) { $psi.ArgumentList.Add($a) }
 
     # Les arguments NE passent PAS par la ligne de commande : derriere -File,
     # pwsh les relisait comme ses propres parametres, et '--output=C:\x'
-    # devenait '--output=C' puis '\x'. Ils voyagent encodes dans
+    # devenait '--output=C' puis '\x' (deuxieme audit). Ils voyagent encodes dans
     # l'environnement de l'enfant, que le lanceur vide avant tout.
     # -InputObject, jamais le pipeline : un tableau d'un seul element y serait
     # deplie en chaine. Et sans -AsArray, qui l'envelopperait une seconde fois.

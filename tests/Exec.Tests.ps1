@@ -613,6 +613,74 @@ end { }
             @(Get-Content -LiteralPath $compteur).Count | Should -Be 1
         }
 
+        It 'une valeur attachee a son parametre reste a ce parametre, meme si elle commence par un tiret' {
+            # Revue Sourcery de la PR #55 : '-Value:-x' arrive a ctx exec en DEUX
+            # elements, '-Value:' puis '-x', et le lanceur passait '-Value:' comme
+            # une valeur positionnelle. La forme attachee est aussi la seule qui
+            # permette de passer une valeur commencant par un tiret : un '-x' entre
+            # apostrophes et un -x nu sont indiscernables une fois dans $args.
+            InModuleScope DevContext -Parameters $script:Monde {
+                Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+                Mock Get-CtxSecret { }
+                Push-Location $Projet
+                try { Invoke-DevCtx exec Set-Content -LiteralPath:$Sortie -Value:'-commence-par-un-tiret' }
+                finally { Pop-Location }
+                $LASTEXITCODE | Should -Be 0
+            }
+            Get-Content -LiteralPath $script:Sortie | Should -Be '-commence-par-un-tiret'
+        }
+
+        It 'un switch attache recoit un booleen, quelle que soit la casse (<Valeur>)' -ForEach @(
+            @{ Valeur = $true; Octets = 1 }
+            @{ Valeur = $false; Octets = 3 }
+        ) {
+            # -NoNewline:$True arrive en '-NoNewline:' puis un booleen, que
+            # l'aplatissement transforme en 'True' : une chaine qu'un switch
+            # refuse de convertir.
+            InModuleScope DevContext -Parameters ($script:Monde + @{ Valeur = $Valeur }) {
+                Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+                Mock Get-CtxSecret { }
+                Push-Location $Projet
+                try { Invoke-DevCtx exec Set-Content -LiteralPath $Sortie -Value 'x' -NoNewline:$Valeur }
+                finally { Pop-Location }
+                $LASTEXITCODE | Should -Be 0
+            }
+            (Get-Item -LiteralPath $script:Sortie).Length | Should -Be $Octets
+        }
+
+        It 'un saut de ligne final ne fait pas d un argument un nom de parametre (<Forme>)' -ForEach @(
+            # Audit du 30 octobre 2026 : en .NET, `$` accepte un `\n` final. Les
+            # deux motifs "fermes" laissaient donc passer '-Force<LF>', qui
+            # entrait dans le texte genere et coupait l'instruction en deux : un
+            # cmdlet en echec rendait 0.
+            @{ Forme = 'nu'; Args = @('-LiteralPath', 'Z:\nexiste\pas\du\tout', "-Force`n", 'APRES') }
+            @{ Forme = 'attache'; Args = @("-LiteralPath:`n", 'Z:\nexiste\pas\du\tout', '-Force') }
+        ) {
+            InModuleScope DevContext -Parameters ($script:Monde + @{ Arguments = $Args }) {
+                Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+                Mock Get-CtxSecret { }
+                Push-Location $Projet
+                try { Invoke-DevCtx exec Get-Item @Arguments 2>$null 6>$null | Out-Null }
+                finally { Pop-Location }
+                $LASTEXITCODE | Should -Be 1
+            }
+        }
+
+        It 'une valeur attachee qui s ecrit true dans une autre casse reste du texte' {
+            # Seul l'aplatissement d'un VRAI booleen produit exactement 'True' ou
+            # 'False'. -eq ignorait la casse et changeait la chaine 'tRuE' en
+            # booleen (audit du 30 octobre 2026).
+            InModuleScope DevContext -Parameters $script:Monde {
+                Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+                Mock Get-CtxSecret { }
+                Push-Location $Projet
+                try { Invoke-DevCtx exec Set-Content -LiteralPath $Sortie -Value:'tRuE' }
+                finally { Pop-Location }
+                $LASTEXITCODE | Should -Be 0
+            }
+            Get-Content -LiteralPath $script:Sortie | Should -BeExactly 'tRuE'
+        }
+
         It 'le vecteur d arguments ne descend pas jusqu a la commande' {
             $sonde = Join-Path $script:Projet 'canal.ps1'
             Set-Content -LiteralPath $sonde -Value "Set-Content -LiteralPath '$($script:Sortie)' -Value ([bool](Get-ChildItem Env: | Where-Object Name -like 'DEVCTX_EXEC*'))"
@@ -625,6 +693,81 @@ end { }
             }
             Get-Content -LiteralPath $script:Sortie | Should -Be 'False'
         }
+    }
+
+    It 'l enfant tourne sous la strategie d execution configuree, pas sous Bypass' {
+        # Revue Sourcery de la PR #55 : avec -ExecutionPolicy Bypass sur le
+        # processus enfant, un script que la strategie de l'utilisateur aurait
+        # bloque -- non signe, venu d'Internet -- s'executait via ctx exec. Le
+        # lanceur ne passe plus par une strategie : il est lu comme du code du
+        # module, et la commande qu'il lance reste soumise a celle configuree.
+        # La portee Process de l'enfant doit donc etre vide.
+        InModuleScope DevContext -Parameters $script:Monde {
+            Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+            Mock Get-CtxSecret { }
+            Push-Location $Projet
+            try { Invoke-DevCtx exec $Pwsh -NoProfile -NonInteractive -Command "Set-Content -LiteralPath '$Sortie' -Value (Get-ExecutionPolicy -Scope Process)" }
+            finally { Pop-Location }
+        }
+        Get-Content -LiteralPath $script:Sortie | Should -Be 'Undefined'
+        # La meme question posee au processus du LANCEUR lui-meme : c'est lui qui
+        # execute un .ps1 demande, et c'est sa strategie qui compte.
+        $sonde = Join-Path $script:Projet 'politique.ps1'
+        Set-Content -LiteralPath $sonde -Value "Set-Content -LiteralPath '$($script:Sortie)' -Value (Get-ExecutionPolicy -Scope Process)"
+        InModuleScope DevContext -Parameters ($script:Monde + @{ Sonde = $sonde }) {
+            Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+            Mock Get-CtxSecret { }
+            Push-Location $Projet
+            try { Invoke-DevCtx exec $Sonde }
+            finally { Pop-Location }
+        }
+        Get-Content -LiteralPath $script:Sortie | Should -Be 'Undefined'
+    }
+
+    It 'les erreurs PowerShell de la commande arrivent en texte sur un stderr redirige, pas en CLIXML' {
+        # Audit du 30 octobre 2026 : lance par -EncodedCommand, pwsh ecrit ses
+        # erreurs, avertissements et progressions en CLIXML des que stderr est
+        # redirige -- exactement le cas d'un agent ou d'un orchestrateur. Seul
+        # un vrai processus redirige le montre : ce test en construit un, sans
+        # coffre (Get-CtxSecret y est remplace) et sans autre contexte que
+        # celui qu'il declare.
+        $module = (Resolve-Path (Join-Path $PSScriptRoot '..' 'DevContext.psd1')).Path
+        $erreur = Join-Path $TestDrive 'stderr.txt'
+        $script = Join-Path $TestDrive 'clixml.ps1'
+        Set-Content -LiteralPath $script -Value @"
+Import-Module '$module' -Force
+& (Get-Module DevContext) {
+    function script:Get-CtxSecret { param(`$Name, `$Key) `$null }
+    function script:Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = '$($script:Racine)' } }
+}
+Set-Location -LiteralPath '$($script:Projet)'
+Invoke-DevCtx exec Write-Error 'MARQUEUR-ERREUR'
+exit `$LASTEXITCODE
+"@
+        $p = Start-Process -FilePath $script:Pwsh -ArgumentList @('-NoProfile', '-File', $script) `
+            -RedirectStandardError $erreur -RedirectStandardOutput (Join-Path $TestDrive 'stdout.txt') -Wait -PassThru -NoNewWindow
+        $texte = Get-Content -LiteralPath $erreur -Raw
+        $texte | Should -Match 'MARQUEUR-ERREUR'
+        $texte | Should -Not -Match 'CLIXML'
+        $p.ExitCode | Should -Be 1
+    }
+
+    It 'refuse hors de Windows, avec son propre code, plutot que d echouer a moitie' {
+        # Revue Sourcery de la PR #55 : l'environnement de base se lit dans le
+        # registre Windows. Ailleurs, l'enfant serait parti sans Path ni HOME.
+        InModuleScope DevContext -Parameters $script:Monde {
+            Mock Get-CtxManifests { [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine } }
+            Mock Test-CtxExecPlateforme { $false }
+            Mock Get-CtxSecret { throw 'ne doit pas etre lu' }
+            Push-Location $Projet
+            try { Invoke-DevCtx exec $Pwsh -NoProfile -Command "Set-Content -LiteralPath '$Sortie' x" }
+            finally { Pop-Location }
+            $LASTEXITCODE | Should -Be 125
+            # Filtre sur 'acme' : Push-Location et Pop-Location declenchent le hook
+            # de dossier, qui lit le coffre pour le contexte de la SESSION.
+            Should -Invoke Get-CtxSecret -Times 0 -Exactly -ParameterFilter { $Name -eq 'acme' } -Because 'the refusal comes before the vault'
+        }
+        Test-Path -LiteralPath $script:Sortie | Should -BeFalse
     }
 
     It 'un echec avant le lancement ne laisse pas un code de sortie perime' {

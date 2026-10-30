@@ -27,6 +27,17 @@
     this script removes that variable from its own environment before running
     anything, so the command never inherits it.
 
+    WHY THIS SCRIPT IS NOT RUN WITH -File
+
+    It was, under `-ExecutionPolicy Bypass`, so that a signing policy could not
+    refuse it. But a policy applies to the process, and this process then runs
+    the command asked for: a script the user's policy would have blocked --
+    unsigned, marked as downloaded -- ran anyway (Sourcery review of PR #55).
+    The module now hands this file's path in DEVCTX_EXEC_LANCEUR and starts pwsh
+    with a fixed bootstrap that reads it as a script block. This file runs as
+    the module code it is, and the command it launches meets the policy that is
+    configured -- the process scope stays empty.
+
     HOW THEY ARE PASSED ON
 
     Plain strings, splatted, arrive exactly as typed -- for a native program,
@@ -54,6 +65,9 @@
 
 $encode = $env:DEVCTX_EXEC_ARGV
 [Environment]::SetEnvironmentVariable('DEVCTX_EXEC_ARGV', [NullString]::Value)
+# The path this script was read from, for the bootstrap only: nothing the
+# command runs needs it.
+[Environment]::SetEnvironmentVariable('DEVCTX_EXEC_LANCEUR', [NullString]::Value)
 
 $tous = @()
 try {
@@ -127,10 +141,28 @@ else {
     # needs none, and an event log that records script blocks sees `$argv[3]`
     # instead of whatever the caller passed. Only the two shapes below are text,
     # and both are matched whole against a closed pattern.
+    #
+    # The attached form `-Name:value` reaches this script already split, as
+    # '-Name:' followed by the value -- PowerShell split it at the caller. The
+    # value is glued back onto its parameter, still by reference; passed as a
+    # separate positional value it bound to the wrong parameter (Sourcery review
+    # of PR #55). It is also the only way to hand a parameter a value that starts
+    # with a dash: once in $args, a quoted '-x' and a bare -x are the same string.
+    # A switch refuses the string 'True', which is what [string] made of the
+    # boolean, so True and False after a colon go back to being booleans.
     $morceaux = for ($i = 0; $i -lt $reste.Count; $i++) {
         $a = $reste[$i]
-        if ($a -cmatch '^-[A-Za-z][A-Za-z0-9_]*$') { $a }
-        elseif ($a -cmatch '^(-[A-Za-z][A-Za-z0-9_]*:)\$(true|false)$') { $Matches[1] + '$' + $Matches[2] }
+        # \z et non $ : en .NET, $ accepte un saut de ligne final, qui entrait
+        # dans le texte genere et coupait l'instruction -- un cmdlet en echec
+        # rendait 0 (audit du 30 octobre 2026). -ceq : seul un vrai booleen
+        # aplati donne exactement 'True' ou 'False' ; 'tRuE' reste du texte.
+        if ($a -cmatch '^-[A-Za-z][A-Za-z0-9_]*:\z' -and $i + 1 -lt $reste.Count) {
+            $i++
+            if ($reste[$i] -ceq 'True') { $a + '$true' }
+            elseif ($reste[$i] -ceq 'False') { $a + '$false' }
+            else { $a + "`$$vArgv[$i]" }
+        }
+        elseif ($a -cmatch '^-[A-Za-z][A-Za-z0-9_]*\z') { $a }
         else { "`$$vArgv[$i]" }
     }
     $appel = [scriptblock]::Create("param(`$$vCible, `$$vEtat, `$$vArgv) & `$$vCible " + ($morceaux -join ' ') + "; `$$vEtat.Reussi = `$?")

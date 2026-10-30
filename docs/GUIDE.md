@@ -260,9 +260,18 @@ nothing inside PowerShell, and `ctx exec gh api user | ConvertFrom-Json` gets
 nothing either. A script that reads that silence as *nothing to do* is wrong. From
 an agent's shell or `pwsh -c`, the output is ordinary stdout of the process.
 
-Arguments arrive exactly as typed, with one exception that PowerShell imposes
-before `ctx exec` ever sees them: a bare `--` is consumed at the call. Quote it,
-`'--'`, when the command needs it, as in `ctx exec git checkout '--' file`.
+Arguments arrive exactly as typed, with three exceptions that PowerShell imposes
+before `ctx exec` ever sees them:
+
+- **A bare `--` is consumed at the call.** Quote it, `'--'`, when the command
+  needs it, as in `ctx exec git checkout '--' file`.
+- **A value that starts with a dash** looks the same as a parameter name once
+  quoted, for a PowerShell command that declares parameters. Attach it to its
+  parameter instead: `ctx exec Set-Content -Value:'-x' -LiteralPath f`.
+- **An unquoted `-name:value` is split in two**, `-name:` then `value`, before
+  `ctx exec` sees it. A PowerShell command gets it back whole; a native program
+  such as `git`, `gh` or `supabase` receives two arguments. Quote it whole when
+  a native program needs it as one: `ctx exec tool '-o:file'`.
 
 The price of that guarantee: whatever the calling session added on its own — an
 activated virtualenv, an `fnm env` `Path`, an exported `NODE_ENV` — is not there

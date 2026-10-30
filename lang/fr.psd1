@@ -559,5 +559,6 @@
     'exec.horsContexteFix'    = 'Lancez-la depuis le dossier d un contexte, ou creez-en un : ctx new'
     'exec.tampon'             = "ctx exec : contexte '{0}' - secrets : {1}"
     'exec.demarrage'          = 'ctx exec : impossible de lancer pwsh : {0}'
+    'exec.plateforme'         = 'ctx exec : Windows seulement pour l instant -- l environnement de base se lit dans le registre. Commande non lancee.'
     'exec.aucunSecret'        = 'aucun'
 }

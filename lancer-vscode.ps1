@@ -68,7 +68,10 @@ if (-not (Test-Path -LiteralPath $Path)) {
 }
 
 # -NoCd : on se place ensuite sur le PROJET, pas sur la racine du contexte.
-Use-DevContext -Name $Context -NoCd
+# Un coffre illisible fait echouer `work` : le dire ICI, avec la pause du
+# lanceur, plutot que laisser une trace brute dans une fenetre qui se ferme.
+try { Use-DevContext -Name $Context -NoCd }
+catch { Stop-WithMessage (& (Get-Module DevContext) { param($t) Protect-CtxMessage $t } $_.Exception.Message) }
 
 # Le changement de dossier déclenche le hook qui aligne SUPABASE_ACCESS_TOKEN
 # sur le project-ref trouvé dans le dossier — indispensable quand un contexte

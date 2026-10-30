@@ -187,6 +187,78 @@
   `subst` drives, mapped drives, 8.3 short names, `\\?\` and UNC spellings are
   not followed; `SECURITY.md` says so.
 
+- **A secret the vault could not READ passed for a secret it does not have.**
+  `Get-CtxSecret` called `Get-Secret` with `-ErrorAction SilentlyContinue`,
+  so every failure came back as `$null` -- and every caller reads `$null` as
+  "this context has no such secret". `work` then announced a context with a
+  token silently missing. Measured on 27 September 2026 and again on 29
+  October: reads from several runspaces of ONE process fail with `Unable to
+  get secret ... from vault DevContext` -- 16 of 24 in the second
+  measurement -- while 26 reads from separate processes all succeeded. A
+  locked vault took the same silent path.
+
+  The rule was measured before it was written, because the obvious one is
+  wrong. A concurrent read reports TWO errors, `GetSecretInvalidOperation`
+  and THEN `GetSecretNotFound`, so "it says not found" proves nothing: a
+  secret is absent only when there is at least one error and EVERY error is
+  `GetSecretNotFound`. A read that returns nothing and says nothing is
+  ambiguous, and ambiguous is never read as absent. A non-terminating failure
+  is retried twice with a short jittered wait -- the measured cause is
+  transient, and the same 24 parallel reads now all succeed; a terminating
+  one, such as a vault missing from the registry, is not. Then the failure
+  is reported by key NAME, never a value, through `Protect-CtxMessage`. An
+  absent secret is never retried.
+
+  What each caller does with a failure:
+
+  - `work` clears the variable, exactly as for an absent key, finishes the
+    activation, then FAILS with `DevCtxActivationIncomplete`, naming the
+    variables. `$?` is false, so `work x && cmd` does not start: a
+    `supabase` command without its token would fall back on the CLI's own
+    login, that is, on the last account anyone used. Note that `work x;
+    ctx` now stops at the failure too, so no verdict is printed after it.
+    A Supabase token whose first read failed but that the folder's own
+    lookup then loaded is not reported, and one that lookup cleared -- on a
+    failure, or because the folder's secret is absent from a stale index --
+    is no longer listed as loaded.
+  - `ctx-off`, which activates the home context through `work`, fails the
+    same way.
+  - The folder-change hook clears the Supabase token BEFORE reporting --
+    raising first would have left the previous project's token loaded, which
+    is worse than the silence it replaces -- and warns instead of logging to
+    the verbose stream, without ever breaking the `cd`, even under
+    `$WarningPreference = 'Stop'`.
+  - The `supabase` alias refuses to run. Before, it ran with whatever token
+    the shell held.
+  - `sb-index` stops before rewriting the index. Before, it skipped the
+    unreadable account like an absent one, and the rebuilt index lost every
+    project of that account, its `env: prod` tag with it: the production
+    guard stopped guarding them. Measured on 1.11.1 by the security audit of
+    29 October 2026.
+  - The VS Code and editor launchers stop on the message, with their usual
+    pause, instead of a raw error in a window that closes. The editor shim
+    still opens the editor -- an isolated profile is worth having without the
+    tokens -- and still records why in its trace.
+
+- **An interrupted `work` left the previous context's tokens behind.** The
+  identity changed first and the secrets were replaced one key at a time, so
+  Ctrl+C during a vault read -- at a password prompt, or during the new
+  retry wait -- left a shell labelled with the new context and holding the
+  old one's tokens. No `catch` sees a pipeline stop. `work` now clears every
+  secret variable BEFORE changing the identity: an interrupted activation
+  leaves a shell with no token, which fails, rather than one with another
+  account's, which succeeds in the wrong place. It clears them before even
+  checking the vault, since the editor shim opens the editor when that check
+  fails. The folder hook clears the Supabase token in a `finally`, the only
+  block a stop runs. Older than the fix above; found by the security audits
+  of 29 and 30 October 2026.
+
+- **A context folder whose manifest named another context mixed two
+  contexts' tokens.** `work` read the secrets under the folder's name and the
+  folder's Supabase token under the manifest's `name`. A context folder
+  copied by hand was enough. `work` now refuses before applying anything when
+  the two differ.
+
 ### Changed
 
 - `work` and `ctx exec` compute a context's variables in one function,

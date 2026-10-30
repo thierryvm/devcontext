@@ -171,6 +171,7 @@
     # --- coffre et manifeste ---------------------------------------------------
     'vault.absent'            = "Module SecretManagement absent. Installer :`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"
     'vault.creation'          = "Creation du coffre '{0}'..."
+    'secret.illisible'        = "Le coffre '{1}' n'a pas pu etre lu pour la cle '{0}' : {2}"
     'manifeste.introuvable'   = "Contexte '{0}' introuvable ({1}). 'ctx-list' pour voir les contextes existants."
 
     # --- ctx-off ---------------------------------------------------------------
@@ -504,6 +505,8 @@
     'work.compte'             = 'Compte   : {0}'
     'work.secrets'            = 'Secrets  : {0}'
     'work.secretsAucun'       = 'aucun charge'
+    'work.illisibles'         = "Activation incomplete : le coffre '{1}' n'a pas pu etre lu pour {0}. Ces variables ont ete effacees, aucune valeur d'un autre contexte n'est restee. Relance 'work' ; si le coffre est verrouille : Unlock-SecretStore."
+    'work.nomManifeste'       = "Le contexte '{0}' porte un manifeste au nom '{1}'. Rien n'a ete applique : les secrets seraient lus sous deux noms, ceux de deux contextes. Corriger 'name' dans context.json, ou renommer le dossier."
 
     'vercel.token'            = 'token charge'
     'vercel.session'          = 'session dediee'

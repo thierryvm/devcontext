@@ -143,6 +143,48 @@
   a failing-script test was green without the translation it claimed to check,
   because a terminating error makes `pwsh` exit 1 on its own.
 
+- **A junction could hand one context's credentials to another context's
+  files, and two manifests with the same root picked an identity at random.**
+  Both were found by review of PR #55 and both lived in
+  `Resolve-DevContextForPath`, which `ctx`, `ctx doctor` and the three guards
+  share. Ownership was decided on the TEXT of the path: a junction under
+  context A pointing into context B resolved to A, while git -- measured on 30
+  October 2026, git 2.56.0.windows.4 -- resolves the repository to B's path and
+  applies only B's `includeIf`. A's tokens, B's files, B's signature. And when
+  two manifests declared one root, the first one enumerated won.
+
+  Ownership is now decided the way git decides it: the path as typed, and the
+  folder it physically designates once every junction and symbolic link is
+  followed, are each compared with the roots **as declared**, and the two
+  answers must agree. A root that is itself a link is therefore applied
+  nowhere -- measured: `includeIf "gitdir:J/"` matches neither from `J\repo`
+  nor from the real folder behind it. When the answers disagree, when two
+  contexts declare the root, or when a link cannot be read, the folder is
+  **ambiguous** and nobody is picked: `ctx` answers `NO-GO` with a reason code
+  that reads the same in both languages (`alias-cible`, `racine-dupliquee`,
+  `cible-inconnue`) and offers no `work`, which could not fix it; `gh` lets
+  through only a closed list of reads; `vercel` only a closed list of reads
+  written as the first argument; `supabase` refuses destructive and
+  branch-bound commands whatever the environment; `ctx mcp` refuses to write a
+  configuration; the agent-trust and shortcut checks treat the folder as
+  foreign. `ctx doctor` reports it, and reports wherever you stand a root
+  declared twice (`contexte/racines`) and a root that is a link
+  (`contexte/lien`), both explained by `-Fix` rather than repaired. `ctx new`
+  refuses a root that is a link.
+
+  An intermediate revision tried each root under both its declared and its
+  physical form. The security audit showed a root-junction planted inside
+  another context's tree then took that subtree over with a plain
+  `proprietaire` verdict -- the same defect, silenced. It also resolved every
+  root on every shim call: 21 s per command for an unreachable network root.
+  The decision now touches no root on disk.
+
+  `Resolve-DevContextForPath` keeps its shape and returns nothing for an
+  ambiguous folder; the editor entry point and the launcher treat it as outside
+  every context. A root written with forward slashes now matches as well.
+  `subst` drives, mapped drives, 8.3 short names, `\\?\` and UNC spellings are
+  not followed; `SECURITY.md` says so.
+
 ### Changed
 
 - `work` and `ctx exec` compute a context's variables in one function,

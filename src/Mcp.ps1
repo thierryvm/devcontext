@@ -222,7 +222,15 @@ function New-DevProjectMcp {
     )
 
     $dossier = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
-    $manifeste = Resolve-DevContextForPath -Path $dossier
+
+    # Le verdict COMPLET : un proprietaire ambigu rendait ici $null, donc
+    # aucun index a consulter, donc « pas de production », donc --read-only
+    # retire sous -Ecriture -- dans un fichier fait pour etre commite. Mesure
+    # par l'audit du 30 octobre 2026. On ne sait pas quel index lire : on
+    # n'ecrit rien.
+    $proprio = Get-CtxProprietaire -Path $dossier
+    if ($proprio.Etat -eq 'ambigu') { throw (Get-CtxMessageAmbiguite -Verdict $proprio) }
+    $manifeste = $proprio.Manifeste
     $contexte  = if ($manifeste) { Get-CtxProp $manifeste 'name' } else { $null }
 
     $nouveaux = [ordered]@{}

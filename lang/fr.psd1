@@ -85,6 +85,9 @@
 
     'ctx.pb.dossierSansActif' = "Ce dossier appartient au contexte '{0}', et aucun contexte n'est actif."
     'ctx.pb.dossierAutre'     = "Ce dossier appartient au contexte '{0}', mais '{1}' est actif."
+    'proprietaire.ambigu.racines' = "Proprietaire ambigu (racine-dupliquee) : les contextes {0} declarent la meme racine. Aucun n est choisi : corrigez le context.json de l un d eux."
+    'proprietaire.ambigu.alias'   = "Proprietaire ambigu (alias-cible) : ce chemin passe par une jonction ou un lien, et son proprietaire n est pas celui de ses fichiers, qui sont dans '{1}' (contextes en jeu : {0}). git signe d apres les fichiers. Travaillez depuis le vrai dossier."
+    'proprietaire.ambigu.inconnue' = "Proprietaire indetermine (cible-inconnue) : un lien sur ce chemin ne se laisse pas lire. Aucun contexte n est choisi."
     # Remplace 'ctx.pb.horsRacine', retire le 19 aout 2026 : un dossier que
     # personne ne possede ne croise aucune identite, et le refus qu'il produisait
     # proposait un correctif deja applique.
@@ -211,6 +214,7 @@
     'new.nomInvalide'         = 'Nom de contexte invalide : minuscules, chiffres et tirets uniquement.'
     'new.existeDeja'          = "Le contexte '{0}' existe deja ({1})."
     'new.racinePrise'         = "La racine '{0}' est deja celle du contexte '{1}'."
+    'new.racineLien'          = "La racine '{0}' est un lien vers '{1}'. git n applique jamais un includeIf a travers un lien : ce contexte ne signerait rien. Declarez le vrai dossier, '{1}'."
     'new.cleGeneration'       = 'Generation de la cle SSH du contexte (passphrase recommandee) :'
     'new.cleSansGeneration'   = 'Cle SSH NON generee (-NoKey).'
     'new.cleCommande'         = "ssh-keygen -t ed25519 -C '{0}' -f '{1}'"
@@ -382,6 +386,11 @@
     'doc.ctx.horsContexteActif' = "ce dossier n appartient a aucun contexte ; l identite '{0}' est chargee dans ce shell, mais c est l identite git GLOBALE qui signera ici"
     'doc.ctx.sansActif'       = "dossier du contexte '{0}', mais aucun contexte actif dans ce shell"
     'doc.ctx.autreActif'      = "dossier du contexte '{0}', identite active '{1}'"
+    'doc.ctx.racineDupliquee' = "la racine '{0}' est declaree par plusieurs contextes : {1}. Dans ce dossier et en dessous, aucune identite n est appliquee."
+    'doc.ctx.racineLien'      = "la racine du contexte '{0}', '{1}', est un lien vers '{2}'. git n y applique jamais l includeIf du contexte, et tout dossier pris par ce chemin est ambigu."
+    'doc.ctx.racineLienFix'   = "declarez le vrai dossier comme racine dans context.json : {0}"
+    'doc.ctx.ambigu.racines'  = "corrigez le context.json de l un des contextes : {0}"
+    'doc.ctx.ambigu.inconnue' = "verifiez la jonction ou le lien sur ce chemin (Get-Item <dossier> | Select-Object LinkTarget)"
     'doc.gh.sansConfigDir'    = 'GH_CONFIG_DIR absent : gh utilise la config globale, donc le dernier compte connecte'
     'doc.gh.autreContexte'    = 'GH_CONFIG_DIR pointe sur un autre contexte'
     'doc.gh.dedie'            = 'config dediee au contexte'
@@ -469,6 +478,7 @@
     'fix.non.admin'           = "modifie le PATH SYSTEME, donc exige les droits administrateur. Un outil qui reclame l'elevation en silence est un outil dont on se mefie ensuite."
     'fix.non.wsl'             = "rien du cote Windows ne peut le fermer : une distribution porte son propre PATH."
     'fix.non.paquet'          = "installer ou desinstaller un binaire n'est jamais le travail d'un diagnostic."
+    'fix.non.manifeste'       = "choisir lequel de deux contextes garde une racine est une decision, pas une reparation : corrigez le context.json a la main."
 
     'doc.garde.sansDossier'   = 'dossier shims introuvable'
     'doc.garde.horsPath'      = 'shims absents du PATH : la protection ne couvre que PowerShell'

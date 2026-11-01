@@ -188,7 +188,7 @@ Describe 'Confiance des agents — collecte' {
             '{ "permissions": { "additionalDirectories": ["F:\\Ailleurs", "C:\\Bureau"] } }' |
                 Set-Content (Join-Path $projet '.claude\settings.json') -Encoding UTF8
 
-            Mock Resolve-DevContextForPath { $null }
+            Mock Get-CtxProprietaire { [pscustomobject]@{ Etat = 'aucun'; Manifeste = $null; Contexte = $null; Raison = $null; Candidats = @(); CheminPhysique = $null } }
             $faits = @(Get-CtxAgentConfianceFacts -Dossier $projet)
 
             @($faits | Where-Object { $_.Portee -eq 'projet' }).Count | Should -Be 2
@@ -196,20 +196,42 @@ Describe 'Confiance des agents — collecte' {
         }
     }
 
-    It 'resout le proprietaire par Resolve-DevContextForPath' {
+    It 'resout le proprietaire par Get-CtxProprietaire' {
         # Reutilisee et non reecrite : c'est elle qui porte le piege de prefixe
-        # (Apps ne doit pas matcher Apps-Autre), deja paye trois fois ici.
+        # (Apps ne doit pas matcher Apps-Autre), deja paye trois fois ici --
+        # et, depuis le 30 octobre 2026, les jonctions et les racines
+        # dupliquees. Elle remplace Resolve-DevContextForPath ici parce que
+        # celle-ci rend $null pour un dossier ambigu, qui passait alors pour
+        # orphelin.
         InModuleScope DevContext {
             $projet = Join-Path $TestDrive 'projet2'
             $null = New-Item -ItemType Directory -Path (Join-Path $projet '.claude') -Force
             '{ "permissions": { "additionalDirectories": ["F:\\Apps"] } }' |
                 Set-Content (Join-Path $projet '.claude\settings.json') -Encoding UTF8
 
-            Mock Resolve-DevContextForPath { [pscustomobject]@{ name = 'perso' } }
+            Mock Get-CtxProprietaire { [pscustomobject]@{ Etat = 'proprietaire'; Manifeste = [pscustomobject]@{ name = 'perso' }; Contexte = 'perso'; Raison = $null; Candidats = @('perso'); CheminPhysique = 'F:\Apps' } }
             $faits = @(Get-CtxAgentConfianceFacts -Dossier $projet)
 
-            Should -Invoke Resolve-DevContextForPath -Times 1 -Exactly
+            Should -Invoke Get-CtxProprietaire -Times 1 -Exactly
             $faits[0].Proprietaire | Should -Be 'perso'
+        }
+    }
+
+    It 'tient un dossier ambigu pour etranger, jamais pour orphelin' {
+        # Audit du 30 octobre 2026 : un dossier approuve qui passe par une
+        # jonction vers un autre client n'etait plus signale du tout.
+        InModuleScope DevContext {
+            $projet = Join-Path $TestDrive 'projet3'
+            $null = New-Item -ItemType Directory -Path (Join-Path $projet '.claude') -Force
+            '{ "permissions": { "additionalDirectories": ["F:\\Apps\\lien"] } }' |
+                Set-Content (Join-Path $projet '.claude\settings.json') -Encoding UTF8
+
+            Mock Get-CtxProprietaire { [pscustomobject]@{ Etat = 'ambigu'; Manifeste = $null; Contexte = $null; Raison = 'alias-cible'; Candidats = @('beta', 'perso'); CheminPhysique = 'F:\Clients\beta\p' } }
+            $faits = @(Get-CtxAgentConfianceFacts -Dossier $projet)
+            $faits[0].Proprietaire | Should -Be 'ambigu:beta+perso'
+
+            $checks = @(Test-CtxDoctorAgentConfiance -Faits $faits -Contexte 'perso')
+            @($checks | Where-Object { $_.Verdict -eq 'PROBLEME' }).Count | Should -Be 1
         }
     }
 
@@ -225,7 +247,7 @@ Describe 'Confiance des agents — collecte' {
             $null = New-Item -ItemType Directory -Path (Join-Path $projet '.claude') -Force
             Set-Content (Join-Path $projet '.claude\settings.json') -Value $Contenu -Encoding UTF8
 
-            Mock Resolve-DevContextForPath { $null }
+            Mock Get-CtxProprietaire { [pscustomobject]@{ Etat = 'aucun'; Manifeste = $null; Contexte = $null; Raison = $null; Candidats = @(); CheminPhysique = $null } }
             { Get-CtxAgentConfianceFacts -Dossier $projet } | Should -Not -Throw
             Get-CtxAgentConfianceFacts -Dossier $projet | Should -BeNullOrEmpty
         }

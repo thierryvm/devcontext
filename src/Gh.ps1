@@ -156,6 +156,33 @@ function Test-CtxGhEcriture {
     $false
 }
 
+function Test-CtxGhLectureConnue {
+    <#
+      PURE. Cette commande figure-t-elle dans la liste FERMEE des lectures ?
+
+      Le nom et le verbe doivent etre les deux PREMIERS arguments : une option
+      placee devant porte peut-etre une valeur, et cette valeur se ferait
+      passer pour le verbe. `api` n'y est pas : sa methode s'ecrit de trop de
+      facons (-XPOST, -X=POST, --method, un champ qui bascule en POST).
+    #>
+    param([string[]]$Arguments = @())
+
+    $a = @($Arguments | ForEach-Object { "$_".ToLowerInvariant() })
+    if ($a.Count -eq 0) { return $false }
+    if (@($a | Where-Object { $_ -notin @('--version', '--help', '-h', 'version', 'help') }).Count -eq 0) { return $true }
+    if ($a[0] -eq 'status') { return $true }
+    if ($a.Count -lt 2) { return $false }
+    "$($a[0]) $($a[1])" -in @(
+        'pr list', 'pr view', 'pr status', 'pr diff', 'pr checks',
+        'issue list', 'issue view', 'issue status',
+        'repo view', 'repo list',
+        'run list', 'run view', 'workflow list', 'workflow view',
+        'release list', 'release view',
+        'search repos', 'search issues', 'search prs', 'search code', 'search commits',
+        'auth status'
+    )
+}
+
 function Test-CtxGhGuard {
     <#
       DECISION PURE. Aucun disque, aucun reseau, aucune variable lue ici : tout
@@ -181,7 +208,10 @@ function Test-CtxGhGuard {
         [AllowNull()][AllowEmptyString()][string]$ConfigActuel,
         # Ce dossier contient-il deja une configuration `gh` utilisable ?
         [switch]$ConfigExiste,
-        [switch]$Override
+        [switch]$Override,
+        # Le message d'un proprietaire AMBIGU (Get-CtxMessageAmbiguite), vide
+        # sinon. Le contexte est alors vide aussi : il n'y en a pas UN.
+        [AllowNull()][AllowEmptyString()][string]$Ambiguite
     )
 
     # Le contexte voyage DANS le verdict. Sans cela, l'appelant devrait le
@@ -208,6 +238,23 @@ function Test-CtxGhGuard {
             Redirection   = $null
             Avertissement = $null
         }
+    }
+
+    # Proprietaire ambigu : deux contextes revendiquent ce dossier, ou son
+    # chemin et ses fichiers n'ont pas le meme. On ne redirige vers AUCUN des
+    # deux, et seule une lecture CONNUE passe, avertie : tout le reste
+    # partirait sous un compte que personne n'a choisi. Teste AVANT "hors
+    # contexte", qui laisserait tout passer en silence.
+    #
+    # Une liste fermee de lectures, et non Test-CtxGhEcriture : l'audit du 30
+    # octobre 2026 a fait passer pour lectures `pr new`, `issue develop`,
+    # `pr revert`, `api -XPOST`... Une liste d'ecritures oublie toujours la
+    # suivante ; dans le seul cas ou l'on ne sait pas QUEL compte ecrirait, on
+    # n'autorise que ce qu'on sait inoffensif.
+    if ($Ambiguite) {
+        if ($Override) { return (& $laisse 'derogation' $null $null) }
+        if (Test-CtxGhLectureConnue -Arguments $Arguments) { return (& $laisse 'lecture-ambigue' $null $Ambiguite) }
+        return (& $refuse 'proprietaire-ambigu' $Ambiguite)
     }
 
     # Hors de tout contexte, ce module n'a rien a dire. C'est le cas d'un dossier
@@ -281,7 +328,12 @@ function Resolve-CtxGhVerdict {
     # LE DOSSIER DECIDE, JAMAIS LA SESSION. $env:DEVCTX n'est pas consulte :
     # quand session et dossier divergent -- l'etat que `ctx` nomme NO-GO -- c'est
     # le dossier qui dit la verite sur ce qui est en train d'etre modifie.
-    $manifeste = Resolve-DevContextForPath -Path $dossier
+    $proprio = Get-CtxProprietaire -Path $dossier
+    if ($proprio.Etat -eq 'ambigu') {
+        return (Test-CtxGhGuard -Arguments $Arguments -Ambiguite (Get-CtxMessageAmbiguite -Verdict $proprio) `
+                -Override:($env:DEVCTX_ALLOW_GH -eq '1'))
+    }
+    $manifeste = $proprio.Manifeste
     if (-not $manifeste) { return (Test-CtxGhGuard -Arguments $Arguments) }
 
     $contexte = Get-CtxProp $manifeste 'name'
@@ -478,12 +530,16 @@ function Write-CtxGhRefus {
     Write-Host ''
     Write-Host "    $(T 'garde.raison' $Verdict.Reason)"
     Write-Host ''
-    Write-Host "    $(T 'gh.correctif')" -ForegroundColor Cyan
-    Write-Host "      work $($Verdict.Contexte) -NoCd" -ForegroundColor Cyan
-    if ($Verdict.Rule -eq 'sans-config') {
-        Write-Host '      gh auth login' -ForegroundColor Cyan
+    # Un dossier ambigu n'a pas UN contexte : `work  -NoCd` serait une commande
+    # sans effet, et la raison dit deja quoi corriger.
+    if ($Verdict.Rule -ne 'proprietaire-ambigu') {
+        Write-Host "    $(T 'gh.correctif')" -ForegroundColor Cyan
+        Write-Host "      work $($Verdict.Contexte) -NoCd" -ForegroundColor Cyan
+        if ($Verdict.Rule -eq 'sans-config') {
+            Write-Host '      gh auth login' -ForegroundColor Cyan
+        }
+        Write-Host ''
     }
-    Write-Host ''
     Write-Host "    $(T 'gh.derogation')" -ForegroundColor DarkGray
     Write-Host '      $env:DEVCTX_ALLOW_GH = 1' -ForegroundColor DarkGray
     Write-Host "    $(T 'garde.jamaisProfil1')" -ForegroundColor DarkGray

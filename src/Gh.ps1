@@ -166,15 +166,21 @@ function Test-CtxGhLectureConnue {
       facons (-XPOST, -X=POST, --method, un champ qui bascule en POST).
 
       Comparaison SENSIBLE a la casse : la CLI l'est, et une liste qui accepte
-      ce que la CLI interpreterait autrement n'est plus fermee. --show-token
-      est exclu : il imprime le jeton du compte que personne n'a choisi.
-      Releves par le contre-audit du 1er novembre 2026.
+      ce que la CLI interpreterait autrement n'est plus fermee. `auth status`
+      n'est accepte que nu : sous toute autre forme il peut imprimer le jeton
+      du compte que personne n'a choisi. Releves par les audits du 1er
+      novembre 2026.
     #>
     param([string[]]$Arguments = @())
 
     $a = @($Arguments | ForEach-Object { "$_" })
     if ($a.Count -eq 0) { return $false }
-    if (@($a | Where-Object { $_ -cin @('-t', '--show-token') }).Count -gt 0) { return $false }
+    # `auth status` seul, sans AUCUN argument : l'option qui imprime le jeton
+    # s'ecrit -t, --show-token, --show-token=true, ou groupee (-at, -ta).
+    # Exclure des orthographes en oublie toujours une ; audit final du 1er
+    # novembre 2026. C'est la seule lecture de la liste qui sache imprimer un
+    # jeton.
+    if ($a.Count -ge 1 -and $a[0] -ceq 'auth' -and $a.Count -ne 2) { return $false }
     if (@($a | Where-Object { $_ -cnotin @('--version', '--help', '-h', 'version', 'help') }).Count -eq 0) { return $true }
     if ($a[0] -ceq 'status') { return $true }
     if ($a.Count -lt 2) { return $false }

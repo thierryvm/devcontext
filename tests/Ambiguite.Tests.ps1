@@ -578,6 +578,10 @@ Describe 'Les decisions des garde-fous, devant une ambiguite' {
         @{ Cas = 'casse differente'; Mots = @('PR', 'LIST'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
         @{ Cas = 'auth status --show-token'; Mots = @('auth', 'status', '--show-token'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
         @{ Cas = 'auth status -t'; Mots = @('auth', 'status', '-t'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
+        # Audit final du 1er novembre 2026 : d'autres orthographes du meme drapeau.
+        @{ Cas = 'auth status --show-token=true'; Mots = @('auth', 'status', '--show-token=true'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
+        @{ Cas = 'auth status -at (groupe)'; Mots = @('auth', 'status', '-at'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
+        @{ Cas = 'auth status -ta (groupe)'; Mots = @('auth', 'status', '-ta'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
         @{ Cas = 'auth status'; Mots = @('auth', 'status'); Override = $false; Permis = $true; Regle = 'lecture-ambigue' }
     ) {
         InModuleScope DevContext -Parameters @{ a = $Mots; o = $Override; p = $Permis; r = $Regle } { param($a, $o, $p, $r)

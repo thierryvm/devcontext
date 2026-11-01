@@ -256,7 +256,20 @@ function Invoke-DevContextExec {
     }
 
     $ici = (Get-Location).ProviderPath
-    $m = if ((Get-Location).Provider.Name -eq 'FileSystem') { Resolve-DevContextForPath -Path $ici }
+
+    # Le verdict COMPLET : un dossier AMBIGU -- deux contextes pour une racine,
+    # ou un chemin dont la cible appartient a un autre contexte -- se refuse en
+    # le nommant, et ne se confond pas avec "hors contexte". Jamais de repli
+    # sur $env:DEVCTX : ce serait choisir, a l'aveugle, l'identite qu'on vient
+    # de refuser de deviner. Une resolution qui leve laisse le 125 pose plus
+    # haut : la commande ne part pas.
+    $proprio = if ((Get-Location).Provider.Name -eq 'FileSystem') { Get-CtxProprietaire -Path $ici }
+    if ($proprio -and $proprio.Etat -eq 'ambigu') {
+        Write-CtxExecLigne (Get-CtxMessageAmbiguite -Verdict $proprio)
+        $global:LASTEXITCODE = $script:CtxExecRefus
+        return
+    }
+    $m = if ($proprio) { $proprio.Manifeste }
     if (-not $m) {
         Write-CtxExecLigne (T 'exec.horsContexte' $ici)
         Write-CtxExecLigne (T 'exec.horsContexteFix')

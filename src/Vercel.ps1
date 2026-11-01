@@ -85,11 +85,16 @@ function Test-CtxVercelGuard {
     # La commande doit etre le PREMIER argument : `--cwd ls --prod` laissait
     # `ls` passer pour la commande alors que c'est la valeur de --cwd -- et la
     # CLI, sans commande, deploie. Mesure par l'audit du 30 octobre 2026.
+    #
+    # Et SENSIBLE a la casse : la CLI compare les noms de commande exactement,
+    # et prend un mot inconnu pour un chemin a deployer. `vercel Logs --prod`
+    # passait la liste, et sur Windows un dossier `logs` repond a `Logs`.
+    # Releve par le contre-audit du 1er novembre 2026.
     if ($Ambiguite) {
-        $bruts = @($Arguments | ForEach-Object { "$_".ToLowerInvariant() })
+        $bruts = @($Arguments | ForEach-Object { "$_" })
         $lecture = if ($bruts.Count -eq 0) { $false }
-        elseif ($bruts[0] -in @('whoami', 'help', 'ls', 'list', 'inspect', 'logs')) { $true }
-        else { @($bruts | Where-Object { $_ -notin @('--version', '-v', '--help', '-h') }).Count -eq 0 }
+        elseif ($bruts[0] -cin @('whoami', 'help', 'ls', 'list', 'inspect', 'logs')) { $true }
+        else { @($bruts | Where-Object { $_ -cnotin @('--version', '-v', '--help', '-h') }).Count -eq 0 }
         if (-not $lecture) {
             return [pscustomobject]@{ Allowed = $false; Rule = 'proprietaire-ambigu'; Reason = $Ambiguite }
         }

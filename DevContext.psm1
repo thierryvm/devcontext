@@ -522,10 +522,17 @@ function Get-CtxRacinesConnues {
     foreach ($m in @(Get-CtxManifests)) {
         $racine = Get-CtxProp $m 'root'
         if (-not $racine) { continue }
+        # Une racine UNC n'est pas resolue : un partage injoignable coute
+        # ~21 s a chaque `ctx doctor`, et le tableau de bord appelle doctor.
+        # Sa forme declaree tient lieu de forme physique -- aucun constat
+        # `contexte/lien` n'en sortira, ce qui est vrai a defaut d'etre complet.
+        $unc = ([string]$racine).StartsWith('\\') -or ([string]$racine).StartsWith('//')
         [pscustomobject]@{
             Manifeste      = $m
             Racine         = [string]$racine
-            RacinePhysique = if ($Physique) { Resolve-CtxCheminPhysique ([string]$racine) } else { $null }
+            RacinePhysique = if (-not $Physique) { $null }
+            elseif ($unc) { [string]$racine }
+            else { Resolve-CtxCheminPhysique ([string]$racine) }
         }
     }
 }
@@ -2345,9 +2352,10 @@ function New-DevContext {
     # chaque commande sous J serait ambigue. Le vrai dossier, lui, marche.
     $newRoot = Get-NormalizedRoot $Root
     $newCible = Resolve-CtxCheminPhysique $Root
-    if ([string]::IsNullOrEmpty($newCible) -or (Get-NormalizedRoot $newCible) -ne $newRoot) {
-        throw (T 'new.racineLien' $Root $(if ($newCible) { $newCible } else { '?' }))
-    }
+    # Illisible n'est pas « lien » : dire « lien vers ? » d'une racine
+    # injoignable envoyait chercher un lien qui n'existe pas.
+    if ([string]::IsNullOrEmpty($newCible)) { throw (T 'new.racineIllisible' $Root) }
+    if ((Get-NormalizedRoot $newCible) -ne $newRoot) { throw (T 'new.racineLien' $Root $newCible) }
 
     # Par le texte ET par la cible : deux racines differentes qui designent le
     # meme dossier se disputent ses fichiers.

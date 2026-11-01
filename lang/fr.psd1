@@ -215,6 +215,7 @@
     'new.existeDeja'          = "Le contexte '{0}' existe deja ({1})."
     'new.racinePrise'         = "La racine '{0}' est deja celle du contexte '{1}'."
     'new.racineLien'          = "La racine '{0}' est un lien vers '{1}'. git n applique jamais un includeIf a travers un lien : ce contexte ne signerait rien. Declarez le vrai dossier, '{1}'."
+    'new.racineIllisible'     = "La racine '{0}' ne se laisse pas lire jusqu au bout (injoignable, ou un lien illisible sur son chemin). Impossible de dire quels fichiers ce contexte gouvernerait."
     'new.cleGeneration'       = 'Generation de la cle SSH du contexte (passphrase recommandee) :'
     'new.cleSansGeneration'   = 'Cle SSH NON generee (-NoKey).'
     'new.cleCommande'         = "ssh-keygen -t ed25519 -C '{0}' -f '{1}'"

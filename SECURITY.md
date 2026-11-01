@@ -76,7 +76,8 @@ older lines receive no backports.
   root, or when a link on the path cannot be read, the folder is **ambiguous**:
   no context's identity is applied, `ctx` answers `NO-GO` with a stable reason
   code (`alias-cible`, `racine-dupliquee`, `cible-inconnue`), and what reads
-  ownership refuses rather than guesses — `gh` runs only a closed list of reads,
+  ownership refuses rather than guesses — `ctx exec` exits 125 without
+  starting the command, `gh` runs only a closed list of reads,
   `vercel` only a closed list of reads written as the first argument,
   `supabase` refuses destructive and branch-bound commands whether or not the
   project is production, `ctx mcp` writes nothing, and the agent-trust and

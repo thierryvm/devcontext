@@ -162,7 +162,9 @@
   contexts declare the root, or when a link cannot be read, the folder is
   **ambiguous** and nobody is picked: `ctx` answers `NO-GO` with a reason code
   that reads the same in both languages (`alias-cible`, `racine-dupliquee`,
-  `cible-inconnue`) and offers no `work`, which could not fix it; `gh` lets
+  `cible-inconnue`) and offers no `work`, which could not fix it; `ctx exec`
+  refuses with exit code 125 and names the reason, never falling back on the
+  session's context; `gh` lets
   through only a closed list of reads; `vercel` only a closed list of reads
   written as the first argument; `supabase` refuses destructive and
   branch-bound commands whatever the environment; `ctx mcp` refuses to write a

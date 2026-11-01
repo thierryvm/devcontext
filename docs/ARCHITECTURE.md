@@ -358,8 +358,10 @@ answers, not two:
 manifest `Get-CtxManifests` enumerated first — an identity chosen by directory
 order.
 
-`Get-CtxProprietaire` gathers and returns that verdict. `ctx`, `ctx doctor` and
-the three guards read it, because they have to say *why*. Everything else reads
+`Get-CtxProprietaire` gathers and returns that verdict. `ctx`, `ctx doctor`,
+`ctx exec`, `ctx mcp`, the agent-trust and shortcut checks and the three guards
+read it, because they have to say *why* or must not treat "ambiguous" as
+"nobody's". Everything else reads
 `Resolve-DevContextForPath`, which returns the manifest only for
 `proprietaire` — so an ambiguous folder is, for them, a folder outside every
 context, where no identity is applied. That is a contract, not an accident:

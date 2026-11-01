@@ -461,6 +461,58 @@ Set-Content -LiteralPath '$($script:Sortie)' -Value "PRIVE=`$prive|LOCALE=`$loca
         Test-Path -LiteralPath $script:Sortie | Should -BeFalse
     }
 
+    It 'REFUSE un dossier dont deux contextes declarent la racine, en le nommant' {
+        # Avant le 30 octobre 2026, le premier manifeste enumere gagnait : la
+        # commande partait sous une identite tiree au sort. Et la session dit
+        # 'autre-contexte' (BeforeEach) : s'y replier lancerait la commande.
+        InModuleScope DevContext -Parameters $script:Monde {
+            Mock Get-CtxManifests {
+                [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine }
+                [pscustomobject]@{ name = 'copie'; email = 'c@copie.test'; root = $Racine }
+            }
+            # Les variables de l'ENFANT, pas Get-CtxSecret : le crochet de
+            # changement de dossier du module lit le coffre pour la session a
+            # chaque Push/Pop-Location, et compter ses appels mesurait le crochet.
+            Mock Get-CtxVariablesContexte { [ordered]@{} }
+            Mock Write-CtxExecLigne { }
+            Push-Location $Projet
+            try { Invoke-DevCtx exec $Pwsh -NoProfile -NonInteractive -Command "Set-Content -LiteralPath '$Sortie' x" }
+            finally { Pop-Location }
+            $LASTEXITCODE | Should -Be 125
+            Should -Invoke Write-CtxExecLigne -ParameterFilter { $Texte -match 'racine-dupliquee' } -Times 1 -Exactly
+            Should -Invoke Get-CtxVariablesContexte -Times 0 -Exactly
+        }
+        Test-Path -LiteralPath $script:Sortie | Should -BeFalse
+    }
+
+    It 'REFUSE un dossier atteint par une jonction vers un autre contexte, en le nommant' {
+        # acme\lien -> beta\projet : le chemin dit acme, les fichiers (et git)
+        # disent beta. Une vraie jonction, retiree sans etre suivie.
+        $beta = Join-Path $TestDrive 'beta'
+        $cible = Join-Path $beta 'projet'
+        New-Item -ItemType Directory -Path $cible -Force | Out-Null
+        $lien = Join-Path $script:Racine 'lien'
+        New-Item -ItemType Junction -Path $lien -Target $cible | Out-Null
+        try {
+            InModuleScope DevContext -Parameters ($script:Monde + @{ Beta = $beta; Lien = $lien }) {
+                Mock Get-CtxManifests {
+                    [pscustomobject]@{ name = 'acme'; email = 'dev@acme.test'; root = $Racine }
+                    [pscustomobject]@{ name = 'beta'; email = 'b@beta.test'; root = $Beta }
+                }
+                Mock Get-CtxVariablesContexte { [ordered]@{} }
+                Mock Write-CtxExecLigne { }
+                Push-Location $Lien
+                try { Invoke-DevCtx exec $Pwsh -NoProfile -NonInteractive -Command "Set-Content -LiteralPath '$Sortie' x" }
+                finally { Pop-Location }
+                $LASTEXITCODE | Should -Be 125
+                Should -Invoke Write-CtxExecLigne -ParameterFilter { $Texte -match 'alias-cible' } -Times 1 -Exactly
+                Should -Invoke Get-CtxVariablesContexte -Times 0 -Exactly
+            }
+        }
+        finally { [System.IO.Directory]::Delete($lien, $false) }
+        Test-Path -LiteralPath $script:Sortie | Should -BeFalse
+    }
+
     It 'ne suit PAS $env:DEVCTX : le dossier decide, meme si la session dit autre chose' {
         # La session annonce 'autre-contexte' (BeforeEach) ; le dossier n'appartient
         # a personne. Suivre la variable aurait lance la commande.

@@ -215,6 +215,7 @@
     'new.existeDeja'          = "Context '{0}' already exists ({1})."
     'new.racinePrise'         = "Root '{0}' already belongs to context '{1}'."
     'new.racineLien'          = "Root '{0}' is a link to '{1}'. git never applies an includeIf through a link: this context would sign nothing. Declare the real folder, '{1}'."
+    'new.racineIllisible'     = "Root '{0}' cannot be read to the end (unreachable, or an unreadable link on its path). There is no telling which files this context would govern."
     'new.cleGeneration'       = 'Generating the context SSH key (a passphrase is recommended):'
     'new.cleSansGeneration'   = 'SSH key NOT generated (-NoKey).'
     'new.cleCommande'         = "ssh-keygen -t ed25519 -C '{0}' -f '{1}'"

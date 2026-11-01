@@ -164,15 +164,21 @@ function Test-CtxGhLectureConnue {
       placee devant porte peut-etre une valeur, et cette valeur se ferait
       passer pour le verbe. `api` n'y est pas : sa methode s'ecrit de trop de
       facons (-XPOST, -X=POST, --method, un champ qui bascule en POST).
+
+      Comparaison SENSIBLE a la casse : la CLI l'est, et une liste qui accepte
+      ce que la CLI interpreterait autrement n'est plus fermee. --show-token
+      est exclu : il imprime le jeton du compte que personne n'a choisi.
+      Releves par le contre-audit du 1er novembre 2026.
     #>
     param([string[]]$Arguments = @())
 
-    $a = @($Arguments | ForEach-Object { "$_".ToLowerInvariant() })
+    $a = @($Arguments | ForEach-Object { "$_" })
     if ($a.Count -eq 0) { return $false }
-    if (@($a | Where-Object { $_ -notin @('--version', '--help', '-h', 'version', 'help') }).Count -eq 0) { return $true }
-    if ($a[0] -eq 'status') { return $true }
+    if (@($a | Where-Object { $_ -cin @('-t', '--show-token') }).Count -gt 0) { return $false }
+    if (@($a | Where-Object { $_ -cnotin @('--version', '--help', '-h', 'version', 'help') }).Count -eq 0) { return $true }
+    if ($a[0] -ceq 'status') { return $true }
     if ($a.Count -lt 2) { return $false }
-    "$($a[0]) $($a[1])" -in @(
+    "$($a[0]) $($a[1])" -cin @(
         'pr list', 'pr view', 'pr status', 'pr diff', 'pr checks',
         'issue list', 'issue view', 'issue status',
         'repo view', 'repo list',

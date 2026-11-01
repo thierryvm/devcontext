@@ -574,6 +574,11 @@ Describe 'Les decisions des garde-fous, devant une ambiguite' {
         @{ Cas = 'option devant le verbe'; Mots = @('-R', 'list', 'pr', 'merge'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
         @{ Cas = 'pr list'; Mots = @('pr', 'list', '--state', 'open'); Override = $false; Permis = $true; Regle = 'lecture-ambigue' }
         @{ Cas = 'version'; Mots = @('--version'); Override = $false; Permis = $true; Regle = 'lecture-ambigue' }
+        # Contre-audit du 1er novembre 2026.
+        @{ Cas = 'casse differente'; Mots = @('PR', 'LIST'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
+        @{ Cas = 'auth status --show-token'; Mots = @('auth', 'status', '--show-token'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
+        @{ Cas = 'auth status -t'; Mots = @('auth', 'status', '-t'); Override = $false; Permis = $false; Regle = 'proprietaire-ambigu' }
+        @{ Cas = 'auth status'; Mots = @('auth', 'status'); Override = $false; Permis = $true; Regle = 'lecture-ambigue' }
     ) {
         InModuleScope DevContext -Parameters @{ a = $Mots; o = $Override; p = $Permis; r = $Regle } { param($a, $o, $p, $r)
             $v = Test-CtxGhGuard -Arguments $a -Ambiguite 'motif (alias-cible)' -Override:$o
@@ -595,6 +600,8 @@ Describe 'Les decisions des garde-fous, devant une ambiguite' {
         @{ Cas = 'valeur de --cwd'; Mots = @('--cwd', 'ls', '--prod'); Permis = $false }
         @{ Cas = 'valeur de -A'; Mots = @('-A', 'whoami', '--prod'); Permis = $false }
         @{ Cas = 'valeur de --scope'; Mots = @('--scope', 'help', '--prod'); Permis = $false }
+        # Contre-audit du 1er novembre 2026 : la CLI prend `Logs` pour un dossier a deployer.
+        @{ Cas = 'casse differente'; Mots = @('Logs', '--prod'); Permis = $false }
     ) {
         InModuleScope DevContext -Parameters @{ a = $Mots; p = $Permis } { param($a, $p)
             $v = Test-CtxVercelGuard -Arguments $a -Ambiguite 'motif (alias-cible)'
@@ -745,6 +752,31 @@ Describe 'ctx et ctx doctor rendent le meme verdict sur un dossier ambigu' {
         $src = Get-SourceSansCommentaires Test-DevContext
         $src | Should -Match "'proprietaireAmbigu'\s*\{\s*\`$problems\s*\+="
         $src | Should -Match "'proprietaireAmbigu'\s*\{[^}]*\`$problemsHorsWork\+\+"
+    }
+}
+
+Describe 'ctx new et doctor devant une racine qu on ne peut pas lire' {
+    It 'ctx new dit "illisible", pas "lien vers ?"' {
+        InModuleScope DevContext -Parameters @{ t = $TestDrive } { param($t)
+            $racine = Join-Path $t 'injoignable'
+            Mock Get-CtxManifests { @() }
+            Mock Test-CtxVault { }
+            Mock Get-CtxPath ({ [System.IO.Path]::Combine($t, 'ctx-illisible') }.GetNewClosure())
+            Mock Resolve-CtxCheminPhysique { $null }
+            { New-DevContext -Name 'illisible' -Email 'i@i.test' -Root $racine -GitUserName 'i' -NoKey -WhatIf } |
+                Should -Throw -ExpectedMessage (T 'new.racineIllisible' $racine)
+        }
+    }
+
+    It 'doctor ne resout pas une racine UNC (21 s par partage injoignable)' {
+        InModuleScope DevContext {
+            $m = [pscustomobject]@{ name = 'nas'; root = '\\192.0.2.1\share\clients' }
+            Mock Get-CtxManifests ({ @($m) }.GetNewClosure())
+            Mock Resolve-CtxCheminPhysique { 'ne-devait-pas-etre-appele' }
+            $r = @(Get-CtxRacinesConnues -Physique)
+            Should -Invoke Resolve-CtxCheminPhysique -Times 0 -Exactly
+            $r[0].RacinePhysique | Should -Be '\\192.0.2.1\share\clients'
+        }
     }
 }
 

@@ -323,6 +323,53 @@ whole point: without it, `C:\Work\Apps` also matches
 `C:\Work\Apps-Autre`, and the guard confidently states the opposite of the
 truth. `tests/ContextResolution.Tests.ps1` pins this case by name.
 
+### The answer must be unique
+
+The question is asked twice, and the two answers must agree. Once on the path
+as typed, once on the folder it physically designates: `Resolve-CtxCheminPhysique`
+follows every junction and symbolic link on the path. Both are compared with
+the roots **as declared** — never with what a root points to.
+PowerShell keeps the logical path — `Get-Location` inside `A\link` says
+`A\link` — while git follows the link: measured on 30 October 2026, from a
+junction under A pointing into B, `git rev-parse --absolute-git-dir` already
+returned B's repository and only B's `includeIf` applied. Judging the text
+alone gave A's tokens to commands working B's files, signed as B.
+
+Declared roots only, because that is what git does: it matches the repository's
+physical path against the `gitdir:` pattern as written, so a root `J` that is a
+junction to `R` is applied neither from `J\repo` nor from `R\repo` (measured
+the same day). An intermediate revision matched each root under both forms,
+and the security audit showed what that bought: a root-junction planted inside
+another context's tree took that subtree over with a clean `proprietaire`,
+while git kept signing for the other context. It also resolved every root on
+disk on every shim call. A root's physical form is now read only by `ctx
+doctor` (`contexte/lien`) and `ctx new`, to say that such a root cannot work.
+
+The decision is one pure function, `Get-CtxVerdictProprietaire`, and it has three
+answers, not two:
+
+| `Etat` | Meaning |
+|---|---|
+| `proprietaire` | One context, the same by path and by target |
+| `aucun` | Outside every root, by path and by target |
+| `ambigu` | `racine-dupliquee` — two contexts tie at the winning length; `alias-cible` — path and target have different owners, either way round; `cible-inconnue` — a link on the path cannot be read |
+
+**Ambiguous is never resolved by picking.** Before, a tie went to whichever
+manifest `Get-CtxManifests` enumerated first — an identity chosen by directory
+order.
+
+`Get-CtxProprietaire` gathers and returns that verdict. `ctx`, `ctx doctor` and
+the three guards read it, because they have to say *why*. Everything else reads
+`Resolve-DevContextForPath`, which returns the manifest only for
+`proprietaire` — so an ambiguous folder is, for them, a folder outside every
+context, where no identity is applied. That is a contract, not an accident:
+returning `$null` is the only answer that cannot hand out the wrong credentials.
+
+What `ctx` and `ctx doctor` do with each state is one table,
+`$script:CtxAxeProprietaire`, built the same way as the git identity table and
+for the same reason — two hand-written copies of five branches is how the two
+commands disagreed on 19 August 2026.
+
 ---
 
 ## Where credentials live

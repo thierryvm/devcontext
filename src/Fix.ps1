@@ -62,6 +62,8 @@ $script:CtxNonReparables = [ordered]@{
     'vercel/binaire'      = 'fix.non.paquet'
     'node/binaire'        = 'fix.non.paquet'
     'git/binaire'         = 'fix.non.paquet'
+    'contexte/racines'    = 'fix.non.manifeste'
+    'contexte/lien'       = 'fix.non.manifeste'
 }
 
 function Invoke-CtxDoctorFix {

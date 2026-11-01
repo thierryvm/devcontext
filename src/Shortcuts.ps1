@@ -282,8 +282,10 @@ function Get-CtxRaccourciChecks {
             $cible = if ($raccourci.Dossier) { $raccourci.Dossier } else { '' }
             $contexte = ''
             if ($cible) {
-                $manifeste = Resolve-DevContextForPath -Path $cible
-                if ($manifeste) { $contexte = Get-CtxProp $manifeste 'name' }
+                # Un dossier ambigu reste un dossier de contexte : un raccourci
+                # qui l'ouvre sur le profil partage est signale comme les autres.
+                $etiquette = Get-CtxEtiquetteProprietaire -Verdict (Get-CtxProprietaire -Path $cible)
+                if ($etiquette) { $contexte = $etiquette }
             }
 
             $verdict = Test-CtxDoctorRaccourci -Nom $raccourci.Nom -Target $raccourci.Target `

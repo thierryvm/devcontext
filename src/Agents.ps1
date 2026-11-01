@@ -109,12 +109,15 @@ function Get-CtxAgentConfianceFacts {
 
         foreach ($d in $dossiers) {
             if ([string]::IsNullOrWhiteSpace($d)) { continue }
-            $manifeste = Resolve-DevContextForPath -Path $d
+            # Le verdict complet : un dossier ambigu compte comme ETRANGER.
+            # Avec Resolve-DevContextForPath il rendait $null, et un dossier
+            # approuve qui mene aux fichiers d'un autre client passait pour
+            # orphelin -- le controle se taisait la ou il existe pour parler.
             $faits += [pscustomobject]@{
                 Portee       = $src.Portee
                 Fichier      = $src.Chemin
                 Dossier      = $d
-                Proprietaire = if ($manifeste) { Get-CtxProp $manifeste 'name' } else { $null }
+                Proprietaire = Get-CtxEtiquetteProprietaire -Verdict (Get-CtxProprietaire -Path $d)
             }
         }
     }

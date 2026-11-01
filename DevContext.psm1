@@ -257,8 +257,22 @@ function Get-CtxProp {
 function Get-NormalizedRoot {
     # Un separateur final non ambigu : sans lui, 'F:\PROJECTS\Apps' matcherait
     # aussi 'F:\PROJECTS\Apps-Autre', et le garde-fou dirait le contraire du vrai.
-    param([Parameter(Mandatory)][string]$Path)
-    ($Path.TrimEnd('\', '/')) + '\'
+    #
+    # Les separateurs et les '..' sont normalises depuis que la resolution
+    # compare AUSSI la cible physique, que le systeme rend toujours sous sa forme
+    # canonique : une racine ecrite 'F:/PROJECTS/Apps' aurait fait diverger le
+    # texte et la cible d'un dossier parfaitement sain, donc rendu ambigu.
+    # GetFullPath seulement sur un chemin complet : sur un chemin relatif, il
+    # resoudrait contre le dossier du PROCESSUS, que Set-Location ne change pas.
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Path)
+    $p = $Path.Replace('/', '\')
+    if ([System.IO.Path]::IsPathFullyQualified($p)) {
+        # Seul un caractere interdit le fait lever. La forme brute reste alors
+        # comparable a elle-meme, ce qui vaut mieux que d'interrompre la
+        # resolution de TOUS les contextes pour un manifeste mal ecrit.
+        try { $p = [System.IO.Path]::GetFullPath($p) } catch { $p = $Path.Replace('/', '\') }
+    }
+    $p.TrimEnd('\') + '\'
 }
 
 function Test-CtxVault {
@@ -301,35 +315,357 @@ function Get-CtxManifests {
 # Resolve-DevContextForPath — a QUI appartient ce dossier ?
 # ---------------------------------------------------------------------------
 
-function Resolve-DevContextForPath {
+function Resolve-CtxCheminPhysique {
     <#
-      Le vrai danger n'est pas « la mauvaise identite est active ». C'est
-      « une identite est active pendant que je me tiens dans le dossier d'une
-      autre ». Cette fonction repond a la seconde question, et c'est elle qui
-      arme le garde-fou de `ctx`.
+      Le dossier que le systeme de fichiers designe VRAIMENT : chaque composant
+      qui est un lien -- jonction, lien symbolique -- est remplace par sa cible,
+      et la suite du chemin est relue depuis la. La partie qui n'existe pas
+      encore est gardee telle quelle.
 
-      La racine la plus longue gagne : un contexte imbrique sous un autre est
-      resolu vers le plus specifique des deux.
+      POURQUOI. git juge sur la cible : mesure le 30 octobre 2026 (git
+      2.56.0.windows.4), depuis A\lien -> B\repo, `git rev-parse
+      --absolute-git-dir` rend deja B/repo/.git, et seule la regle
+      `includeIf "gitdir:B/"` s'applique. PowerShell, lui, garde le chemin
+      logique : Get-Location et Resolve-Path rendent A\lien. Comparer ce texte
+      aux racines donnait les jetons de A a des commandes qui travaillaient les
+      fichiers de B, signes au nom de B.
+
+      Rend $null quand un lien existe et ne se laisse pas lire, ou quand les
+      sauts depassent -SautsMax (40, la limite de Linux) : on SAIT alors qu'un
+      lien est en jeu, sans savoir vers quoi. L'appelant en fait une ambiguite,
+      jamais un « pas de lien ».
+
+      Un point d'analyse qui n'est pas un lien -- un fichier OneDrive a la
+      demande, une deduplication -- n'a pas de cible : on le traverse.
+
+      NE COUVRE PAS, et c'est dit plutot que lisse : un lecteur `subst`, un
+      lecteur reseau mappe, un nom court 8.3. Aucun n'est un point d'analyse ;
+      git les resout par GetFinalPathNameByHandle, que .NET n'expose pas sans
+      compiler du code natif a chaque appel de shim.
+
+      Jamais Join-Path : c'est un cmdlet de FOURNISSEUR, qui echoue sur un
+      lecteur absent. Ici le chemin est une donnee.
     #>
     [CmdletBinding()]
-    param([string]$Path = (Get-Location).Path)
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Chemin,
+        [int]$SautsMax = 40
+    )
 
-    $full = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path } catch { $Path }
-    $candidate = $null
-    $bestLength = -1
+    # Un chemin relatif serait resolu contre le dossier du PROCESSUS, pas
+    # contre celui de la session : il ne designe rien de sur. Rendu tel quel,
+    # il ne correspond a aucune racine, ce qui est la verite.
+    if (-not [System.IO.Path]::IsPathFullyQualified($Chemin)) { return $Chemin }
 
-    foreach ($m in Get-CtxManifests) {
-        $root = Get-CtxProp $m 'root'
-        if (-not $root) { continue }
-        $normalized = Get-NormalizedRoot $root
-        if ((Get-NormalizedRoot $full).StartsWith($normalized, [StringComparison]::OrdinalIgnoreCase)) {
-            if ($normalized.Length -gt $bestLength) {
-                $bestLength = $normalized.Length
-                $candidate = $m
+    $separateurs = [char[]]@([char]'\', [char]'/')
+    $sauts = 0
+    try {
+        $courant = [System.IO.Path]::GetFullPath($Chemin)
+        :reprise while ($true) {
+            $racine = [System.IO.Path]::GetPathRoot($courant)
+            $parts = @($courant.Substring($racine.Length).Split($separateurs, [System.StringSplitOptions]::RemoveEmptyEntries))
+            $acquis = $racine
+            for ($i = 0; $i -lt $parts.Count; $i++) {
+                $suivant = [System.IO.Path]::Combine($acquis, $parts[$i])
+                $info = [System.IO.DirectoryInfo]::new($suivant)
+
+                # -1 : rien a cet endroit. La suite n'existe pas non plus, et
+                # ne peut donc cacher aucun lien.
+                if ([int]$info.Attributes -eq -1) {
+                    return [System.IO.Path]::Combine([string[]](@($acquis) + @($parts | Select-Object -Skip $i)))
+                }
+
+                if ($info.Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
+                    $cible = $info.LinkTarget
+                    if ($cible) {
+                        $sauts++
+                        if ($sauts -gt $SautsMax) { return $null }
+                        # Une cible relative se lit depuis le dossier du lien.
+                        $cibleComplete = [System.IO.Path]::GetFullPath($cible, $acquis)
+                        $reste = @($parts | Select-Object -Skip ($i + 1))
+                        $courant = [System.IO.Path]::Combine([string[]](@($cibleComplete) + $reste))
+                        continue reprise
+                    }
+                }
+                $acquis = $suivant
             }
+            return $acquis
         }
     }
-    $candidate
+    catch {
+        # Un lien illisible -- acces refuse, cible malformee. On sait qu'il y a
+        # quelque chose, pas quoi : $null, que l'appelant tient pour ambigu.
+        return $null
+    }
+}
+
+function Get-CtxVerdictProprietaire {
+    <#
+      PURE. A qui appartient ce chemin -- et la reponse est-elle unique ?
+
+      Le vrai danger n'est pas « la mauvaise identite est active ». C'est
+      « une identite est active pendant que je me tiens dans le dossier d'une
+      autre ». Cette fonction repond a la seconde question ; ctx, ctx doctor,
+      ctx exec et les trois garde-fous la LISENT, aucun ne la refait.
+
+      La racine la plus longue gagne : un contexte imbrique sous un autre est
+      resolu vers le plus specifique des deux. La question est posee DEUX fois,
+      sur le chemin tel qu'on le tape et sur sa cible physique, et les deux
+      reponses doivent s'accorder.
+
+      LES DEUX FOIS CONTRE LES RACINES DECLAREES, jamais contre leur cible.
+      C'est exactement ce que fait git, mesure le 30 octobre 2026 (git
+      2.56.0.windows.4) : il resout le depot jusqu'a son chemin physique, puis
+      le compare aux motifs `includeIf "gitdir:"` tels qu'ecrits. Une racine
+      declaree qui est elle-meme une jonction J -> R ne s'applique donc NULLE
+      PART -- ni depuis J\repo, ni depuis R\repo. Juger autrement, c'est donner
+      les jetons d'un contexte a des commandes que git signe pour un autre.
+
+      La revision intermediaire du meme jour essayait chaque racine sous ses
+      deux formes ; l'audit de securite a montre qu'une racine-jonction posee
+      DANS l'arbre d'un autre contexte s'emparait alors de ce sous-arbre sans
+      un mot -- verdict 'proprietaire', jetons du mauvais contexte, signature
+      git de l'autre. La forme physique d'une racine ne sert plus qu'a `ctx
+      doctor` et `ctx new`, pour dire qu'une telle racine est inutilisable.
+
+      Trois etats :
+        proprietaire  une seule reponse, la meme des deux cotes
+        aucun         hors de toute racine, des deux cotes
+        ambigu        Manifeste vide, et une Raison stable :
+          racine-dupliquee  deux contextes declarent la racine gagnante.
+                            Avant le 30 octobre 2026, le premier enumere
+                            gagnait : une identite arbitraire.
+          alias-cible       le chemin et sa cible n'ont pas le meme
+                            proprietaire, dans un sens ou dans l'autre. git
+                            signe d'apres la cible ; on ne choisit pas pour
+                            autant, parce qu'on ne sait pas laquelle des deux
+                            l'utilisateur croit habiter.
+          cible-inconnue    un lien est sur le chemin et ne se laisse pas lire.
+
+      On ne CHOISIT jamais : une ambiguite se refuse. C'est la doctrine du
+      module -- corriger quand la reponse est connaissable, refuser seulement
+      quand elle ne l'est pas -- appliquee a la question dont toutes les autres
+      dependent.
+
+      -Racines : des objets { Manifeste; Racine }. Une RacinePhysique
+      eventuelle est ignoree ici, par construction.
+      -CheminPhysique : $null veut dire « inconnu », jamais « pas de lien ».
+    #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()][string]$Chemin,
+        [AllowNull()][AllowEmptyString()][string]$CheminPhysique,
+        [AllowNull()][AllowEmptyCollection()][object[]]$Racines
+    )
+
+    $racines = @($Racines | Where-Object { $_ -and $_.Racine })
+
+    # Les gagnants a la longueur maximale. Plusieurs = ex aequo, et des racines
+    # de meme longueur qui prefixent toutes deux un meme chemin sont egales.
+    $gagnants = {
+        param($chemin)
+        $cle = Get-NormalizedRoot $chemin
+        $meilleure = -1
+        $liste = @()
+        foreach ($r in $racines) {
+            $normale = Get-NormalizedRoot $r.Racine
+            if (-not $cle.StartsWith($normale, [StringComparison]::OrdinalIgnoreCase)) { continue }
+            if ($normale.Length -gt $meilleure) { $meilleure = $normale.Length; $liste = @($r.Manifeste) }
+            elseif ($normale.Length -eq $meilleure) { $liste += $r.Manifeste }
+        }
+        , $liste
+    }
+
+    $nom = { param($m) [string](Get-CtxProp $m 'name' '') }
+    $verdict = {
+        param($etat, $manifeste, $raison, $candidats)
+        [pscustomobject]@{
+            Etat           = $etat
+            Manifeste      = $manifeste
+            Contexte       = if ($manifeste) { & $nom $manifeste } else { $null }
+            Raison         = $raison
+            Candidats      = @($candidats | ForEach-Object { & $nom $_ } | Where-Object { $_ } | Sort-Object -Unique)
+            CheminPhysique = $CheminPhysique
+        }
+    }
+
+    $texte = & $gagnants $Chemin
+    if ([string]::IsNullOrEmpty($CheminPhysique)) {
+        return (& $verdict 'ambigu' $null 'cible-inconnue' $texte)
+    }
+    $cible = & $gagnants $CheminPhysique
+
+    if ($texte.Count -gt 1 -or $cible.Count -gt 1) {
+        return (& $verdict 'ambigu' $null 'racine-dupliquee' (@($texte) + @($cible)))
+    }
+
+    $parTexte = if ($texte.Count) { $texte[0] } else { $null }
+    $parCible = if ($cible.Count) { $cible[0] } else { $null }
+
+    # Par reference : deux manifestes peuvent porter le meme nom.
+    if (-not [object]::ReferenceEquals($parTexte, $parCible)) {
+        return (& $verdict 'ambigu' $null 'alias-cible' (@($texte) + @($cible)))
+    }
+    if ($parTexte) { return (& $verdict 'proprietaire' $parTexte $null @($parTexte)) }
+    & $verdict 'aucun' $null $null @()
+}
+
+function Get-CtxRacinesConnues {
+    # Les racines declarees. -Physique y ajoute le dossier que chacune designe
+    # vraiment -- pour `ctx doctor` et `ctx new` seulement : la decision n'en a
+    # pas besoin, et la resoudre a chaque appel de shim touchait le disque de
+    # CHAQUE racine, 21 s par commande pour un partage reseau injoignable
+    # (mesure par l'audit du 30 octobre 2026).
+    [CmdletBinding()]
+    param([switch]$Physique)
+
+    foreach ($m in @(Get-CtxManifests)) {
+        $racine = Get-CtxProp $m 'root'
+        if (-not $racine) { continue }
+        [pscustomobject]@{
+            Manifeste      = $m
+            Racine         = [string]$racine
+            RacinePhysique = if ($Physique) { Resolve-CtxCheminPhysique ([string]$racine) } else { $null }
+        }
+    }
+}
+
+function Get-CtxProprietaire {
+    <#
+      RASSEMBLE, puis decide : le verdict complet de Get-CtxVerdictProprietaire
+      pour un dossier. Pour les appelants qui doivent distinguer « personne »
+      de « on ne sait pas » -- ctx, ctx doctor, ctx exec, les garde-fous.
+
+      -Racines evite de relire les manifestes quand l'appelant les a deja.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$Path = (Get-Location).ProviderPath,
+        [AllowNull()][AllowEmptyCollection()][object[]]$Racines
+    )
+
+    # ProviderPath, jamais .Path : sous un lecteur PowerShell (TestDrive:,
+    # un New-PSDrive), .Path rend 'Lecteur:\...', que le systeme de fichiers ne
+    # connait pas et qu'aucune racine ne prefixe.
+    $complet = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).ProviderPath }
+    catch {
+        # Un dossier qui n'existe pas encore se resout quand meme -- ne
+        # serait-ce que pour diagnostiquer une faute de frappe.
+        try { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path) } catch { $Path }
+    }
+    if ($null -eq $Racines) { $Racines = @(Get-CtxRacinesConnues) }
+
+    Get-CtxVerdictProprietaire -Chemin $complet -CheminPhysique (Resolve-CtxCheminPhysique $complet) -Racines $Racines
+}
+
+function Resolve-DevContextForPath {
+    <#
+      Le manifeste du contexte qui possede ce dossier, ou rien.
+
+      « Rien » couvre DEUX cas depuis le 30 octobre 2026 : aucun proprietaire,
+      et un proprietaire ambigu (Get-CtxVerdictProprietaire dit pourquoi). Les
+      appelants qui s'en tiennent a ce contrat -- le shim de l'editeur, le
+      lanceur -- traitent alors le dossier comme hors contexte : aucune
+      identite n'y est appliquee, ce qui est le seul choix sur quand on ne sait
+      pas laquelle. Ceux qui doivent dire POURQUOI lisent Get-CtxProprietaire.
+
+      Ne leve jamais : un garde-fou qui l'appelle se rabattrait sur le binaire
+      reel, sans controle.
+    #>
+    [CmdletBinding()]
+    param([string]$Path = (Get-Location).ProviderPath)
+
+    $v = Get-CtxProprietaire -Path $Path
+    if ($v.Etat -eq 'proprietaire') { $v.Manifeste }
+}
+
+function Get-CtxRacinesDupliquees {
+    <#
+      PURE. Les groupes de contextes qui revendiquent la meme racine -- par le
+      texte, ou parce que deux racines differentes designent physiquement le
+      meme dossier. Pour ctx doctor, qui le dit quel que soit le dossier
+      courant : un doublon ne se voit sinon que le jour ou l'on s'y tient.
+
+      `ctx new` refuse le doublon. Un manifeste edite a la main, ou cree en
+      parallele, passe a cote -- d'ou ce constat.
+    #>
+    [CmdletBinding()]
+    param([AllowNull()][AllowEmptyCollection()][object[]]$Racines)
+
+    $liste = @($Racines | Where-Object { $_ -and $_.Racine })
+    $n = $liste.Count
+    if ($n -lt 2) { return }
+
+    # Union par indice : A=B par le texte et B=C par la cible font un seul groupe.
+    $parent = [int[]](0..($n - 1))
+    $chef = { param($i) while ($parent[$i] -ne $i) { $i = $parent[$i] }; $i }
+    for ($i = 0; $i -lt $n; $i++) {
+        for ($j = $i + 1; $j -lt $n; $j++) {
+            $a = $liste[$i]; $b = $liste[$j]
+            $memeTexte = (Get-NormalizedRoot $a.Racine) -eq (Get-NormalizedRoot $b.Racine)
+            $memeCible = $false
+            if ($a.RacinePhysique -and $b.RacinePhysique) {
+                $memeCible = (Get-NormalizedRoot $a.RacinePhysique) -eq (Get-NormalizedRoot $b.RacinePhysique)
+            }
+            if ($memeTexte -or $memeCible) { $parent[(& $chef $j)] = & $chef $i }
+        }
+    }
+
+    # Cle en CHAINE : un [ordered] indexe par un entier lit par POSITION, pas
+    # par cle -- et leve des le deuxieme groupe.
+    $groupes = [ordered]@{}
+    for ($i = 0; $i -lt $n; $i++) {
+        $c = [string](& $chef $i)
+        if (-not $groupes.Contains($c)) { $groupes[$c] = @() }
+        $groupes[$c] += $liste[$i]
+    }
+    foreach ($g in $groupes.Values) {
+        if ($g.Count -lt 2) { continue }
+        [pscustomobject]@{
+            Racine    = $g[0].Racine
+            Contextes = @($g | ForEach-Object { [string](Get-CtxProp $_.Manifeste 'name' '') } | Sort-Object)
+        }
+    }
+}
+
+function Get-CtxEtiquetteProprietaire {
+    <#
+      Le proprietaire d'un dossier, dit en UN mot, pour les controles qui
+      comparent des proprietaires entre eux (dossiers approuves pour un agent,
+      raccourcis) : le nom du contexte, 'ambigu:<candidats>' pour un dossier
+      ambigu, $null pour personne.
+
+      Un dossier ambigu n'est pas « sans proprietaire » : il mene peut-etre
+      aux fichiers d'un autre contexte, et le tenir pour orphelin faisait taire
+      le controle des agents la ou il devait parler (audit du 30 octobre 2026).
+      L'etiquette n'est PAS traduite : elle entre dans un Sujet, et un Sujet
+      traduit casse `ctx doctor -Fix` dans l'autre langue.
+    #>
+    param([Parameter(Mandatory)]$Verdict)
+
+    switch ($Verdict.Etat) {
+        'proprietaire' { [string]$Verdict.Contexte }
+        'ambigu' {
+            $c = @($Verdict.Candidats)
+            'ambigu:' + $(if ($c.Count) { $c -join '+' } else { '?' })
+        }
+        default { $null }
+    }
+}
+
+function Get-CtxMessageAmbiguite {
+    # Le message d'un verdict ambigu, une cle LITTERALE par raison. Le code de
+    # la raison figure dans les deux langues : c'est lui qu'un script ou un
+    # agent reconnait, la phrase est pour l'humain.
+    param([Parameter(Mandatory)]$Verdict)
+
+    $candidats = @($Verdict.Candidats)
+    $noms = if ($candidats.Count) { $candidats -join ', ' } else { '-' }
+    switch ($Verdict.Raison) {
+        'racine-dupliquee' { T 'proprietaire.ambigu.racines' $noms }
+        'alias-cible' { T 'proprietaire.ambigu.alias' $noms $Verdict.CheminPhysique }
+        default { T 'proprietaire.ambigu.inconnue' }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -1584,7 +1920,10 @@ function Test-CtxSupabaseGuard {
         # Vrai quand l'index du contexte contient au moins un projet marque
         # 'prod'. Sert au seul cas ou ce garde-fou se ferme par defaut : voir
         # plus bas, --db-url.
-        [switch]$IndexContientProd
+        [switch]$IndexContientProd,
+        # Le message d'un proprietaire AMBIGU (Get-CtxMessageAmbiguite), vide
+        # sinon. Voir plus bas : le second cas ou ce garde-fou se ferme.
+        [AllowNull()][AllowEmptyString()][string]$Ambiguite
     )
 
     $pass = { param($rule) [pscustomobject]@{ Allowed = $true; Rule = $rule; Reason = '' } }
@@ -1593,6 +1932,19 @@ function Test-CtxSupabaseGuard {
     $destructive = @($paires | Where-Object { $_ -in $script:GuardDestructive })   | Select-Object -First 1
     $branchBound = @($paires | Where-Object { $_ -in $script:GuardBranchBound })   | Select-Object -First 1
     $sub         = if ($destructive) { $destructive } else { $branchBound }
+
+    # --- proprietaire ambigu --------------------------------------------------
+    #
+    # LE SECOND ENDROIT OU CE GARDE-FOU SE FERME PAR DEFAUT, ajoute le 30
+    # octobre 2026. Tout le reste de ce garde-fou se demande « est-ce la
+    # production ? » en lisant l'index DU contexte qui possede le dossier. Quand
+    # deux contextes le revendiquent, ou que le chemin et les fichiers n'ont pas
+    # le meme, il n'y a pas UN index a lire : repondre « pas de production »
+    # serait affirmer ce qu'on n'a pas pu verifier. Les seules commandes
+    # refusees sont celles que ce garde-fou protege deja ; les lectures passent.
+    if ($Ambiguite -and ($destructive -or $branchBound) -and -not $Override) {
+        return [pscustomobject]@{ Allowed = $false; Rule = 'proprietaire-ambigu'; Reason = $Ambiguite }
+    }
 
     # --- cible redirigee -----------------------------------------------------
     #
@@ -1764,8 +2116,18 @@ function Resolve-CtxSupabaseVerdict {
     # Lire $env:DEVCTX en priorite interrogeait l'index du MAUVAIS contexte
     # quand session et dossier divergent -- l'etat que `ctx` qualifie justement
     # de NO-GO -- n'y trouvait pas le projet, et concluait « pas de production ».
+    # Un proprietaire ambigu se juge AVANT les sorties anticipees qui suivent :
+    # sans projet lie ni contexte, elles laisseraient passer sans un mot.
+    $proprio = Get-CtxProprietaire -Path $dossier
+    if ($proprio.Etat -eq 'ambigu') {
+        $refus = Test-CtxSupabaseGuard -Arguments $Arguments `
+            -Ambiguite (Get-CtxMessageAmbiguite -Verdict $proprio) `
+            -Override:($env:DEVCTX_ALLOW_PROD -eq '1')
+        if (-not $refus.Allowed) { return [pscustomobject]@{ Verdict = $refus; Projet = $null } }
+    }
+
     $contextes = @()
-    $manifeste = Resolve-DevContextForPath -Path $dossier
+    $manifeste = $proprio.Manifeste
     if ($manifeste) { $contextes += Get-CtxProp $manifeste 'name' }
     if ($env:DEVCTX -and $env:DEVCTX -notin $contextes) { $contextes += $env:DEVCTX }
     if ($contextes.Count -eq 0) { return }
@@ -1975,13 +2337,27 @@ function New-DevContext {
 
     # Deux contextes qui se recouvrent rendent la resolution par chemin
     # ambigue — donc le garde-fou incertain, donc inutile.
+    #
+    # Une racine qui est elle-meme un lien est refusee d'emblee. git compare
+    # le chemin PHYSIQUE du depot au motif `includeIf "gitdir:"` tel qu'ecrit :
+    # mesure le 30 octobre 2026, une racine J -> R ne s'applique ni depuis
+    # J\repo ni depuis R\repo. Le contexte n'aurait jamais signe un commit, et
+    # chaque commande sous J serait ambigue. Le vrai dossier, lui, marche.
     $newRoot = Get-NormalizedRoot $Root
-    foreach ($m in Get-CtxManifests) {
-        $existing = Get-CtxProp $m 'root'
-        if (-not $existing) { continue }
-        $existingRoot = Get-NormalizedRoot $existing
-        if ($newRoot -eq $existingRoot) {
-            throw (T 'new.racinePrise' $Root $m.name)
+    $newCible = Resolve-CtxCheminPhysique $Root
+    if ([string]::IsNullOrEmpty($newCible) -or (Get-NormalizedRoot $newCible) -ne $newRoot) {
+        throw (T 'new.racineLien' $Root $(if ($newCible) { $newCible } else { '?' }))
+    }
+
+    # Par le texte ET par la cible : deux racines differentes qui designent le
+    # meme dossier se disputent ses fichiers.
+    foreach ($r in @(Get-CtxRacinesConnues -Physique)) {
+        $memeCible = $false
+        if ($newCible -and $r.RacinePhysique) {
+            $memeCible = (Get-NormalizedRoot $newCible) -eq (Get-NormalizedRoot $r.RacinePhysique)
+        }
+        if ($newRoot -eq (Get-NormalizedRoot $r.Racine) -or $memeCible) {
+            throw (T 'new.racinePrise' $Root $r.Manifeste.name)
         }
     }
 
@@ -2401,6 +2777,24 @@ $script:CtxAxeGitIdentite = [ordered]@{
     accord       = @{ Doctor = 'OK';        Ctx = 'rien' }
 }
 
+# L'AXE DU PROPRIETAIRE, meme contrat que celui de l'identite git ci-dessus :
+# chaque etat de Get-CtxVerdictDossier dit ce que `ctx doctor` en rend ET ce
+# que `ctx` en fait. Doctor la LIT (Test-CtxDoctorProprietaire). `ctx` garde
+# son switch, que tests/ContextResolution.Tests.ps1 epingle deja ; la colonne
+# Ctx est donc eprouvee en EXECUTANT `ctx -Quiet` sur un dossier ambigu
+# (tests/Ambiguite.Tests.ps1), pas en lisant sa source.
+#
+# L'etat ambigu est le seul ajout du 30 octobre 2026. Les cinq autres decrivent
+# ce que les deux commandes rendaient deja.
+$script:CtxAxeProprietaire = [ordered]@{
+    accord             = @{ Doctor = 'OK';        Ctx = 'rien' }
+    dossierSansActif   = @{ Doctor = 'ATTENTION'; Ctx = 'probleme' }
+    dossierAutre       = @{ Doctor = 'PROBLEME';  Ctx = 'probleme' }
+    sansProprietaire   = @{ Doctor = 'INFO';      Ctx = 'remarque' }
+    neutre             = @{ Doctor = 'INFO';      Ctx = 'rien' }
+    proprietaireAmbigu = @{ Doctor = 'PROBLEME';  Ctx = 'probleme' }
+}
+
 function Get-CtxVerdictDossier {
     <#
       PURE. Le dossier courant et l'identite active s'accordent-ils ?
@@ -2436,8 +2830,14 @@ function Get-CtxVerdictDossier {
     [CmdletBinding()]
     param(
         [AllowNull()][AllowEmptyString()][string]$Proprietaire,
-        [AllowNull()][AllowEmptyString()][string]$Actif
+        [AllowNull()][AllowEmptyString()][string]$Actif,
+        # Get-CtxVerdictProprietaire a rendu 'ambigu'. Passe AVANT tout le
+        # reste : un accord avec l'identite active ne vaut rien quand on ne
+        # sait pas a qui est le dossier.
+        [switch]$Ambigu
     )
+
+    if ($Ambigu) { return 'proprietaireAmbigu' }
 
     $aProprio = -not [string]::IsNullOrWhiteSpace($Proprietaire)
     $aActif = -not [string]::IsNullOrWhiteSpace($Actif)
@@ -2484,7 +2884,11 @@ function Test-DevContext {
     # proposer serait envoyer vers une commande sans effet.
     $problemsHorsWork = 0
 
-    $owner    = Resolve-DevContextForPath
+    # Le verdict COMPLET, pas Resolve-DevContextForPath : celui-ci rend $null
+    # pour un dossier ambigu comme pour un dossier sans proprietaire, et `ctx`
+    # doit refuser le premier, pas le commenter.
+    $proprio  = Get-CtxProprietaire
+    $owner    = $proprio.Manifeste
     $here     = (Get-Location).Path
 
     # --- 0. L'outil est-il seulement installe ? ---
@@ -2539,8 +2943,12 @@ function Test-DevContext {
     # designait le ~/.gitconfig GLOBAL. Un depot client egare hors des racines
     # se voit a cette ligne.
     $proprietaire = Get-CtxProp $owner 'name'
-    $etatDossier = Get-CtxVerdictDossier -Proprietaire $proprietaire -Actif $env:DEVCTX
+    $etatDossier = Get-CtxVerdictDossier -Proprietaire $proprietaire -Actif $env:DEVCTX `
+        -Ambigu:($proprio.Etat -eq 'ambigu')
     switch ($etatDossier) {
+        # Aucun `work` ne leve une ambiguite : c'est un manifeste a corriger,
+        # ou un vrai dossier ou se placer.
+        'proprietaireAmbigu' { $problems += Get-CtxMessageAmbiguite -Verdict $proprio; $problemsHorsWork++ }
         'dossierSansActif' { $problems += T 'ctx.pb.dossierSansActif' $proprietaire }
         'dossierAutre' { $problems += T 'ctx.pb.dossierAutre' $proprietaire $env:DEVCTX }
         'sansProprietaire' { $remarques += T 'ctx.note.sansProprietaire' $env:DEVCTX }

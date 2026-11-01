@@ -120,7 +120,7 @@ try {
     Write-Trace "cible : $target"
 
     $manifest = & $module { param($p) Resolve-DevContextForPath -Path $p } $target
-    if (-not $manifest) { Invoke-Real -Motif 'aucun contexte ne possede ce dossier' }
+    if (-not $manifest) { Invoke-Real -Motif 'aucun contexte ne possede ce dossier, ou son proprietaire est ambigu' }
 
     $contextName = & $module { param($m) Get-CtxProp $m 'name' } $manifest
     $contextDir = & $module { param($n) Get-CtxPath $n } $contextName

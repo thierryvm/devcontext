@@ -61,7 +61,9 @@ function Test-CtxVercelGuard {
         [string[]]$Arguments = @(),
         [AllowNull()][string]$CurrentBranch,
         [AllowNull()][string]$DefaultBranch,
-        [switch]$Override
+        [switch]$Override,
+        # Le message d'un proprietaire AMBIGU (Get-CtxMessageAmbiguite), vide sinon.
+        [AllowNull()][AllowEmptyString()][string]$Ambiguite
     )
 
     $passe = { param($regle) [pscustomobject]@{ Allowed = $true; Rule = $regle; Reason = '' } }
@@ -69,6 +71,35 @@ function Test-CtxVercelGuard {
     if ($Override) { return (& $passe 'derogation') }
 
     $mots = @(Get-CtxVercelMots -Arguments $Arguments)
+
+    # --- proprietaire ambigu -------------------------------------------------
+    #
+    # Ici la regle "toute incertitude laisse passer" ne tient plus : ce n'est
+    # pas la branche qui est inconnue, c'est le COMPTE. Aucune session de
+    # contexte n'est injectee, et la CLI retomberait sur la session globale --
+    # le dernier compte connecte. Seules passent les commandes dont on SAIT
+    # qu'elles ne changent rien a distance ; une commande inconnue, ou un
+    # `vercel` nu (qui deploie), est refusee. Liste fermee, a dessein : une
+    # liste d'ecritures oublierait la prochaine.
+    #
+    # La commande doit etre le PREMIER argument : `--cwd ls --prod` laissait
+    # `ls` passer pour la commande alors que c'est la valeur de --cwd -- et la
+    # CLI, sans commande, deploie. Mesure par l'audit du 30 octobre 2026.
+    #
+    # Et SENSIBLE a la casse : la CLI compare les noms de commande exactement,
+    # et prend un mot inconnu pour un chemin a deployer. `vercel Logs --prod`
+    # passait la liste, et sur Windows un dossier `logs` repond a `Logs`.
+    # Releve par le contre-audit du 1er novembre 2026.
+    if ($Ambiguite) {
+        $bruts = @($Arguments | ForEach-Object { "$_" })
+        $lecture = if ($bruts.Count -eq 0) { $false }
+        elseif ($bruts[0] -cin @('whoami', 'help', 'ls', 'list', 'inspect', 'logs')) { $true }
+        else { @($bruts | Where-Object { $_ -cnotin @('--version', '-v', '--help', '-h') }).Count -eq 0 }
+        if (-not $lecture) {
+            return [pscustomobject]@{ Allowed = $false; Rule = 'proprietaire-ambigu'; Reason = $Ambiguite }
+        }
+        return (& $passe 'lecture-ambigue')
+    }
 
     # --- env rm sur la production -------------------------------------------
     #
@@ -121,15 +152,24 @@ function Resolve-CtxVercelVerdict {
 
     $dossier = if ($Path) { $Path } else { (Get-Location).Path }
 
+    $proprio  = Get-CtxProprietaire -Path $dossier
+    $ambiguite = if ($proprio.Etat -eq 'ambigu') { Get-CtxMessageAmbiguite -Verdict $proprio } else { $null }
+
     $branches = Get-CtxBranchesPour -Dossier $dossier
     $verdict  = Test-CtxVercelGuard -Arguments $Arguments `
         -CurrentBranch $branches.Courante -DefaultBranch $branches.Defaut `
-        -Override:($env:DEVCTX_ALLOW_VERCEL -eq '1')
+        -Override:($env:DEVCTX_ALLOW_VERCEL -eq '1') -Ambiguite $ambiguite
 
     $config = $null
     $avertissement = $null
-    $manifeste = Resolve-DevContextForPath -Path $dossier
-    if ($manifeste) {
+    $manifeste = $proprio.Manifeste
+    if ($ambiguite) {
+        # Aucune redirection, pas meme celle qu'un `work` aurait posee : elle
+        # designerait un contexte, et c'est precisement ce qu'on ne sait pas.
+        # Une lecture qui passe est avertie, comme pour `gh`.
+        if ($verdict.Allowed) { $avertissement = $ambiguite }
+    }
+    elseif ($manifeste) {
         $contexte = Get-CtxProp $manifeste 'name'
         $attendu  = [System.IO.Path]::Combine((Get-CtxPath $contexte), 'vercel')
         $mots     = @(Get-CtxVercelMots -Arguments $Arguments)

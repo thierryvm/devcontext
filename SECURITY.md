@@ -66,6 +66,26 @@ older lines receive no backports.
   connection string it is judged on that; when it cannot, and the context holds
   any production project, the command is refused. This is the one place the
   guard fails closed.
+- **An ambiguous owner is refused, never picked.** Ownership is decided the
+  way git decides it: the path as typed and the folder it physically designates
+  (every junction and symbolic link followed) are each compared with the roots
+  **as declared**. Measured on 30 October 2026: from a junction under context A
+  pointing into context B, git resolved the repository to B's path and applied
+  only B's `includeIf`; and a root that is itself a link is applied by git from
+  nowhere. When the two answers differ, when two manifests declare the same
+  root, or when a link on the path cannot be read, the folder is **ambiguous**:
+  no context's identity is applied, `ctx` answers `NO-GO` with a stable reason
+  code (`alias-cible`, `racine-dupliquee`, `cible-inconnue`), and what reads
+  ownership refuses rather than guesses — `ctx exec` exits 125 without
+  starting the command, `gh` runs only a closed list of reads,
+  `vercel` only a closed list of reads written as the first argument,
+  `supabase` refuses destructive and branch-bound commands whether or not the
+  project is production, `ctx mcp` writes nothing, and the agent-trust and
+  shortcut checks treat the folder as belonging to another context. `ctx
+  doctor` also reports, wherever you stand, a root declared twice and a root
+  that is a link; `ctx new` refuses the latter. Before this, the first manifest
+  enumerated won a tie, and a junction gave one context's `gh` and Vercel
+  sessions to commands working another context's files.
 - **Editor sessions are separated per context.** Each context owns a profile
   directory, and the editor keeps its GitHub, Copilot and marketplace sessions
   inside it, encrypted by the OS. An entry point in `PATH` supplies the flag, so
@@ -108,6 +128,14 @@ one you have been allowed to assume away is not.
 | **The GitHub account check needs the network** | Confirming *which account `gh` actually opens* costs an API call. When GitHub cannot answer, `ctx` says the account was **not verified** and does not turn that into `NO-GO`. Deliberate: on 17 Aug 2026 the opposite behaviour declared a healthy client folder compromised during a GitHub outage, which sends people to re-authenticate against a service that is down. The offline axes — folder ownership, `GH_CONFIG_DIR`, SSH routing, the Supabase key — are unaffected and still decide. |
 | **`vercel rollback`, `promote` and `rm` are not guarded** | `rollback` is a repair gesture, and refusing it always lands during an incident, from a hotfix branch. `promote` acts on an already-built deployment. What `rm` deletes is not identifiable as production from the command line alone, and refusing on a doubt is refusing at random. |
 | **`vercel env rm` without a named environment is not guarded** | Given no target the CLI opens a prompt, and the human sees what they pick. Refusing there would remove the command for development environments too, where it is routine. |
+| **`subst` drives, mapped drives and 8.3 short names are not resolved** | Physical resolution follows reparse points — junctions and symbolic links — and nothing else. A `subst` letter, a mapped network drive or a `PROGRA~1`-style short name is not a reparse point, and resolving it would need `GetFinalPathNameByHandle`, which .NET does not expose without compiling native code on every shim call. git does resolve them, so in those three cases DevContext can still judge a path differently from git. The answer there is the one it gave before 30 October 2026, not a new one. |
+| **`\\?\` and UNC spellings of a local folder resolve to no context** | `\\?\C:\...` and `\\localhost\C$\...` are compared as written and match no declared root. git applies no `includeIf` from them either (measured by the audit of 30 October 2026), so the two agree; the guards simply have nothing to say there. |
+| **A link that leaves every context is still ambiguous** | A junction under context A pointing outside every root, or a path outside every root leading into A, is treated as ambiguous rather than as A's. The files and the path disagree, and so would DevContext and git. If you work through such links on purpose, work from the real folder. |
+| **A git worktree that crosses roots is judged by its folder, not by its git directory** | git's `includeIf "gitdir:"` reads the **git directory**; ownership reads the **working folder**. A worktree created under context A from a repository under context B is A's folder for DevContext and B's for git — measured by the audit of 1 November 2026: `ctx`'s gh redirection went to A while git signed as B. This predates the ambiguity work. `ctx`'s git identity axis reports the mismatch; the entry points do not. Create a worktree inside the root that owns its repository. |
+| **A root that is a link governs nothing** | git compares the repository's physical path with the `gitdir:` pattern as written, so a root declared as `J` where `J` is a junction to `R` never signs a commit — neither from `J\...` nor from `R\...`. Folders under `J` are ambiguous; folders under `R` belong to no context. `ctx new` refuses such a root and `ctx doctor` reports an existing one (`contexte/lien`) with the real folder to declare. |
+| **Ambiguity disables editor isolation** | The editor entry point and the launcher read ownership through `Resolve-DevContextForPath`, which returns nothing for an ambiguous folder. They then behave as outside any context: the editor opens on its shared profile. That is the only safe default when the owner is unknown — applying either context could be the wrong one — and `ctx` says `NO-GO` in the same folder. |
+| **The Supabase token follows the session, not the folder** | `SUPABASE_ACCESS_TOKEN` is set by `work`, never by the folder. In an ambiguous folder the guard refuses the commands it protects, but other `supabase` commands — `projects delete`, `functions delete`, `secrets unset` — run with whatever token the session holds, exactly as they do elsewhere. |
+| **One unreadable `context.json` turns every guard off** | `Get-CtxManifests` parses every manifest without isolating failures, so a single malformed file — single backslashes in a Windows path are enough — makes ownership resolution throw, and the three entry points then fail open in every folder, while `ctx` and `ctx doctor` crash. This predates the ambiguity work and is tracked separately; until it is fixed, validate a hand-edited manifest with `Get-Content <file> -Raw \| ConvertFrom-Json`. |
 | **Anyone who can write to `shims/` runs code everywhere** | The folder sits first in `PATH`. Its filesystem permissions are part of your threat model, not ours. |
 | **`npx` fetches at run time** | A generated `.mcp.json` uses `npx -y @supabase/mcp-server-supabase@latest`, which downloads on every start. That is upstream's recommended form; pin the version yourself if your threat model requires it. |
 | **A shortcut pointing at the executable bypasses everything** | `C:\...\Code.exe` consults no `PATH`, so no entry point can reach it. Nothing here can change that; `ctx doctor` reads your shortcuts and reports which ones open a context project on the shared profile, and `ctx-shortcut` writes correct ones. Detection, not prevention. |

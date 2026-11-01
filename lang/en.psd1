@@ -85,6 +85,9 @@
 
     'ctx.pb.dossierSansActif' = "This folder belongs to context '{0}', and no context is active."
     'ctx.pb.dossierAutre'     = "This folder belongs to context '{0}', but '{1}' is active."
+    'proprietaire.ambigu.racines' = "Ambiguous owner (racine-dupliquee): contexts {0} declare the same root. None is chosen: correct the context.json of one of them."
+    'proprietaire.ambigu.alias'   = "Ambiguous owner (alias-cible): this path goes through a junction or link, and its owner is not the owner of its files, which live in '{1}' (contexts involved: {0}). git signs by the files. Work from the real folder."
+    'proprietaire.ambigu.inconnue' = "Undetermined owner (cible-inconnue): a link on this path cannot be read. No context is chosen."
     # Replaces 'ctx.pb.horsRacine', removed on 19 August 2026: a folder nobody
     # owns crosses no identity, and the refusal it produced offered a fix the
     # user had already applied.
@@ -211,6 +214,8 @@
     'new.nomInvalide'         = 'Invalid context name: lowercase letters, digits and hyphens only.'
     'new.existeDeja'          = "Context '{0}' already exists ({1})."
     'new.racinePrise'         = "Root '{0}' already belongs to context '{1}'."
+    'new.racineLien'          = "Root '{0}' is a link to '{1}'. git never applies an includeIf through a link: this context would sign nothing. Declare the real folder, '{1}'."
+    'new.racineIllisible'     = "Root '{0}' cannot be read to the end (unreachable, or an unreadable link on its path). There is no telling which files this context would govern."
     'new.cleGeneration'       = 'Generating the context SSH key (a passphrase is recommended):'
     'new.cleSansGeneration'   = 'SSH key NOT generated (-NoKey).'
     'new.cleCommande'         = "ssh-keygen -t ed25519 -C '{0}' -f '{1}'"
@@ -382,6 +387,11 @@
     'doc.ctx.horsContexteActif' = "this folder belongs to no context; identity '{0}' is loaded in this shell, but the GLOBAL git identity is what will sign here"
     'doc.ctx.sansActif'       = "folder of context '{0}', but no context is active in this shell"
     'doc.ctx.autreActif'      = "folder of context '{0}', active identity '{1}'"
+    'doc.ctx.racineDupliquee' = "root '{0}' is declared by several contexts: {1}. In this folder and below, no identity is applied."
+    'doc.ctx.racineLien'      = "context '{0}' root, '{1}', is a link to '{2}'. git never applies the context's includeIf there, and every folder reached through this path is ambiguous."
+    'doc.ctx.racineLienFix'   = "declare the real folder as root in context.json: {0}"
+    'doc.ctx.ambigu.racines'  = "correct the context.json of one of the contexts: {0}"
+    'doc.ctx.ambigu.inconnue' = "check the junction or link on this path (Get-Item <folder> | Select-Object LinkTarget)"
     'doc.gh.sansConfigDir'    = 'GH_CONFIG_DIR is unset: gh uses the machine-wide config, therefore the last account logged into'
     'doc.gh.autreContexte'    = 'GH_CONFIG_DIR points at another context'
     'doc.gh.dedie'            = 'config dedicated to this context'
@@ -469,6 +479,7 @@
     'fix.non.admin'           = 'changes the SYSTEM PATH, so it needs administrator rights. A tool that silently asks for elevation is a tool people stop trusting.'
     'fix.non.wsl'             = 'nothing on the Windows side can close it: a distribution carries its own PATH.'
     'fix.non.paquet'          = 'installing or uninstalling a binary is never a diagnostic job.'
+    'fix.non.manifeste'       = 'deciding which of two contexts keeps a root is a decision, not a repair: correct the context.json by hand.'
 
     'doc.garde.sansDossier'   = 'shims folder not found'
     'doc.garde.horsPath'      = 'shims are absent from PATH: the protection covers PowerShell only'

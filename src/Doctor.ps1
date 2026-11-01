@@ -185,6 +185,83 @@ function Test-CtxDoctorIdentiteGit {
     New-CtxCheck -Domaine 'git' -Sujet 'identite' -Verdict $verdict -Detail $detail -Correctif $correctif
 }
 
+function Test-CtxDoctorProprietaire {
+    <#
+      A qui est ce dossier, au regard de l'identite active. Meme patron que
+      Test-CtxDoctorIdentiteGit : l'etat vient de Get-CtxVerdictDossier, le
+      verdict de $script:CtxAxeProprietaire -- les deux que `ctx` consomme.
+
+      Jusqu'au 30 octobre 2026, ces cinq branches etaient ecrites ici en dur,
+      a cote de celles de `ctx`. L'etat ambigu, qui devait valoir PROBLEME des
+      deux cotes, aurait ete la troisieme occasion de les faire diverger.
+    #>
+    param(
+        [Parameter(Mandatory)]$Verdict,
+        [AllowNull()][AllowEmptyString()][string]$Actif
+    )
+
+    $proprio = [string]$Verdict.Contexte
+    $etat = Get-CtxVerdictDossier -Proprietaire $proprio -Actif $Actif -Ambigu:($Verdict.Etat -eq 'ambigu')
+
+    $detail, $correctif = switch ($etat) {
+        # Les MEMES MOTS que `ctx` sur le meme dossier : INFO ici et NO-GO
+        # la-bas jusqu'au 19 aout 2026.
+        'neutre'             { (T 'doc.ctx.horsContexte'), '' }
+        'sansProprietaire'   { (T 'doc.ctx.horsContexteActif' $Actif), '' }
+        'dossierSansActif'   { (T 'doc.ctx.sansActif' $proprio), "work $proprio -NoCd" }
+        'dossierAutre'       { (T 'doc.ctx.autreActif' $proprio $Actif), "work $proprio -NoCd" }
+        'accord'             { $proprio, '' }
+        'proprietaireAmbigu' {
+            $fix = switch ($Verdict.Raison) {
+                'racine-dupliquee' { T 'doc.ctx.ambigu.racines' (@($Verdict.Candidats) -join ', ') }
+                # Apostrophes doublees : un dossier « O'Brien » casserait la
+                # commande qu'on propose de copier.
+                'alias-cible' { "Set-Location -LiteralPath '$("$($Verdict.CheminPhysique)".Replace("'", "''"))'" }
+                default { T 'doc.ctx.ambigu.inconnue' }
+            }
+            (Get-CtxMessageAmbiguite -Verdict $Verdict), $fix
+        }
+    }
+
+    New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict $script:CtxAxeProprietaire[$etat].Doctor `
+        -Detail $detail -Correctif $correctif
+}
+
+function Test-CtxDoctorRacines {
+    # Un constat par groupe de contextes revendiquant la meme racine, et rien
+    # quand il n'y en a pas : une ligne OK de plus sur chaque diagnostic ne
+    # dirait rien que l'absence de PROBLEME ne dise deja.
+    param([AllowNull()][AllowEmptyCollection()][object[]]$Groupes)
+
+    foreach ($g in @($Groupes | Where-Object { $_ })) {
+        New-CtxCheck -Domaine 'contexte' -Sujet 'racines' -Verdict 'PROBLEME' `
+            -Detail (T 'doc.ctx.racineDupliquee' $g.Racine (@($g.Contextes) -join ', ')) `
+            -Correctif (T 'doc.ctx.ambigu.racines' (@($g.Contextes) -join ', '))
+    }
+}
+
+function Test-CtxDoctorRacinesLiens {
+    <#
+      Une racine DECLAREE qui est elle-meme un lien -- jonction ou lien
+      symbolique. git compare le chemin physique du depot au motif ecrit :
+      mesure le 30 octobre 2026, `includeIf "gitdir:J/"` ne s'applique ni
+      depuis J\repo ni depuis R\repo quand J -> R. Ce contexte ne signe donc
+      rien, et tout dossier pris sous J est ambigu pour la resolution. Le
+      correctif est de declarer le vrai dossier.
+    #>
+    param([AllowNull()][AllowEmptyCollection()][object[]]$Racines)
+
+    foreach ($r in @($Racines | Where-Object { $_ -and $_.Racine })) {
+        $physique = Get-CtxProp $r 'RacinePhysique'
+        if (-not $physique) { continue }
+        if ((Get-NormalizedRoot $physique) -eq (Get-NormalizedRoot $r.Racine)) { continue }
+        $nom = [string](Get-CtxProp $r.Manifeste 'name' '')
+        New-CtxCheck -Domaine 'contexte' -Sujet 'lien' -Verdict 'PROBLEME' `
+            -Detail (T 'doc.ctx.racineLien' $nom $r.Racine $physique) `
+            -Correctif (T 'doc.ctx.racineLienFix' $physique)
+    }
+}
+
 function Test-CtxDoctorRemote {
     <#
       The trap documented on 5 Aug 2026: a remote written
@@ -439,33 +516,24 @@ function Get-DevContextDoctor {
     $checks  = [System.Collections.Generic.List[object]]::new()
 
     # --- contexte ----------------------------------------------------------
-    $manifeste = Resolve-DevContextForPath -Path $dossier
+    #
+    # Le verdict COMPLET, et non Resolve-DevContextForPath : un dossier ambigu
+    # y rend $null, comme un dossier sans proprietaire, et doctor doit dire
+    # lequel des deux.
+    $racinesConnues = @(Get-CtxRacinesConnues -Physique)
+    $verdictProprio = Get-CtxProprietaire -Path $dossier -Racines $racinesConnues
+    $manifeste = $verdictProprio.Manifeste
     $proprio   = if ($manifeste) { Get-CtxProp $manifeste 'name' } else { $null }
     $actif     = $env:DEVCTX
 
-    if (-not $proprio) {
-        # Les MEMES MOTS que `ctx` sur le meme dossier. Les deux commandes ont
-        # rendu des verdicts differents sur ce fait-la jusqu'au 19 aout 2026 --
-        # INFO ici, NO-GO la-bas -- et c'est le piege « la meme question
-        # repondue a deux endroits » que AGENTS.md consigne deja.
-        $detail = if ($actif) { T 'doc.ctx.horsContexteActif' $actif }
-        else { T 'doc.ctx.horsContexte' }
-        $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'INFO' `
-                    -Detail $detail))
+    $checks.Add((Test-CtxDoctorProprietaire -Verdict $verdictProprio -Actif $actif))
+
+    # Quel que soit le dossier courant : un doublon ne se voit sinon que le
+    # jour ou l'on s'y tient, c'est-a-dire le jour ou il sert.
+    foreach ($c in @(Test-CtxDoctorRacines -Groupes @(Get-CtxRacinesDupliquees -Racines $racinesConnues))) {
+        $checks.Add($c)
     }
-    elseif (-not $actif) {
-        $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'ATTENTION' `
-                    -Detail (T 'doc.ctx.sansActif' $proprio) `
-                    -Correctif "work $proprio -NoCd"))
-    }
-    elseif ($actif -ne $proprio) {
-        $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'PROBLEME' `
-                    -Detail (T 'doc.ctx.autreActif' $proprio $actif) `
-                    -Correctif "work $proprio -NoCd"))
-    }
-    else {
-        $checks.Add((New-CtxCheck -Domaine 'contexte' -Sujet 'proprietaire' -Verdict 'OK' -Detail $proprio))
-    }
+    foreach ($c in @(Test-CtxDoctorRacinesLiens -Racines $racinesConnues)) { $checks.Add($c) }
 
     # --- la racine des contextes -------------------------------------------
     #

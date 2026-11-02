@@ -28,25 +28,196 @@
 # Cette liste courte est un choix. Un garde-fou dont on peut enoncer la regle en
 # une phrase est un garde-fou qu'on garde ; SECURITY.md la reprend telle quelle.
 
-function Get-CtxVercelMots {
-    <#
-      Les mots d'une ligne `vercel`, options ecartees. Rendus tous, et pas
-      seulement les deux premiers : `vercel env rm CLE production` porte sa
-      cible en quatrieme position.
+# Comment la CLI lit une ligne. Releve sur ses sources -- packages/cli/src sur
+# GitHub le 1er novembre 2026, puis le paquet 65.8.0 installe ici, le 2
+# novembre -- lues, jamais executees.
+#
+# Une premiere lecture ne connait que les options GLOBALES, en mode permissif,
+# par la bibliotheque `arg`. Le premier mot qui reste est compare EXACTEMENT a
+# la table des commandes -- une Map JavaScript, sans mise en minuscules. S'il
+# n'y est pas, c'est un chemin a deployer ; s'il n'y a pas de mot, c'est
+# `vercel deploy`. Une option que cette lecture ne connait pas n'est PAS
+# ecartee : le mode permissif la range avec les mots, et elle devient elle-meme
+# le premier mot. `vercel --prod build` deploie donc `build` en production, la
+# ou `vercel build --prod` construit.
+#
+# Ce que `arg` fait des ecritures moins courantes, et que ce lecteur reproduit :
+# un groupe de lettres (`-dd`, `-dQ dir`) s'eclate en options courtes, dont
+# seule la DERNIERE peut prendre une valeur ; un booleen ignore ce qui suit son
+# `=` (`--debug=0` vaut vrai) ; chaque booleen global a sa negation `--no-` ; et
+# tout ce qui suit un `--` nu est un mot.
+#
+# Le sens de l'erreur decide du contenu de ces listes, comme pour Supabase.
+# Une option globale OUBLIEE rend la lecture ambigue, donc un refus de trop.
+# Une commande OUBLIEE fait prendre son nom pour un chemin, donc un refus de
+# trop -- seulement avec `--prod`, seulement hors branche par defaut. Dans les
+# deux cas l'erreur se voit et se leve par derogation ; l'erreur inverse
+# deploierait en production sans un mot.
+$script:VercelOptionsGlobalesAValeur = @('cwd', 'local-config', 'global-config', 'scope', 'token', 'team', 'api')
+$script:VercelOptionsGlobalesBool    = @(
+    'help', 'version', 'debug', 'no-color', 'non-interactive', 'changelog',
+    'no-help', 'no-version', 'no-debug', 'no-non-interactive', 'no-changelog'
+)
+$script:VercelCourtesAValeur         = @('A', 'Q', 'S', 't', 'T')
+$script:VercelCourtesBool            = @('h', 'v', 'd')
 
-      A ENVELOPPER DANS @() A L'APPEL. PowerShell deballe un tableau d'un seul
-      element en le rendant, et `.Count` sur la chaine obtenue leve sous
-      StrictMode. Mesure ici meme : `vercel build --prod` etait alors REFUSE,
-      parce que la verification qui l'ecarte tombait avant d'avoir lieu. Un
-      garde-fou qui se trompe de sens en cas d'erreur interne est pire qu'un
-      garde-fou absent.
+# Les options qui nomment l'environnement vise par `deploy` et `redeploy` :
+# `--environment` (court `-e`), et `--target`, son alias deprecie. `--prod` en
+# est le raccourci booleen.
+$script:VercelOptionsEnvironnement = @('--environment', '-e', '--target')
+
+# Noms ET alias, tels que chaque command.ts les declare.
+$script:VercelCommandes = @(
+    'activity', 'agent', 'agent-runs', 'ai-gateway', 'alerts', 'alias', 'aliases', 'ln', 'api',
+    'bisect', 'blob', 'budgets', 'budget', 'build', 'builders', 'buy', 'cache', 'certs', 'cert',
+    'changelog', 'ci', 'comments', 'connect', 'contract', 'crons', 'cron', 'curl', 'daemons',
+    'daemon', 'deploy', 'deploy-hooks', 'deploy-hook', 'dev', 'develop', 'dns', 'domains', 'domain',
+    'drains', 'drain', 'env', 'experiments', 'feedback', 'firewall', 'flags', 'git',
+    'global-config', 'edge-config', 'guidance', 'health', 'status-page', 'help', 'httpstat', 'init',
+    'inspect', 'install', 'i', 'integration', 'integration-resource', 'ir', 'kms', 'link', 'list',
+    'ls', 'login', 'logout', 'logs', 'log', 'mcp', 'metrics', 'microfrontends', 'mf',
+    'notifications', 'open', 'organizations', 'organization', 'pricing', 'project', 'projects',
+    'promote', 'pull', 'redeploy', 'redirects', 'redirect', 'remove', 'rm', 'rollback',
+    'rolling-release', 'rr', 'routes', 'sandbox', 'schedules', 'security', 'setup', 'signup',
+    'skills', 'storage', 'environments', 'environment', 'targets', 'target', 'teams', 'switch',
+    'team', 'telemetry', 'token-pass', 'tokenpass', 'tokens', 'traces', 'upgrade', 'usage', 'vcr',
+    'version', 'versions', 'webhooks', 'webhook', 'whoami'
+)
+
+function Read-CtxVercelLigne {
+    <#
+      LA lecture d'une ligne `vercel`. Le garde-fou et la redirection de
+      configuration la consomment tous deux : deux lectures de la meme ligne
+      finissent par repondre deux choses (AGENTS.md, "the same question
+      answered in two places").
+
+      Rend un ETAT, jamais un verdict :
+
+        Etat 'commande'  Commande = le premier mot, casse comprise ;
+                         Suite = les arguments bruts qui le suivent
+        Etat 'aucune'    rien que des options globales : `vercel` nu, qui deploie
+        Etat 'ambigue'   une option inconnue ou une ecriture incertaine avant
+                         le premier mot
+
+      'ambigue' ne veut jamais dire "rien a signaler". Chaque appelant en
+      decide, et toujours du cote de la regle qu'il garde : un deploiement pour
+      `--prod`, la ligne entiere fouillee pour `env rm` et pour `login`.
+
+      Remplace Get-CtxVercelMots, qui ecartait les options en gardant leurs
+      valeurs et mettait tout en minuscules : `vercel --cwd build --prod` et
+      `vercel Logs --prod` y passaient pour des commandes sans effet distant.
+      Releve par les audits de la PR #58, les 31 octobre et 1er novembre 2026.
     #>
-    param([string[]]$Arguments = @())
-    @(
-        $Arguments |
-            Where-Object { $_ -and -not "$_".StartsWith('-') } |
-            ForEach-Object { "$_".ToLowerInvariant() }
-    )
+    param([AllowEmptyCollection()][string[]]$Arguments = @())
+
+    $bruts = @($Arguments | ForEach-Object { "$_" })
+    $ambigue = { [pscustomobject]@{ Etat = 'ambigue'; Commande = $null; Suite = @() } }
+    $commande = {
+        param($rang)
+        if ($rang -ge $bruts.Count) { return [pscustomobject]@{ Etat = 'aucune'; Commande = $null; Suite = @() } }
+        [pscustomobject]@{
+            Etat     = 'commande'
+            Commande = $bruts[$rang]
+            Suite    = @($bruts | Select-Object -Skip ($rang + 1))
+        }
+    }
+    # Une valeur qui commence par un tiret, `arg` la refuse comme valeur
+    # manquante. On ne devine pas ce que la CLI fera de la ligne.
+    $valeurLisible = { param($rang) $rang -lt $bruts.Count -and -not $bruts[$rang].StartsWith('-') }
+
+    $i = 0
+    while ($i -lt $bruts.Count) {
+        $a = $bruts[$i]
+
+        if (-not $a.StartsWith('-')) { return (& $commande $i) }
+
+        # Tout ce qui suit `--` est un mot, options comprises.
+        if ($a -eq '--') { return (& $commande ($i + 1)) }
+        # `-` seul est un chemin a deployer, pas une option.
+        if ($a -eq '-') { return (& $ambigue) }
+
+        if ($a.StartsWith('--')) {
+            $eg  = $a.IndexOf('=')
+            $nom = if ($eg -ge 0) { $a.Substring(2, $eg - 2) } else { $a.Substring(2) }
+
+            # -cin : la CLI distingue la casse, `--CWD` lui est inconnu.
+            if ($nom -cin $script:VercelOptionsGlobalesBool) { $i++; continue }
+            if ($nom -cin $script:VercelOptionsGlobalesAValeur) {
+                if ($eg -ge 0) { $i++; continue }
+                if (-not (& $valeurLisible ($i + 1))) { return (& $ambigue) }
+                $i += 2
+                continue
+            }
+            return (& $ambigue)
+        }
+
+        # Courtes, seules ou groupees. Une lettre a valeur ailleurs qu'en fin
+        # de groupe, `arg` la refuse ; une lettre inconnue rend tout incertain.
+        $lettres = @($a.Substring(1).ToCharArray() | ForEach-Object { "$_" })
+        $consomme = 1
+        for ($k = 0; $k -lt $lettres.Count; $k++) {
+            $lettre = $lettres[$k]
+            if ($lettre -cin $script:VercelCourtesBool) { continue }
+            if ($lettre -cin $script:VercelCourtesAValeur -and $k -eq $lettres.Count - 1) {
+                if (-not (& $valeurLisible ($i + 1))) { return (& $ambigue) }
+                $consomme = 2
+                continue
+            }
+            return (& $ambigue)
+        }
+        $i += $consomme
+    }
+
+    [pscustomobject]@{ Etat = 'aucune'; Commande = $null; Suite = @() }
+}
+
+function Test-CtxVercelVisePro {
+    <#
+      `production` est-il ecrit quelque part dans ces arguments, en valeur
+      separee, apres un `=` ou dans une liste a virgules ? La CLI joint par des
+      virgules les environnements multiples de `env rm`.
+
+      Trop large a dessein : une variable NOMMEE production serait refusee
+      aussi, et `Production` compte, casse ignoree, la ou le reste de la
+      lecture la respecte. C'est une derogation de trop, jamais une suppression
+      de trop.
+    #>
+    param([AllowEmptyCollection()][string[]]$Arguments = @())
+    foreach ($a in $Arguments) {
+        foreach ($morceau in ("$a" -split '[=,]')) {
+            if ($morceau -eq 'production') { return $true }
+        }
+    }
+    $false
+}
+
+function Test-CtxVercelDemandeProd {
+    <#
+      Cette ligne demande-t-elle la production a `deploy` ou `redeploy` ?
+
+      `--prod`, sous toutes ses ecritures : `arg` donne VRAI a un booleen quoi
+      qu'on ecrive apres le `=`, donc `--prod=false` deploie en production.
+      Et `--environment`, `-e` ou `--target` valant `production`, a N'IMPORTE
+      QUELLE occurrence : une option repetee garde la derniere, et `--prod`
+      cede devant `--environment`. Les suivre exactement, ce serait parier sur
+      un ordre que la CLI peut changer ; refuser des que la production est
+      nommee ne parie sur rien.
+    #>
+    param([AllowEmptyCollection()][string[]]$Arguments = @())
+
+    $bruts = @($Arguments | ForEach-Object { "$_" })
+    for ($i = 0; $i -lt $bruts.Count; $i++) {
+        $a = $bruts[$i]
+        if ($a -ceq '--prod' -or $a.StartsWith('--prod=')) { return $true }
+
+        $eg  = $a.IndexOf('=')
+        $nom = if ($eg -ge 0) { $a.Substring(0, $eg) } else { $a }
+        if ($nom -cnotin $script:VercelOptionsEnvironnement) { continue }
+
+        $valeur = if ($eg -ge 0) { $a.Substring($eg + 1) } elseif ($i + 1 -lt $bruts.Count) { $bruts[$i + 1] } else { '' }
+        if ($valeur -eq 'production') { return $true }
+    }
+    $false
 }
 
 function Test-CtxVercelGuard {
@@ -70,7 +241,7 @@ function Test-CtxVercelGuard {
 
     if ($Override) { return (& $passe 'derogation') }
 
-    $mots = @(Get-CtxVercelMots -Arguments $Arguments)
+    $ligne = Read-CtxVercelLigne -Arguments $Arguments
 
     # --- proprietaire ambigu -------------------------------------------------
     #
@@ -106,7 +277,18 @@ function Test-CtxVercelGuard {
     # Seulement quand 'production' est ECRIT. Sans cible, la CLI ouvre une
     # invite et l'humain voit ce qu'il choisit ; refuser la ferait disparaitre
     # pour les environnements de developpement aussi, ou l'operation est banale.
-    if ($mots.Count -ge 2 -and $mots[0] -eq 'env' -and $mots[1] -eq 'rm' -and 'production' -in $mots) {
+    #
+    # La sous-commande est cherchee dans TOUTE la suite, et pas au rang deux :
+    # `env` lit ses propres options avant elle, et si `rm` ou son alias
+    # `remove` est la sous-commande, il est forcement ecrit quelque part. Le
+    # chercher partout ne peut que refuser de trop -- `env add rm production`.
+    # Sur une lecture ambigue, c'est la ligne ENTIERE qui est fouillee : ne pas
+    # savoir ou commence la commande n'autorise pas a conclure qu'elle est
+    # absente.
+    $suite = if ($ligne.Etat -eq 'ambigue') { @($Arguments | ForEach-Object { "$_" }) } else { @($ligne.Suite) }
+    $envVise = ($ligne.Etat -eq 'commande' -and $ligne.Commande -ceq 'env') -or ($ligne.Etat -eq 'ambigue' -and $suite -ccontains 'env')
+    $envRm = $envVise -and ($suite -ccontains 'rm' -or $suite -ccontains 'remove')
+    if ($envRm -and (Test-CtxVercelVisePro -Arguments $suite)) {
         return [pscustomobject]@{
             Allowed = $false
             Rule    = 'env-rm-production'
@@ -115,15 +297,15 @@ function Test-CtxVercelGuard {
     }
 
     # --- deploiement de production hors branche par defaut -------------------
-    $cible = Get-CtxArgumentValeur -Arguments $Arguments -Nom 'target'
-    $prod  = ('--prod' -in @($Arguments | ForEach-Object { "$_" })) -or ($cible -eq 'production')
-    if (-not $prod) { return (& $passe 'non-garde') }
+    if (-not (Test-CtxVercelDemandeProd -Arguments $Arguments)) { return (& $passe 'non-garde') }
 
     # `vercel build --prod` construit en local sans rien deployer : le refuser
-    # serait un faux refus sur une commande sans effet distant. Un `vercel` nu
-    # deploie, lui, et ne porte aucun mot.
-    $commande = if ($mots.Count -ge 1) { $mots[0] } else { '' }
-    if ($commande -and $commande -notin @('deploy', 'redeploy')) { return (& $passe 'non-deploiement') }
+    # serait un faux refus sur une commande sans effet distant. Seule une
+    # commande CONNUE l'obtient : un mot inconnu est un chemin que la CLI
+    # deploie, `vercel` nu deploie, et une lecture ambigue se juge comme un
+    # deploiement -- c'est ce que la CLI en fera le plus souvent.
+    $connue = $ligne.Etat -eq 'commande' -and $ligne.Commande -cin $script:VercelCommandes
+    if ($connue -and $ligne.Commande -cnotin @('deploy', 'redeploy')) { return (& $passe 'non-deploiement') }
 
     if (-not $CurrentBranch -or -not $DefaultBranch) { return (& $passe 'branche-inconnue') }
     if ($CurrentBranch -eq $DefaultBranch)           { return (& $passe 'branche-par-defaut') }
@@ -172,7 +354,7 @@ function Resolve-CtxVercelVerdict {
     elseif ($manifeste) {
         $contexte = Get-CtxProp $manifeste 'name'
         $attendu  = [System.IO.Path]::Combine((Get-CtxPath $contexte), 'vercel')
-        $mots     = @(Get-CtxVercelMots -Arguments $Arguments)
+        $ligne    = Read-CtxVercelLigne -Arguments $Arguments
 
         # Un `--global-config` deja present a ete ecrit volontairement. On ne
         # l'ecrase pas : un outil qui defait un choix explicite devient
@@ -183,7 +365,12 @@ function Resolve-CtxVercelVerdict {
 
         if (-not $dejaPose) {
             $connecte = Test-Path -LiteralPath ([System.IO.Path]::Combine($attendu, 'auth.json'))
-            if ($mots.Count -ge 1 -and $mots[0] -in @('login', 'logout', 'switch')) {
+            # Sur une lecture ambigue, un de ces mots n'importe ou suffit : la
+            # rater enverrait la session dans la configuration GLOBALE, celle
+            # du dernier compte connecte.
+            $sessions = @('login', 'logout', 'switch')
+            $ambigueSession = $ligne.Etat -eq 'ambigue' -and @($Arguments | Where-Object { "$_" -cin $sessions }).Count -gt 0
+            if (($ligne.Etat -eq 'commande' -and $ligne.Commande -cin $sessions) -or $ambigueSession) {
                 # Ces commandes ont le dossier de configuration pour SUJET. Les
                 # rediriger fait qu'un `vercel login` tape dans le contexte
                 # connecte CE contexte -- et c'est la sortie du cas "pas encore

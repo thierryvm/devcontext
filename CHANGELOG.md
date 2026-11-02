@@ -42,6 +42,53 @@
 
 ### Fixed
 
+- **The Vercel production guard read the command line differently from the
+  CLI, and let production deployments through from a side branch.** It dropped
+  flags but kept their values, and lowercased every word, so the first word it
+  saw was taken for the command. `vercel --cwd build --prod` read as `build`,
+  and `vercel Logs --prod` as `logs`. Both were allowed as "not a deployment",
+  but the CLI deploys both. `--cwd` consumes `build`, which leaves no command.
+  `Logs` matches no command, since names are compared exactly, so the CLI takes
+  it for a path to deploy. On Windows a `logs` folder answers to that path. The
+  same misreading let through `vercel dist --prod` (an unknown word is a path to
+  deploy) and `vercel --prod build`. In the second, a flag the CLI does not know
+  before the command becomes the first word, so the line is a deployment of
+  `build`.
+
+  The guard now has one reader, `Read-CtxVercelLigne`, written from the CLI's
+  own source, read but never run: GitHub on 1 November 2026, then the installed
+  65.8.0 package. It skips only the values of the seven value-taking **global**
+  options, compares command names case-sensitively against the CLI's declared
+  names and aliases, and follows what the CLI's argument parser does with
+  `-dd`, `-dQ dir`, `--debug=0` (a boolean ignores its value), `--no-debug` and
+  `--`. Anything else before the command is *ambiguous*, and an ambiguous line
+  is never read as harmless. For `--prod` it counts as a deployment. For
+  `env rm` and `login` the whole line is searched. `vercel build --prod` stays
+  allowed.
+
+  `-e`, `-m` and `-b`, listed as value-taking in the first report, are not
+  global options. Before the command, the CLI does not give them a value, and
+  it deploys. Skipping their value would have reopened the hole, and a test
+  fails if it ever is.
+
+  **Production was also requested in ways the guard never looked at.** In
+  65.8.0, `--environment` (short `-e`) is the main option of `deploy` and
+  `redeploy`, and `--target` is only its deprecated alias. So `vercel deploy
+  --environment production` went through. So did `--prod=false`, which the
+  parser reads as **true**, and `--target preview --target production`, where
+  the last value wins while the guard read the first. Production is now
+  recognised in any of those spellings, at any occurrence.
+
+  `env rm` on production had the same blind spots, and now catches the alias
+  `env remove`, `--environment production` and `-e production`, the
+  `--environment=production` spelling (dropped whole as a flag before), lists
+  such as `preview,production`, and global options ahead of `env`. The session
+  redirect for `vercel login` uses the same reader, so `vercel --scope team
+  login` no longer logs into the global configuration.
+
+  Found by the security audits of PR #58 on 31 October and 1 November 2026, and
+  by the audit of this fix on 2 November.
+
 - **The first design of `ctx exec` was wrong, and the security audit said so
   before it shipped.** It ran the command in the caller's process, with the
   environment swapped and restored in a `finally`. An environment belongs to the

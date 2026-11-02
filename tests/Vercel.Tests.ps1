@@ -84,6 +84,177 @@ Describe 'Test-CtxVercelGuard' {
     }
 }
 
+Describe 'Test-CtxVercelGuard -- lit la ligne comme la CLI la lit' {
+    # Releve sur les sources de la CLI (packages/cli/src sur GitHub le 1er
+    # novembre 2026, paquet 65.8.0 installe le 2), sans jamais l executer :
+    #
+    #   - les options globales sont lues AVANT la commande, et sept d entre
+    #     elles prennent une valeur en argument separe ;
+    #   - la commande est le premier mot restant, compare EXACTEMENT a la table
+    #     des commandes (Map JavaScript, aucune mise en minuscules) ;
+    #   - un mot qui n est pas une commande est pris pour un chemin a deployer,
+    #     et pas de mot du tout, c est `vercel deploy` ;
+    #   - une option inconnue de cette premiere lecture (`--prod`, `-e`) n est
+    #     pas ecartee : elle DEVIENT le premier mot, donc un deploiement.
+    #
+    # Avant ce correctif, `Get-CtxVercelMots` ecartait les options mais gardait
+    # leurs valeurs, et mettait tout en minuscules : chacune des lignes
+    # refusees ci-dessous passait pour une commande sans effet distant.
+
+    It 'REFUSE <Ligne> : la valeur d une option globale n est pas la commande' -ForEach @(
+        @{ Ligne = '--cwd build --prod' }
+        @{ Ligne = '--cwd=build --prod' }
+        @{ Ligne = '--local-config build --prod' }
+        @{ Ligne = '-A build --prod' }
+        @{ Ligne = '--global-config build --prod' }
+        @{ Ligne = '-Q build --prod' }
+        @{ Ligne = '--scope build --prod' }
+        @{ Ligne = '-S build --prod' }
+        @{ Ligne = '--token build --prod' }
+        @{ Ligne = '-t build --prod' }
+        @{ Ligne = '--team build --prod' }
+        @{ Ligne = '-T build --prod' }
+        @{ Ligne = '--api build --prod' }
+    ) {
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'prod-hors-branche'
+    }
+
+    It 'REFUSE <Ligne> : un nom de commande se compare a la casse pres' -ForEach @(
+        @{ Ligne = 'Logs --prod' }
+        @{ Ligne = 'BUILD --prod' }
+    ) {
+        # Sur Windows, un dossier `logs` repond en plus a `Logs` : la CLI
+        # deploierait ce dossier-la, en production.
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'prod-hors-branche'
+    }
+
+    It 'REFUSE vercel dist --prod : un mot inconnu est un chemin a deployer' {
+        $v = Test-CtxVercelGuard -Arguments @('dist', '--prod') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'prod-hors-branche'
+    }
+
+    It 'REFUSE <Ligne> : une option inconnue avant la commande rend la lecture ambigue' -ForEach @(
+        @{ Ligne = '--prod build' }
+        @{ Ligne = '-e K=V build --prod' }
+        @{ Ligne = '--meta k=v build --prod' }
+        @{ Ligne = '--build-env K=V build --prod' }
+        @{ Ligne = '--DEBUG build --prod' }
+        @{ Ligne = '-Qd x build --prod' }
+        @{ Ligne = '-dx build --prod' }
+        @{ Ligne = '--no-cwd build --prod' }
+        @{ Ligne = '--cwd --prod build' }
+    ) {
+        # `-e`, `-m` et `-b` sont des options de `deploy`, pas des options
+        # globales : avant la commande, la CLI ne leur connait pas de valeur et
+        # deploie. Sauter leur valeur aurait fait lire `build` et rouvert le
+        # trou. Une lecture incertaine se resout du cote du refus.
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'prod-hors-branche'
+    }
+
+    It 'laisse passer <Ligne>, qui ne deploie rien' -ForEach @(
+        @{ Ligne = 'build --prod' }
+        @{ Ligne = '--debug build --prod' }
+        @{ Ligne = '-d build --prod' }
+        @{ Ligne = '--scope equipe build --prod' }
+        @{ Ligne = '-S equipe build --prod' }
+        @{ Ligne = '--cwd=app build --prod' }
+        @{ Ligne = '--cwd app ls --prod' }
+    ) {
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeTrue
+        $v.Rule    | Should -Be 'non-deploiement'
+    }
+
+    It 'REFUSE toujours deploy derriere une option globale' {
+        $v = Test-CtxVercelGuard -Arguments @('--scope', 'equipe', 'deploy', '--prod') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+    }
+
+    It 'REFUSE <Ligne> : env rm sur la production, sous toutes ses ecritures' -ForEach @(
+        @{ Ligne = '--cwd app env rm CLE production' }
+        @{ Ligne = '-S equipe env rm CLE production' }
+        @{ Ligne = 'env remove CLE production' }
+        @{ Ligne = 'env rm CLE --environment production' }
+        @{ Ligne = 'env rm CLE --environment=production --yes' }
+        @{ Ligne = 'env rm CLE -e production' }
+        @{ Ligne = 'env rm CLE --environment preview,production' }
+    ) {
+        # `remove` est l alias declare de `rm` ; `--environment` (court `-e`)
+        # remplace l argument positionnel, desormais deprecie, et la CLI joint
+        # par des virgules les environnements multiples.
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ')
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'env-rm-production'
+    }
+
+    It 'REFUSE <Ligne> : la production se demande aussi par --environment, -e, --target et --prod=' -ForEach @(
+        @{ Ligne = 'deploy --environment production' }
+        @{ Ligne = 'deploy --environment=production' }
+        @{ Ligne = 'deploy -e production' }
+        @{ Ligne = '--environment production' }
+        @{ Ligne = 'deploy --prod=false' }
+        @{ Ligne = 'deploy --prod=1' }
+        @{ Ligne = 'deploy --target preview --target production' }
+        @{ Ligne = 'deploy --environment preview --environment production' }
+        @{ Ligne = 'redeploy https://x --environment production' }
+    ) {
+        # Releve dans la CLI 65.8.0 installee, lue sans etre executee :
+        # `--environment` (court `-e`) est l option principale de deploy et de
+        # redeploy, `--target` n en est plus que l alias deprecie, et `arg`
+        # donne VRAI a un booleen quelle que soit la valeur ecrite apres `=`.
+        # Une option a valeur repetee garde la DERNIERE occurrence : la
+        # production se reconnait donc a n importe quelle occurrence.
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'prod-hors-branche'
+    }
+
+    It 'laisse passer un deploiement de preview nomme par --environment' {
+        (Test-CtxVercelGuard -Arguments @('deploy', '--environment', 'preview') -CurrentBranch 'feat/x' -DefaultBranch 'main').Allowed |
+            Should -BeTrue
+    }
+
+    It 'lit comme la CLI <Ligne>, sans la croire ambigue' -ForEach @(
+        @{ Ligne = '-dd build --prod' }
+        @{ Ligne = '-dQ cfg build --prod' }
+        @{ Ligne = '--debug=1 build --prod' }
+        @{ Ligne = '--no-debug build --prod' }
+        @{ Ligne = '-- build --prod' }
+    ) {
+        # `arg` eclate `-dd` en deux `-d`, accepte une lettre a valeur en fin
+        # de groupe, ignore la valeur ecrite apres `=` sur un booleen, accepte
+        # la negation `--no-` de chaque booleen global, et fait de tout ce qui
+        # suit `--` des mots.
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeTrue
+        $v.Rule    | Should -Be 'non-deploiement'
+    }
+
+    It 'REFUSE <Ligne> : une lecture ambigue ne vaut jamais absence de env rm' -ForEach @(
+        @{ Ligne = '-dd env rm CLE production' }
+        @{ Ligne = '--debug=1 env rm CLE production' }
+        @{ Ligne = '-- env rm CLE production' }
+        @{ Ligne = '--inconnue env rm CLE production' }
+        @{ Ligne = '-dS equipe env rm CLE production' }
+    ) {
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ')
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'env-rm-production'
+    }
+
+    It 'laisse passer env rm visant un autre environnement, meme nomme d apres la production' {
+        (Test-CtxVercelGuard -Arguments @('env', 'rm', 'CLE', '--environment', 'preview', '--git-branch', 'production-fix')).Allowed |
+            Should -BeTrue
+    }
+}
+
 Describe 'shim vercel — de bout en bout' {
     BeforeAll {
         $script:ctxRoot  = Join-Path $TestDrive 'CTXVC'
@@ -192,6 +363,52 @@ exit `$LASTEXITCODE
             $r.Output | Should -Not -Match ([regex]::Escape($vc))
         }
         finally { Remove-Item $vc -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+
+    It 'REFUSE <Ligne> sans appeler le leurre' -ForEach @(
+        @{ Ligne = '--cwd build --prod' }
+        @{ Ligne = 'Logs --prod' }
+        @{ Ligne = '--prod build' }
+        @{ Ligne = 'env rm CLE --environment=production' }
+    ) {
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy $Ligne ''
+        $r.Output | Should -Match 'REFUSE'
+        $r.Output | Should -Not -Match 'LEURRE-APPELE'
+        $r.Code   | Should -Be 1
+    }
+
+    It 'laisse passer <Ligne> jusqu au leurre' -ForEach @(
+        @{ Ligne = 'build --prod' }
+        @{ Ligne = '--debug build --prod' }
+    ) {
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy $Ligne ''
+        $r.Output | Should -Match 'LEURRE-APPELE'
+        $r.Output | Should -Not -Match 'REFUSE'
+        $r.Code   | Should -Be 42
+    }
+
+    It 'redirige vercel login meme derriere une option globale' {
+        # `--scope equipe login` est un `login` : lu mot par mot, `equipe`
+        # passait pour la commande, et la session ouverte atterrissait dans la
+        # configuration GLOBALE -- celle du dernier compte connecte.
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy '--scope equipe login' ''
+        $r.Output | Should -Match 'LEURRE-APPELE'
+        $r.Output | Should -Match '--global-config'
+    }
+
+    It 'redirige vercel login meme derriere une lecture ambigue' {
+        # Ne pas savoir lire la ligne ne doit jamais envoyer une session dans
+        # la configuration globale.
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy '--inconnue login' ''
+        $r.Output | Should -Match 'LEURRE-APPELE'
+        $r.Output | Should -Match '--global-config'
+    }
+
+    It 'REFUSE deploy --environment production sans appeler le leurre' {
+        $r = & $script:Run $script:Shim $script:proj $script:ctxRoot $script:decoy 'deploy --environment production' ''
+        $r.Output | Should -Match 'REFUSE'
+        $r.Output | Should -Not -Match 'LEURRE-APPELE'
+        $r.Code   | Should -Be 1
     }
 
     It 'laisse passer la derogation explicite' {

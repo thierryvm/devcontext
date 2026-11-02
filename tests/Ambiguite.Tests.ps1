@@ -606,6 +606,13 @@ Describe 'Les decisions des garde-fous, devant une ambiguite' {
         @{ Cas = 'valeur de --scope'; Mots = @('--scope', 'help', '--prod'); Permis = $false }
         # Contre-audit du 1er novembre 2026 : la CLI prend `Logs` pour un dossier a deployer.
         @{ Cas = 'casse differente'; Mots = @('Logs', '--prod'); Permis = $false }
+        # Le meme lecteur que le garde-fou de production (2 novembre 2026) : une
+        # option globale ecartee laisse voir la commande, une option inconnue
+        # rend la lecture ambigue, donc refusee.
+        @{ Cas = 'lecture derriere --scope'; Mots = @('--scope', 'equipe', 'whoami'); Permis = $true }
+        @{ Cas = 'lecture derriere --debug=1'; Mots = @('--debug=1', 'ls'); Permis = $true }
+        @{ Cas = 'option inconnue devant la lecture'; Mots = @('--prod', 'whoami'); Permis = $false }
+        @{ Cas = 'option de deploy devant la lecture'; Mots = @('-e', 'K=V', 'ls'); Permis = $false }
     ) {
         InModuleScope DevContext -Parameters @{ a = $Mots; p = $Permis } { param($a, $p)
             $v = Test-CtxVercelGuard -Arguments $a -Ambiguite 'motif (alias-cible)'

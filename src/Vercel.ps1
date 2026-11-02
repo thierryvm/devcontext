@@ -253,9 +253,11 @@ function Test-CtxVercelGuard {
     # `vercel` nu (qui deploie), est refusee. Liste fermee, a dessein : une
     # liste d'ecritures oublierait la prochaine.
     #
-    # La commande doit etre le PREMIER argument : `--cwd ls --prod` laissait
-    # `ls` passer pour la commande alors que c'est la valeur de --cwd -- et la
-    # CLI, sans commande, deploie. Mesure par l'audit du 30 octobre 2026.
+    # La commande est celle que lit Read-CtxVercelLigne, le lecteur qu'utilise
+    # aussi le reste de ce garde-fou : `--cwd ls --prod` n'a pas de commande,
+    # `ls` y etant la valeur de --cwd, et la CLI, sans commande, deploie.
+    # Mesure par l'audit du 30 octobre 2026. Une lecture ambigue n'est jamais
+    # une lecture permise.
     #
     # Et SENSIBLE a la casse : la CLI compare les noms de commande exactement,
     # et prend un mot inconnu pour un chemin a deployer. `vercel Logs --prod`
@@ -263,9 +265,8 @@ function Test-CtxVercelGuard {
     # Releve par le contre-audit du 1er novembre 2026.
     if ($Ambiguite) {
         $bruts = @($Arguments | ForEach-Object { "$_" })
-        $lecture = if ($bruts.Count -eq 0) { $false }
-        elseif ($bruts[0] -cin @('whoami', 'help', 'ls', 'list', 'inspect', 'logs')) { $true }
-        else { @($bruts | Where-Object { $_ -cnotin @('--version', '-v', '--help', '-h') }).Count -eq 0 }
+        $lecture = ($ligne.Etat -eq 'commande' -and $ligne.Commande -cin @('whoami', 'help', 'ls', 'list', 'inspect', 'logs')) -or
+        ($bruts.Count -gt 0 -and @($bruts | Where-Object { $_ -cnotin @('--version', '-v', '--help', '-h') }).Count -eq 0)
         if (-not $lecture) {
             return [pscustomobject]@{ Allowed = $false; Rule = 'proprietaire-ambigu'; Reason = $Ambiguite }
         }

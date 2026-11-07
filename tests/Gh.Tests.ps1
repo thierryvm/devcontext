@@ -393,9 +393,9 @@ Describe 'Resolve-CtxGhLoginObserve' {
 
     It 'lit un compte quand la CLI a reussi' {
         InModuleScope DevContext {
-            $r = Resolve-CtxGhLoginObserve -Sortie "ovb-willemot`n" -Code 0 -ConfigExiste $true
+            $r = Resolve-CtxGhLoginObserve -Sortie "client-a-gh`n" -Code 0 -ConfigExiste $true
             $r.Etat  | Should -Be 'connu'
-            $r.Login | Should -Be 'ovb-willemot'
+            $r.Login | Should -Be 'client-a-gh'
         }
     }
 
@@ -417,7 +417,7 @@ Describe 'Resolve-CtxGhLoginObserve' {
             foreach ($difforme in @(
                     '{"message": "Bad gateway"}'
                     'error connecting to api.github.com'
-                    "ovb-willemot`nwarning: a new release of gh is available"
+                    "client-a-gh`nwarning: a new release of gh is available"
                     '-commence-par-un-tiret'
                     'finit-par-un-tiret-'
                     'a espace'
@@ -431,7 +431,7 @@ Describe 'Resolve-CtxGhLoginObserve' {
     }
 
     It 'accepte les formes de compte GitHub reellement valides : <_>' -ForEach @(
-        'a', 'thierryvm', 'ovb-willemot', 'A1', 'x-y-z', ('a' * 39)
+        'a', 'thierryvm', 'client-a-gh', 'A1', 'x-y-z', ('a' * 39)
     ) {
         InModuleScope DevContext -Parameters @{ nom = $_ } { param($nom)
             $r = Resolve-CtxGhLoginObserve -Sortie $nom -Code 0 -ConfigExiste $true

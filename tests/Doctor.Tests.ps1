@@ -741,12 +741,12 @@ Describe 'Read-CtxGhHostsComptes' {
                 'github.com:'
                 '    users:'
                 '        thierryvm:'
-                '        ovb-willemot:'
+                '        client-a-gh:'
                 '    user: thierryvm'
                 '    git_protocol: ssh'
             ) | Set-Content -LiteralPath $f -Encoding utf8
 
-            @(Read-CtxGhHostsComptes -Chemin $f) | Should -Be @('ovb-willemot', 'thierryvm')
+            @(Read-CtxGhHostsComptes -Chemin $f) | Should -Be @('client-a-gh', 'thierryvm')
         }
     }
 
@@ -806,7 +806,7 @@ Describe 'Get-CtxJetonGlobalFacts' {
     It 'rattache un login au contexte qui le declare' {
         InModuleScope DevContext {
             $f = Join-Path $TestDrive 'facts-hosts.yml'
-            @('github.com:', '    users:', '        ovb-willemot:') |
+            @('github.com:', '    users:', '        client-a-gh:') |
                 Set-Content -LiteralPath $f -Encoding utf8
 
             $faits = @(Get-CtxJetonGlobalFacts `
@@ -816,13 +816,13 @@ Describe 'Get-CtxJetonGlobalFacts' {
                     }) `
                     -Manifestes @(
                     [pscustomobject]@{ name = 'perso'; github = [pscustomobject]@{ login = 'thierryvm' } }
-                    [pscustomobject]@{ name = 'goldteam'; github = [pscustomobject]@{ login = 'ovb-willemot' } }
+                    [pscustomobject]@{ name = 'client-a'; github = [pscustomobject]@{ login = 'client-a-gh' } }
                 ))
 
             $faits.Count | Should -Be 1
             $faits[0].Present | Should -BeTrue
-            $faits[0].Comptes[0].Login | Should -Be 'ovb-willemot'
-            $faits[0].Comptes[0].Contexte | Should -Be 'goldteam'
+            $faits[0].Comptes[0].Login | Should -Be 'client-a-gh'
+            $faits[0].Comptes[0].Contexte | Should -Be 'client-a'
         }
     }
 
@@ -930,7 +930,7 @@ Describe 'Test-CtxDoctorJetonGlobal' {
                     Present = $true; Chemin = 'C:\quelque\part\hosts.yml'
                     Comptes = @(
                         [pscustomobject]@{ Login = 'thierryvm'; Contexte = 'perso' }
-                        [pscustomobject]@{ Login = 'ovb-willemot'; Contexte = 'goldteam' }
+                        [pscustomobject]@{ Login = 'client-a-gh'; Contexte = 'client-a' }
                     )
                 })
 
@@ -939,7 +939,7 @@ Describe 'Test-CtxDoctorJetonGlobal' {
             $c[0].Verdict | Should -Be 'PROBLEME'
             $c[0].Domaine | Should -Be 'gh'
             $c[0].Sujet | Should -Be 'global'
-            $c[0].Detail | Should -Match 'ovb-willemot'
+            $c[0].Detail | Should -Match 'client-a-gh'
             $c[0].Detail | Should -Not -Match 'thierryvm' -Because 'le compte du contexte courant n est pas le reproche'
         }
     }
@@ -991,7 +991,7 @@ Describe 'Get-CtxRacineFacts' {
         function New-CtxRacineTest {
             param([Parameter(Mandatory)][string]$Chemin)
             New-Item -ItemType Directory -Path $Chemin -Force | Out-Null
-            foreach ($c in @('perso', 'goldteam')) {
+            foreach ($c in @('perso', 'client-a')) {
                 $d = Join-Path $Chemin $c
                 New-Item -ItemType Directory -Path $d -Force | Out-Null
                 ('{ "name": "' + $c + '" }') |

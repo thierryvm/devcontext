@@ -42,7 +42,7 @@ Describe 'Confiance des agents — decision' {
             $faits = @(
                 [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'F:\Apps'; Proprietaire = 'perso' }
             )
-            $c = @(Test-CtxDoctorAgentConfiance -Faits $faits -Contexte 'goldteam')
+            $c = @(Test-CtxDoctorAgentConfiance -Faits $faits -Contexte 'client-a')
 
             $c.Count | Should -Be 1
             $c[0].Domaine | Should -Be 'agent'
@@ -59,7 +59,7 @@ Describe 'Confiance des agents — decision' {
             $faits = @(
                 [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'F:\Apps'; Proprietaire = 'perso' }
             )
-            $c = @(Test-CtxDoctorAgentConfiance -Faits $faits -Contexte 'goldteam')
+            $c = @(Test-CtxDoctorAgentConfiance -Faits $faits -Contexte 'client-a')
             $c[0].Detail | Should -Match 'utilisateur|user'
         }
     }
@@ -110,7 +110,7 @@ Describe 'Confiance des agents — decision' {
                 [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'F:\A'; Proprietaire = 'alpha' }
                 [pscustomobject]@{ Portee = 'utilisateur'; Fichier = 'u'; Dossier = 'F:\A2'; Proprietaire = 'alpha' }
             )
-            $c = @(Test-CtxDoctorAgentConfiance -Faits $faits -Contexte 'goldteam')
+            $c = @(Test-CtxDoctorAgentConfiance -Faits $faits -Contexte 'client-a')
 
             $c.Count | Should -Be 2
             $c[0].Sujet | Should -Be 'confiance/alpha'

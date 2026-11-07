@@ -1260,7 +1260,7 @@ function Test-CtxDoctorEditeurConnexions {
       echoue. Elle avait au contraire parfaitement fonctionne : un profil par
       contexte, c'est un magasin de secrets par contexte, donc une connexion a
       ouvrir une fois dans chacun. Mesure le 17 aout 2026 sur le contexte
-      goldteam.
+      client-a.
 
       POURQUOI L'ETAT REEL N'EST PAS MESURE
 

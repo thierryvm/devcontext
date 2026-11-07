@@ -373,7 +373,7 @@ function Resolve-CtxGhLoginObserve {
       attendu comme si c'etait une identite :
 
           Compte GitHub actif '{"message": "No server is currently available
-          to service your request..."}' - le contexte attend 'ovb-willemot'.
+          to service your request..."}' - le contexte attend 'client-a-gh'.
 
       La meme question etait deja posee correctement a vingt lignes de la, dans
       `ctx doctor -Live` (src/Jetons.ps1), qui teste $LASTEXITCODE depuis le

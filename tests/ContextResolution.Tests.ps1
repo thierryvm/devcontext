@@ -189,8 +189,8 @@ Describe 'Get-CtxVerdictDossier' {
 
     It 'rend <Attendu> pour proprietaire=<P> et actif=<A>' -ForEach @(
         @{ P = 'perso'; A = 'perso'; Attendu = 'accord' }
-        @{ P = 'goldteam'; A = 'perso'; Attendu = 'dossierAutre' }
-        @{ P = 'goldteam'; A = ''; Attendu = 'dossierSansActif' }
+        @{ P = 'client-a'; A = 'perso'; Attendu = 'dossierAutre' }
+        @{ P = 'client-a'; A = ''; Attendu = 'dossierSansActif' }
         @{ P = ''; A = 'perso'; Attendu = 'sansProprietaire' }
         @{ P = ''; A = ''; Attendu = 'neutre' }
     ) {
@@ -216,7 +216,7 @@ Describe 'Get-CtxVerdictDossier' {
         # ne croise rien et ne doit pas refuser ; le second refuse toujours.
         InModuleScope DevContext {
             $sansProprio = Get-CtxVerdictDossier -Proprietaire '' -Actif 'perso'
-            $autre = Get-CtxVerdictDossier -Proprietaire 'goldteam' -Actif 'perso'
+            $autre = Get-CtxVerdictDossier -Proprietaire 'client-a' -Actif 'perso'
 
             $sansProprio | Should -Not -Be $autre
             $sansProprio | Should -Be 'sansProprietaire'
@@ -229,8 +229,8 @@ Describe 'Get-CtxVerdictDossier' {
         # refus, ni remarque, ni rien -- un silence qu'aucun test ne verrait.
         InModuleScope DevContext {
             $connus = @('accord', 'dossierSansActif', 'dossierAutre', 'sansProprietaire', 'neutre')
-            foreach ($p in @('', 'perso', 'goldteam', $null)) {
-                foreach ($a in @('', 'perso', 'goldteam', $null)) {
+            foreach ($p in @('', 'perso', 'client-a', $null)) {
+                foreach ($a in @('', 'perso', 'client-a', $null)) {
                     $connus | Should -Contain (Get-CtxVerdictDossier -Proprietaire $p -Actif $a)
                 }
             }

@@ -491,7 +491,7 @@
   [shared storage] Creating shared storage database at
      'c:\Users\<me>\.vscode-shared\sharedStorage\state.vscdb'
   [shared storage] Initializing fallback application storage
-     (path: f:\CTX\goldteam\vscode\User\globalStorage\state.vscdb)
+     (path: f:\CTX\client-a\vscode\User\globalStorage\state.vscdb)
   ```
 
   What lives there: extension **secrets**, the recently-opened list, and the
@@ -876,7 +876,7 @@
   ```
   NO-GO
     - Compte GitHub actif '{"message": "No server is currently available
-      to service your request..."}' - le contexte attend 'ovb-willemot'.
+      to service your request..."}' - le contexte attend 'client-a-gh'.
   ```
 
   `gh api user --jq .login` wrote the API's error body to its **standard

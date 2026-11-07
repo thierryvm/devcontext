@@ -2153,7 +2153,8 @@ function Test-CtxSupabaseGuard {
     # deux contextes le revendiquent, ou que le chemin et les fichiers n'ont pas
     # le meme, il n'y a pas UN index a lire : repondre « pas de production »
     # serait affirmer ce qu'on n'a pas pu verifier. Les seules commandes
-    # refusees sont celles que ce garde-fou protege deja ; les lectures passent.
+    # refusees sont celles que ce garde-fou protege deja. Tout le reste passe,
+    # y compris des ecritures comme `functions deploy` : SECURITY.md le dit.
     if ($Ambiguite -and ($destructive -or $branchBound) -and -not $Override) {
         return [pscustomobject]@{ Allowed = $false; Rule = 'proprietaire-ambigu'; Reason = $Ambiguite }
     }
@@ -2252,18 +2253,21 @@ function Get-CtxBranchesPour {
     $vide = [pscustomobject]@{ Courante = $null; Defaut = $null }
     if (-not $Dossier -or -not (Test-Path -LiteralPath $Dossier)) { return $vide }
 
-    # Le drapeau, et non un Pop-Location dans un finally inconditionnel : si le
-    # Push echoue, ce finally depilerait l'emplacement de QUELQU'UN D'AUTRE et
-    # laisserait l'appelant ailleurs qu'il ne croit.
-    $pousse = $false
+    # `git -C`, JAMAIS Push-Location. Se deplacer declenche le crochet de dossier,
+    # donc une lecture du coffre -- dans un shim, ou un echec efface un jeton
+    # valide juste avant de lancer le CLI. Mesure par l'audit du 7 novembre 2026 :
+    # token=SET en entrant dans le shim, UNSET dans le CLI, code 0. Une question
+    # posee a git n'a aucune raison de changer ou l'on se tient.
+    #
+    # Le chemin de FOURNISSEUR, resolu ici : git ne connait pas les lecteurs
+    # PowerShell, et son echec vaudrait « laisse passer ».
     try {
-        Push-Location -LiteralPath $Dossier -ErrorAction Stop
-        $pousse = $true
+        $depot = (Resolve-Path -LiteralPath $Dossier -ErrorAction Stop).ProviderPath
 
-        $courante = git rev-parse --abbrev-ref HEAD 2>$null
+        $courante = git -C $depot rev-parse --abbrev-ref HEAD 2>$null
         if ($LASTEXITCODE -ne 0 -or $courante -eq 'HEAD') { $courante = $null }
 
-        $defaut = git symbolic-ref --short refs/remotes/origin/HEAD 2>$null
+        $defaut = git -C $depot symbolic-ref --short refs/remotes/origin/HEAD 2>$null
         if ($LASTEXITCODE -eq 0 -and $defaut) {
             # Retirer le prefixe du remote, et LUI SEUL. Un `-split '/'` suivi de
             # [-1] tronquait une branche hierarchique : avec
@@ -2275,7 +2279,7 @@ function Get-CtxBranchesPour {
         else {
             $defaut = $null
             foreach ($candidat in 'main', 'master') {
-                git show-ref --verify --quiet "refs/heads/$candidat" 2>$null
+                git -C $depot show-ref --verify --quiet "refs/heads/$candidat" 2>$null
                 if ($LASTEXITCODE -eq 0) { $defaut = $candidat; break }
             }
         }
@@ -2283,7 +2287,6 @@ function Get-CtxBranchesPour {
         [pscustomobject]@{ Courante = $courante; Defaut = $defaut }
     }
     catch { $vide }
-    finally { if ($pousse) { Pop-Location } }
 }
 
 function Resolve-CtxSupabaseVerdict {

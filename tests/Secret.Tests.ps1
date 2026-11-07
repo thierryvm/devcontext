@@ -637,3 +637,78 @@ Describe 'sb-index -- une cle illisible ne reecrit pas l index' {
         $env:SUPABASE_ACCESS_TOKEN | Should -Be 'jeton-avant-sb-index'
     }
 }
+
+Describe 'lire une branche ne deplace pas la session' {
+    # Audit du 7 novembre 2026. Get-CtxBranchesPour faisait un Push-Location pour
+    # interroger git. Dans un shim, ce deplacement declenche le crochet de
+    # dossier, donc Sync-CtxSupabaseEnv, donc le coffre ; si la lecture echoue, le
+    # jeton herite est efface et le CLI part quand meme, sans lui. Mesure sur un
+    # leurre : token=SET avant le shim, token=UNSET apres, code 0. C'est le cas
+    # exact que `ctx exec` et `work` promettent d'exclure, defait un niveau plus
+    # bas. `ctx doctor` avait la meme forme : il pouvait retirer le jeton de la
+    # session qui le lancait.
+    BeforeAll {
+        $script:Depot = Join-Path $TestDrive 'depot avec espace'
+        New-Item -ItemType Directory -Path $script:Depot -Force | Out-Null
+        git -C $script:Depot init -q -b cote 2>$null
+        git -C $script:Depot -c user.name=t -c user.email=t@t.test commit -q --allow-empty -m init 2>$null
+        $script:Ailleurs = Join-Path $TestDrive 'ailleurs'
+        New-Item -ItemType Directory -Path $script:Ailleurs -Force | Out-Null
+    }
+
+    BeforeEach {
+        $script:ActifAvant = $env:DEVCTX
+        $env:DEVCTX = 'demo'
+    }
+    AfterEach {
+        # Restaurer, jamais retirer.
+        $env:DEVCTX = $script:ActifAvant
+    }
+
+    It 'Get-CtxBranchesPour ne lit pas le coffre' {
+        InModuleScope DevContext -Parameters @{ d = $script:Depot } { param($d)
+            Mock Get-CtxSecret { }
+            $null = Get-CtxBranchesPour -Dossier $d
+            Should -Invoke Get-CtxSecret -Times 0 -Exactly
+        }
+    }
+
+    It 'Get-CtxBranchesPour lit la branche du dossier VISE, pas celle ou l on se tient' {
+        # La raison d'etre de la fonction depuis le 16 aout 2026 : --workdir.
+        InModuleScope DevContext -Parameters @{ d = $script:Depot; a = $script:Ailleurs } { param($d, $a)
+            Push-Location -LiteralPath $a
+            try {
+                (Get-CtxBranchesPour -Dossier $d).Courante | Should -Be 'cote'
+                (Get-Location).ProviderPath | Should -Be $a
+            }
+            finally { Pop-Location }
+        }
+    }
+
+    It 'Get-CtxBranchesPour comprend un lecteur PowerShell' {
+        # git ne le connait pas : sans resolution, il echoue, et un echec ici
+        # vaut "laisse passer".
+        InModuleScope DevContext -Parameters @{ d = $script:Depot } { param($d)
+            $null = New-PSDrive -Name CtxDepot -PSProvider FileSystem -Root $d
+            try { (Get-CtxBranchesPour -Dossier 'CtxDepot:\').Courante | Should -Be 'cote' }
+            finally { Remove-PSDrive -Name CtxDepot }
+        }
+    }
+
+    It 'Get-CtxBranchesPour rend $null hors d un depot' {
+        InModuleScope DevContext -Parameters @{ a = $script:Ailleurs } { param($a)
+            (Get-CtxBranchesPour -Dossier $a).Courante | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'ctx doctor ne deplace pas la session non plus' {
+        $source = (Get-Command Get-DevContextDoctor).ScriptBlock.ToString()
+        $jetons = $null; $erreurs = $null
+        $null = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$jetons, [ref]$erreurs)
+        $commandes = @($jetons | Where-Object { $_.TokenFlags -band [System.Management.Automation.Language.TokenFlags]::CommandName } |
+                ForEach-Object { $_.Text })
+        $commandes | Should -Contain 'git' -Because 'sinon ce test ne mesure plus rien'
+        $commandes | Should -Not -Contain 'Push-Location'
+        $commandes | Should -Not -Contain 'Set-Location'
+    }
+}

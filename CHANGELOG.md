@@ -265,6 +265,15 @@
   copied by hand was enough. `work` now refuses before applying anything when
   the two differ.
 
+- **Reading a git branch could cost a command its token.** The guards and
+  `ctx doctor` moved into the folder with `Push-Location` to ask git a question.
+  Moving fires the folder hook, which reads the vault, and a failed read clears
+  the token -- so inside a shim a valid `SUPABASE_ACCESS_TOKEN` went in and the
+  CLI ran without it, exit 0, falling back on its global login. Measured by the
+  audit of 7 November 2026, including under `ctx exec`, whose stamp had just
+  announced the token. Git is now asked with `git -C`, and nothing that only
+  needs an answer changes where the session stands.
+
 ### Changed
 
 - `work` and `ctx exec` compute a context's variables in one function,

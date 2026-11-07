@@ -50,9 +50,14 @@
 # Le sens de l'erreur decide du contenu de ces listes, comme pour Supabase.
 # Une option globale OUBLIEE rend la lecture ambigue, donc un refus de trop.
 # Une commande OUBLIEE fait prendre son nom pour un chemin, donc un refus de
-# trop -- seulement avec `--prod`, seulement hors branche par defaut. Dans les
-# deux cas l'erreur se voit et se leve par derogation ; l'erreur inverse
-# deploierait en production sans un mot.
+# trop -- seulement avec `--prod`, seulement hors branche par defaut. Ces deux
+# erreurs se voient et se levent par derogation.
+#
+# L'erreur inverse est le seul sens dangereux : un mot RESTE dans la table de
+# commandes alors que la CLI ne le connait plus. Il passe pour sans effet, et la
+# CLI le prend pour un chemin qu'elle deploie en production. `notifications` et
+# `guidance` y etaient, et le contre-audit du 7 novembre 2026 les a trouves. En
+# cas de doute sur un mot : le retirer.
 $script:VercelOptionsGlobalesAValeur = @('cwd', 'local-config', 'global-config', 'scope', 'token', 'team', 'api')
 $script:VercelOptionsGlobalesBool    = @(
     'help', 'version', 'debug', 'no-color', 'non-interactive', 'changelog',
@@ -66,17 +71,19 @@ $script:VercelCourtesBool            = @('h', 'v', 'd')
 # est le raccourci booleen.
 $script:VercelOptionsEnvironnement = @('--environment', '-e', '--target')
 
-# Noms ET alias, tels que chaque command.ts les declare.
+# Noms ET alias, tels que la CLI 65.8.0 les enregistre : le tableau
+# commandsStructs, plus metrics et connect, ajoutes apres lui. `guidance` n'y
+# entre que sous FF_GUIDANCE_MODE, un drapeau interne : il n'est donc pas ici.
 $script:VercelCommandes = @(
     'activity', 'agent', 'agent-runs', 'ai-gateway', 'alerts', 'alias', 'aliases', 'ln', 'api',
     'bisect', 'blob', 'budgets', 'budget', 'build', 'builders', 'buy', 'cache', 'certs', 'cert',
     'changelog', 'ci', 'comments', 'connect', 'contract', 'crons', 'cron', 'curl', 'daemons',
     'daemon', 'deploy', 'deploy-hooks', 'deploy-hook', 'dev', 'develop', 'dns', 'domains', 'domain',
     'drains', 'drain', 'env', 'experiments', 'feedback', 'firewall', 'flags', 'git',
-    'global-config', 'edge-config', 'guidance', 'health', 'status-page', 'help', 'httpstat', 'init',
+    'global-config', 'edge-config', 'health', 'status-page', 'help', 'httpstat', 'init',
     'inspect', 'install', 'i', 'integration', 'integration-resource', 'ir', 'kms', 'link', 'list',
     'ls', 'login', 'logout', 'logs', 'log', 'mcp', 'metrics', 'microfrontends', 'mf',
-    'notifications', 'open', 'organizations', 'organization', 'pricing', 'project', 'projects',
+    'monitors', 'open', 'organizations', 'organization', 'page-integrity', 'pricing', 'project', 'projects',
     'promote', 'pull', 'redeploy', 'redirects', 'redirect', 'remove', 'rm', 'rollback',
     'rolling-release', 'rr', 'routes', 'sandbox', 'schedules', 'security', 'setup', 'signup',
     'skills', 'storage', 'environments', 'environment', 'targets', 'target', 'teams', 'switch',
@@ -185,7 +192,7 @@ function Test-CtxVercelVisePro {
     param([AllowEmptyCollection()][string[]]$Arguments = @())
     foreach ($a in $Arguments) {
         foreach ($morceau in ("$a" -split '[=,]')) {
-            if ($morceau -eq 'production') { return $true }
+            if ($morceau.Trim() -eq 'production') { return $true }
         }
     }
     $false
@@ -215,7 +222,7 @@ function Test-CtxVercelDemandeProd {
         if ($nom -cnotin $script:VercelOptionsEnvironnement) { continue }
 
         $valeur = if ($eg -ge 0) { $a.Substring($eg + 1) } elseif ($i + 1 -lt $bruts.Count) { $bruts[$i + 1] } else { '' }
-        if ($valeur -eq 'production') { return $true }
+        if ($valeur.Trim() -eq 'production') { return $true }
     }
     $false
 }
@@ -275,9 +282,10 @@ function Test-CtxVercelGuard {
 
     # --- env rm sur la production -------------------------------------------
     #
-    # Seulement quand 'production' est ECRIT. Sans cible, la CLI ouvre une
-    # invite et l'humain voit ce qu'il choisit ; refuser la ferait disparaitre
-    # pour les environnements de developpement aussi, ou l'operation est banale.
+    # Seulement quand 'production' est ECRIT. Sans cible, la CLI retire la
+    # variable de TOUS ses environnements, production comprise, apres une
+    # confirmation que `--yes` saute. Ce cas reste ouvert : SECURITY.md le dit,
+    # et le refuser disparaitrait pour le developpement aussi, ou c'est banal.
     #
     # La sous-commande est cherchee dans TOUTE la suite, et pas au rang deux :
     # `env` lit ses propres options avant elle, et si `rm` ou son alias

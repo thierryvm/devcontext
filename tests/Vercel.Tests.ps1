@@ -61,9 +61,10 @@ Describe 'Test-CtxVercelGuard' {
     }
 
     It 'laisse passer env rm sans cible, que la CLI demandera' {
-        # Sans environnement ecrit, `vercel` ouvre une invite et l humain voit ce
-        # qu il choisit. Refuser ici ferait disparaitre la commande pour les
-        # environnements de developpement aussi, ou elle est banale.
+        # Sans environnement ecrit, la CLI retire la variable de tous ses
+        # environnements, apres une confirmation que `--yes` saute. Limite
+        # assumee et ecrite dans SECURITY.md : refuser ici ferait disparaitre
+        # la commande pour les environnements de developpement aussi.
         (Test-CtxVercelGuard -Arguments @('env', 'rm', 'CLE')).Allowed | Should -BeTrue
     }
 
@@ -136,6 +137,47 @@ Describe 'Test-CtxVercelGuard -- lit la ligne comme la CLI la lit' {
         $v = Test-CtxVercelGuard -Arguments @('dist', '--prod') -CurrentBranch 'feat/x' -DefaultBranch 'main'
         $v.Allowed | Should -BeFalse
         $v.Rule    | Should -Be 'prod-hors-branche'
+    }
+
+    It 'REFUSE <Ligne> : un mot qui n est plus une commande redevient un chemin' -ForEach @(
+        @{ Ligne = 'notifications --prod' }
+        @{ Ligne = 'guidance --prod' }
+    ) {
+        # Le sens dangereux de cette liste. Une commande OUBLIEE coute un refus
+        # de trop ; un mot que la CLI ne connait plus, reste dans la liste, fait
+        # passer pour sans effet ce que la CLI deploie. `notifications` a quitte
+        # la table avant la 65.8.0, et `guidance` n y entre que sous un drapeau
+        # interne. Releve par le contre-audit du 7 novembre 2026.
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be 'prod-hors-branche'
+    }
+
+    It 'laisse passer <Ligne>, commande de la table 65.8.0' -ForEach @(
+        @{ Ligne = 'monitors --prod' }
+        @{ Ligne = 'page-integrity --prod' }
+        @{ Ligne = 'metrics --prod' }
+        @{ Ligne = 'connect --prod' }
+        @{ Ligne = 'token-pass --prod' }
+    ) {
+        # metrics et connect sont ajoutes APRES le tableau des commandes :
+        # les lire dans le seul tableau les ferait croire disparus.
+        $v = Test-CtxVercelGuard -Arguments ($Ligne -split ' ') -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeTrue
+        $v.Rule    | Should -Be 'non-deploiement'
+    }
+
+    It 'REFUSE <Cas> : une espace autour de production ne l efface pas' -ForEach @(
+        @{ Cas = 'deploy'; Arguments = @('deploy', '--environment', ' production'); Regle = 'prod-hors-branche' }
+        @{ Cas = 'deploy ='; Arguments = @('deploy', '--environment= production '); Regle = 'prod-hors-branche' }
+        @{ Cas = 'env rm'; Arguments = @('env', 'rm', 'CLE', '--environment', ' production'); Regle = 'env-rm-production' }
+        @{ Cas = 'env rm, liste'; Arguments = @('env', 'rm', 'CLE', '--environment', 'preview, production'); Regle = 'env-rm-production' }
+    ) {
+        # La CLI ne retire pas l espace dans parseTarget, et ce que l API en
+        # fait n est pas connu : mieux vaut un refus de trop que de le parier.
+        $v = Test-CtxVercelGuard -Arguments $Arguments -CurrentBranch 'feat/x' -DefaultBranch 'main'
+        $v.Allowed | Should -BeFalse
+        $v.Rule    | Should -Be $Regle
     }
 
     It 'REFUSE <Ligne> : une option inconnue avant la commande rend la lecture ambigue' -ForEach @(

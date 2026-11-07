@@ -86,8 +86,16 @@
   redirect for `vercel login` uses the same reader, so `vercel --scope team
   login` no longer logs into the global configuration.
 
+  The command table follows what 65.8.0 registers. `notifications` and
+  `guidance` left it: a word the CLI no longer knows is a path it deploys, and
+  it read here as harmless. That is the one dangerous direction of this list.
+  `SECURITY.md` records it, along with what stays open: `env rm KEY --yes`
+  removes production too, a folder named on the line is not the one whose
+  branch is checked, and `alias set`, a bare `redeploy` and `--api` are not
+  guarded.
+
   Found by the security audits of PR #58 on 31 October and 1 November 2026, and
-  by the audit of this fix on 2 November.
+  by the audits of this fix on 2 and 7 November.
 
 - **The first design of `ctx exec` was wrong, and the security audit said so
   before it shipped.** It ran the command in the caller's process, with the

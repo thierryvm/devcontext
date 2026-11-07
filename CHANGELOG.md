@@ -89,10 +89,13 @@
   The command table follows what 65.8.0 registers. `notifications` and
   `guidance` left it: a word the CLI no longer knows is a path it deploys, and
   it read here as harmless. That is the one dangerous direction of this list.
-  `SECURITY.md` records it, along with what stays open: `env rm KEY --yes`
-  removes production too, a folder named on the line is not the one whose
-  branch is checked, and `alias set`, a bare `redeploy` and `--api` are not
-  guarded.
+  `SECURITY.md` records it, along with what stays open: `env rm KEY --yes` can
+  remove production too, a folder named on the line is not the one whose branch
+  is checked, and `alias set`, a bare `redeploy` and, outside an ambiguous
+  folder, `--api` are not guarded.
+
+  In an ambiguous folder, a read carrying `--api` is refused: the CLI would send
+  the global session to that URL.
 
   Found by the security audits of PR #58 on 31 October and 1 November 2026, and
   by the audits of this fix on 2 and 7 November.

@@ -270,11 +270,16 @@ function Test-CtxVercelGuard {
     # et prend un mot inconnu pour un chemin a deployer. `vercel Logs --prod`
     # passait la liste, et sur Windows un dossier `logs` repond a `Logs`.
     # Releve par le contre-audit du 1er novembre 2026.
+    #
+    # Et jamais avec `--api` : la CLI enverrait la session a l'URL ecrite, or
+    # c'est ici la session globale, celle d'un compte qu'on ne connait pas.
+    # Une lecture du serveur ne reste une lecture que vers Vercel.
     if ($Ambiguite) {
         $bruts = @($Arguments | ForEach-Object { "$_" })
         $lecture = ($ligne.Etat -eq 'commande' -and $ligne.Commande -cin @('whoami', 'help', 'ls', 'list', 'inspect', 'logs')) -or
         ($bruts.Count -gt 0 -and @($bruts | Where-Object { $_ -cnotin @('--version', '-v', '--help', '-h') }).Count -eq 0)
-        if (-not $lecture) {
+        $apiRedirigee = @($bruts | Where-Object { $_ -cmatch '^--api(=|$)' }).Count -gt 0
+        if (-not $lecture -or $apiRedirigee) {
             return [pscustomobject]@{ Allowed = $false; Rule = 'proprietaire-ambigu'; Reason = $Ambiguite }
         }
         return (& $passe 'lecture-ambigue')

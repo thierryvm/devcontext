@@ -613,6 +613,12 @@ Describe 'Les decisions des garde-fous, devant une ambiguite' {
         @{ Cas = 'lecture derriere --debug=1'; Mots = @('--debug=1', 'ls'); Permis = $true }
         @{ Cas = 'option inconnue devant la lecture'; Mots = @('--prod', 'whoami'); Permis = $false }
         @{ Cas = 'option de deploy devant la lecture'; Mots = @('-e', 'K=V', 'ls'); Permis = $false }
+        # Contre-audit du 7 novembre 2026 : `--api` envoie la session globale a
+        # l'URL ecrite. Aucune lecture n'est permise quand le compte est incertain.
+        @{ Cas = '--api devant la lecture'; Mots = @('--api', 'https://ailleurs.example', 'whoami'); Permis = $false }
+        @{ Cas = '--api= devant la lecture'; Mots = @('--api=https://ailleurs.example', 'whoami'); Permis = $false }
+        @{ Cas = '--api derriere la lecture'; Mots = @('whoami', '--api', 'https://ailleurs.example'); Permis = $false }
+        @{ Cas = '--api= derriere la lecture'; Mots = @('ls', '--api=https://ailleurs.example'); Permis = $false }
     ) {
         InModuleScope DevContext -Parameters @{ a = $Mots; p = $Permis } { param($a, $p)
             $v = Test-CtxVercelGuard -Arguments $a -Ambiguite 'motif (alias-cible)'

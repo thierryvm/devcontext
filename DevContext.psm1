@@ -328,7 +328,7 @@ function Set-CtxSecret {
 # Un avertissement et non un blocage : le jour ou Supabase ajoute une variante,
 # un module en retard ne doit pas empecher de poser un jeton valide.
 $script:JetonFormats = @{
-    'supabase-token' = @{ Motif = '^sbp_(oauth_|v0_)?[0-9a-f]{40}$'; Attendu = 'sbp_ + 40 hex (44)' }
+    'supabase-token' = @{ Motif = '^sbp_(oauth_|v0_)?[0-9a-f]{40}$'; Attendu = 'sbp_ + 40 hex (44), sbp_v0_ + 40 hex (47), sbp_oauth_ + 40 hex (50)' }
 }
 
 # Aucun jeton ni mot de passe gere ici n'est aussi court : en dessous, c'est
@@ -378,9 +378,12 @@ function Test-CtxJetonPlausible {
 }
 
 function Read-CtxPressePapiers {
-    # Le texte du presse-papiers, sans les blancs qui l'entourent -- un jeton
-    # copie depuis un tableau de bord emporte souvent un retour a la ligne.
-    try { "$(Get-Clipboard -Raw -ErrorAction Stop)".Trim() } catch { '' }
+    # Le texte du presse-papiers, sans le retour a la ligne final qu'emporte
+    # souvent un jeton copie depuis un tableau de bord. Les espaces, eux, sont
+    # gardes : un secret peut commencer ou finir par un espace, et le rogner
+    # stockerait une valeur que le service refuse. -Raw : sans lui, Get-Clipboard
+    # rend une ligne par element et le texte arriverait recompose.
+    try { "$(Get-Clipboard -Raw -ErrorAction Stop)" -replace '(\r?\n)+$', '' } catch { '' }
 }
 
 function Read-CtxJeton {

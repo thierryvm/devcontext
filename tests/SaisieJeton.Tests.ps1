@@ -89,7 +89,12 @@ Describe 'Read-CtxJeton' {
             Mock Read-Host -ParameterFilter { -not $AsSecureString } {
                 if ($script:TestJeton.Choix.Count) { $script:TestJeton.Choix.Dequeue() } else { '' }
             }
-            Mock Get-Clipboard { $script:TestJeton.PressePapiers }
+            # Fidele a la vraie cmdlet : sans -Raw, une ligne par element. Un
+            # code qui oublierait -Raw recevrait un tableau, pas le texte.
+            Mock Get-Clipboard -ParameterFilter { $Raw } { $script:TestJeton.PressePapiers }
+            Mock Get-Clipboard -ParameterFilter { -not $Raw } {
+                if ($null -ne $script:TestJeton.PressePapiers) { $script:TestJeton.PressePapiers -split '\r?\n' }
+            }
             Mock Set-Clipboard { }
             Mock Write-Host { $script:TestJeton.Sortie.Add("$Object") }
         }
@@ -146,10 +151,23 @@ Describe 'Read-CtxJeton' {
             $script:TestJeton.Saisies.Enqueue([string][char]0x16)
             $script:TestJeton.Choix.Enqueue('2')
             # Tel qu'un tableau de bord le copie : avec un retour a la ligne.
-            $script:TestJeton.PressePapiers = "  $v`r`n"
+            $script:TestJeton.PressePapiers = "$v`r`n"
             $s = Read-CtxJeton -Key 'supabase-token'
             ConvertFrom-CtxSecureString $s | Should -BeExactly $v
             Should -Invoke Set-Clipboard -ParameterFilter { $Value -eq ' ' } -Times 1 -Exactly
+        }
+    }
+
+    It 'garde les espaces d un secret lu dans le presse-papiers, et n en retire que le retour a la ligne' {
+        # Rogner les espaces stockerait une valeur que le service refuse : un
+        # mot de passe peut commencer ou finir par un espace.
+        InModuleScope DevContext {
+            $secret = ' mot de passe avec espaces '
+            $script:TestJeton.Saisies.Enqueue([string][char]0x16)
+            $script:TestJeton.Choix.Enqueue('2')
+            $script:TestJeton.PressePapiers = "$secret`r`n"
+            $s = Read-CtxJeton -Key 'supabase-db'
+            ConvertFrom-CtxSecureString $s | Should -BeExactly $secret
         }
     }
 

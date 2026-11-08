@@ -224,6 +224,23 @@
     'new.jetonsPlusTard'      = 'Les poser plus tard, un par un :'
     'new.jetonsCles'          = 'cles : {0}'
     'new.jetonsSaisie'        = 'Tokens du contexte (Entree pour passer)'
+    'new.jetonsCollage'       = "Le collage n'affiche qu'une seule * ? Validez quand meme : le jeton pourra etre lu depuis le presse-papiers."
+
+    # --- saisie d'un jeton (Read-CtxJeton) ---------------------------------------
+    'jeton.controle'          = '{0} : saisie refusee, elle contient des caracteres invisibles ({1} caractere(s)). Rien n a ete enregistre.'
+    'jeton.court'             = '{0} : saisie refusee, {1} caractere(s) - trop court pour un jeton (minimum {2}). Rien n a ete enregistre.'
+    'jeton.format'            = "{0} : {1} caractere(s), format inattendu pour cette cle (attendu : {2}). Rien n'a encore ete enregistre."
+    'jeton.collageRate'       = "Une seule * affichee au collage ? L'invite masquee a avale le collage : choisissez 2 pour lire le jeton depuis le presse-papiers."
+    'jeton.choix'             = '1 = ressaisir   2 = lire le presse-papiers (sans l afficher)   3 = passer cette cle'
+    'jeton.choixGarder'       = '4 = enregistrer cette valeur quand meme'
+    'jeton.choixInvite'       = 'Choix'
+    'jeton.ppVide'            = 'Le presse-papiers est vide, ou ne contient pas de texte.'
+    'jeton.ppImporte'         = '{0} : jeton lu depuis le presse-papiers ({1} caracteres), sans l afficher.'
+    'jeton.ppEcrase'          = "Presse-papiers ecrase. L'historique Windows (Win+V) peut encore contenir le jeton : supprimez-l'y."
+    'jeton.ppEcraseEchec'     = "Impossible d'ecraser le presse-papiers : copiez autre chose par-dessus le jeton."
+    'jeton.passe'             = '{0} : non enregistre.'
+    'jeton.abandon'           = '{0} : trop de saisies refusees, cle passee. Rien n a ete enregistre.'
+    'jeton.enregistre'        = '{0} : enregistre ({1} caracteres).'
     'new.cree'                = "Contexte '{0}' cree."
     'new.resteAFaire'         = 'Reste a faire, une seule fois :'
     'new.etape1'              = '1. Ajouter la cle publique au compte GitHub {0} :'

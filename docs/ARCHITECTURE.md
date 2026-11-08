@@ -396,6 +396,9 @@ resulting error names the real problem. The same reasoning is why
 Say you want `ctx doctor` to cover Netlify.
 
 1. **Secret** — add `'netlify-token' = 'NETLIFY_AUTH_TOKEN'` to `$script:SecretMap`.
+   If the provider documents a stable token format, add it to
+   `$script:JetonFormats` too: `Read-CtxJeton`, the one function behind every
+   masked token prompt, then warns before storing a value that does not match.
 2. **Decision** — write `Test-CtxDoctorJetonNetlify` in `src/Jetons.ps1`: pure,
    taking the expected account and the observed one, returning a check.
 3. **Gathering** — call the API in `Get-CtxJetonChecks`, through `Invoke-CtxApi`

@@ -133,7 +133,11 @@ ctx-new -Name perso -Email you@example.com -Root C:\dev\perso
   agent's shell: `ssh-keygen` asks for a passphrase, and nothing there can answer.
 
 You will be asked for a passphrase and then for tokens. Every token is optional —
-press Enter to skip and add it later.
+press Enter to skip and add it later. An entry that cannot be a token (control
+characters, fewer than 8 characters, a Supabase token in the wrong format) is
+never stored without asking: you can type it again, read it from the clipboard,
+or skip it. This is the way out when a paste into the masked prompt shows a
+single `*`.
 
 ### Where contexts are stored
 

@@ -198,7 +198,7 @@ $script:CtxDerogations = @('DEVCTX_ALLOW_PROD', 'DEVCTX_ALLOW_GH', 'DEVCTX_ALLOW
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Agents.ps1', 'Shortcuts.ps1', 'Dashboard.ps1', 'Gh.ps1', 'Vercel.ps1', 'Init.ps1', 'Exec.ps1', 'Ctx.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Agents.ps1', 'Shortcuts.ps1', 'Dashboard.ps1', 'Gh.ps1', 'Vercel.ps1', 'Init.ps1', 'Exec.ps1', 'Secret.ps1', 'Ctx.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -3434,7 +3434,8 @@ $exportedFunctions = @(
     'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
     'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh',
     'Invoke-DevCtx', 'Resolve-CtxPathSansVides', 'Invoke-DevContextInit',
-    'Invoke-DevContextDashboard', 'Invoke-DevContextGuard', 'Invoke-DevContextExec'
+    'Invoke-DevContextDashboard', 'Invoke-DevContextGuard', 'Invoke-DevContextExec',
+    'Set-DevContextSecret'
 )
 # Les alias ctx-<nom> sont DERIVES de la meme table que les alias eux-memes.
 # Ils y etaient recopies a la main jusqu'a la 1.8.0, et le defaut a frappe des

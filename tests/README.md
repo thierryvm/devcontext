@@ -16,7 +16,7 @@ Stated honestly, because a coverage claim nobody can check is worth nothing.
 
 | Level | File | Guarantees |
 |---|---|---|
-| Decision | `Guard`, `Doctor`, `Jetons`, `SaisieJeton`, `Mcp`, `Installer`, `Editors`, `Shortcuts`, `Fix`, `Init`, `ProfilComptes` | Every return path of every pure decision, exhaustively, without touching a machine |
+| Decision | `Guard`, `Doctor`, `Jetons`, `SaisieJeton`, `Secret`, `Mcp`, `Installer`, `Editors`, `Shortcuts`, `Fix`, `Init`, `ProfilComptes` | Every return path of every pure decision, exhaustively, without touching a machine |
 | Contract | `Manifest`, `Ctx` | psd1 ↔ module export parity — read from the LOADED module, since a derived list is invisible to text analysis — plus format file validity, and that `ctx-<name>` and `ctx <name>` cannot diverge |
 | Resolution | `ContextResolution` | Which context owns a folder, including the prefix trap and nesting |
 | Integration | `Shim`, `SupabaseIndex`, `SupabaseMap` | A whole fake world under `$TestDrive`: context, index, git repository, decoy binary |

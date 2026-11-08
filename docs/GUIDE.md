@@ -139,6 +139,21 @@ never stored without asking: you can type it again, read it from the clipboard,
 or skip it. This is the way out when a paste into the masked prompt shows a
 single `*`.
 
+To add a token later, or replace one that expired, set that one key:
+
+```powershell
+ctx secret supabase-token             # the active context
+ctx secret vercel-token -Name acme    # another context
+ctx secret sentry-token -Remove       # delete a key, after confirmation
+```
+
+It uses the same masked prompt and the same checks, reports the length and
+never the value, and asks before replacing a value that is already stored. The
+value is never typed on the command line, where it would stay in the PowerShell
+history. It needs an interactive terminal and refuses when input is
+redirected. In a shell where that context is active, run `work <context> -NoCd`
+afterwards to load the new value.
+
 ### Where contexts are stored
 
 By default `%LOCALAPPDATA%\DevContext\contexts`. To put them elsewhere:

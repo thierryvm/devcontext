@@ -52,6 +52,7 @@
     'ctx.sc.aide.off'        = 'deactivate the context in this shell'
     'ctx.sc.aide.root'       = 'change where contexts are stored'
     'ctx.sc.aide.sb'         = 'which Supabase project on which account'
+    'ctx.sc.aide.secret'     = 'set, replace or remove one secret of a context (masked prompt)'
     'ctx.sc.aide.shortcut'   = 'create a Desktop shortcut to a project'
     'ctx.sc.aide.who'        = 'which context owns this folder'
 
@@ -241,6 +242,24 @@
     'jeton.passe'             = '{0}: not stored.'
     'jeton.abandon'           = '{0}: too many refused entries, key skipped. Nothing was stored.'
     'jeton.enregistre'        = '{0}: stored ({1} characters).'
+
+    # --- ctx secret (Set-DevContextSecret) ----------------------------------------
+    'secret.usage'            = 'Usage: ctx secret <key> [-Name <context>] [-Remove]'
+    'secret.cleInconnue'      = "Unknown key. Valid keys: {0}. The key is the secret's NAME; its value is asked for afterwards, masked."
+    'secret.cleRessembleJeton' = 'What was typed looks like a secret value. If it is one, it is now in the PowerShell history (PSReadLine): revoke it at the provider.'
+    'secret.redirige'         = '{0}: refused, standard input is redirected and nobody could answer the masked prompt. Run ctx secret {0} in an interactive terminal.'
+    'secret.sansContexte'     = '{0}: no active context. Name it (ctx secret {0} -Name <context>) or enter a context first (work <context>).'
+    'secret.contexteInvalide' = 'Invalid context name: lowercase letters, digits and hyphens only, as at creation (ctx new).'
+    'secret.actionPoser'      = 'Set secret'
+    'secret.actionRetirer'    = 'Remove secret'
+    'secret.saisie'           = "{0} for context '{1}' (empty Enter = change nothing)"
+    'secret.confirmerRemplacement' = "{0}: a value already exists for context '{1}'. Replace it? (y/N)"
+    'secret.confirmerRetrait' = "{0}: remove the value from context '{1}'? (y/N)"
+    'secret.inchange'         = '{0}: unchanged.'
+    'secret.rienARetirer'     = "{0}: no value in the vault for context '{1}', nothing to remove."
+    'secret.enregistre'       = "{0}: stored for context '{1}' ({2} characters)."
+    'secret.retire'           = "{0}: removed from context '{1}'."
+    'secret.recharger'        = 'This shell still holds the old value of {0}: run work {1} -NoCd to load the new one.'
     'new.cree'                = "Context '{0}' created."
     'new.resteAFaire'         = 'Left to do, once:'
     'new.etape1'              = '1. Add the public key to the GitHub account {0}:'
@@ -268,7 +287,7 @@
 
     'off.exemple'             = 'ctx-new {0} -Label ''Personal'' -Email ''<your-email>'' '
     'off.exempleSuite'        = "-Root '{0}' -GithubLogin '<your-login>'"
-    'new.jetonsCommande'      = 'Set-Secret -Vault DevContext -Name ''devctx/{0}/<key>'' -SecureStringSecret $s'
+    'new.jetonsCommande'      = 'ctx secret <key> -Name {0}   (once per key, in an interactive terminal)'
     'end.sshManuel1'          = "Remove the 'Host github-{0}' block by hand from {1}"
     'end.sshManuel2'          = 'and the matching includeIf block from {0}.'
     'end.projetIntact'        = 'The project folder {0} was not touched.'

@@ -40,6 +40,30 @@
   receives the names bare and every value as a quoted literal, so no argument
   is ever evaluated.
 
+- **`ctx secret <key>`: set, replace or remove one token later, through the
+  validated prompt.** A token skipped during `ctx new`, or one that expired,
+  could only go in through a raw `Set-Secret`, and that is the command
+  `ctx new` itself printed as its non-interactive advice. It bypasses the check
+  added after the swallowed paste of 8 November 2026, so the advice kept that
+  incident's door open one step to the side. `ctx new` now points to
+  `ctx secret <key> -Name <context>` instead.
+
+  It acts on the active context, or on `-Name <context>`. The key must be one
+  the module manages (`github-token`, `vercel-token`, `supabase-token`,
+  `supabase-db`, `sentry-token`); any other is refused with the list. An
+  unknown key is never echoed, because the command line is where a token
+  pasted too early lands, and when what was typed looks like a token the
+  message says it is now in the PowerShell history and should be revoked. The
+  value is never an argument: it is asked for by the same masked prompt as
+  `ctx new`, with the same refusals and the same clipboard way out. Only the
+  key and the length are reported. A key that already holds a value is
+  replaced only after an explicit yes, and a vault that cannot be read is
+  never taken to mean "no value yet". `-Remove` deletes a key, after
+  confirmation. With input redirected (a script, a CI job, an AI agent's
+  shell) it refuses before any prompt or vault access, since nothing could
+  answer. A shell where the context is active keeps the old value until
+  `work <context> -NoCd` is run again, and the command says so.
+
 ### Fixed
 
 - **A token pasted into `ctx-new` could be stored as one character, in

@@ -52,6 +52,7 @@
     'ctx.sc.aide.off'        = 'desactiver le contexte de ce shell'
     'ctx.sc.aide.root'       = 'changer le dossier ou vivent les contextes'
     'ctx.sc.aide.sb'         = 'quel projet Supabase sur quel compte'
+    'ctx.sc.aide.secret'     = 'poser, remplacer ou retirer un secret du contexte (invite masquee)'
     'ctx.sc.aide.shortcut'   = 'creer un raccourci Bureau vers un projet'
     'ctx.sc.aide.who'        = 'a quel contexte appartient ce dossier'
 
@@ -241,6 +242,24 @@
     'jeton.passe'             = '{0} : non enregistre.'
     'jeton.abandon'           = '{0} : trop de saisies refusees, cle passee. Rien n a ete enregistre.'
     'jeton.enregistre'        = '{0} : enregistre ({1} caracteres).'
+
+    # --- ctx secret (Set-DevContextSecret) ----------------------------------------
+    'secret.usage'            = 'Usage : ctx secret <cle> [-Name <contexte>] [-Remove]'
+    'secret.cleInconnue'      = 'Cle inconnue. Cles valides : {0}. La cle est le NOM du secret ; sa valeur est demandee ensuite, masquee.'
+    'secret.cleRessembleJeton' = "Ce qui a ete tape ressemble a une valeur de secret. Si c'en est une, elle est maintenant dans l'historique PowerShell (PSReadLine) : revoquez-la chez le fournisseur."
+    'secret.redirige'         = "{0} : refuse, l'entree standard est redirigee et personne ne pourrait repondre a l'invite masquee. Lancez ctx secret {0} dans un terminal interactif."
+    'secret.sansContexte'     = "{0} : aucun contexte actif. Precisez-le (ctx secret {0} -Name <contexte>) ou entrez d'abord dans un contexte (work <contexte>)."
+    'secret.contexteInvalide' = 'Nom de contexte invalide : minuscules, chiffres et tirets seulement, comme a la creation (ctx new).'
+    'secret.actionPoser'      = 'poser le secret'
+    'secret.actionRetirer'    = 'retirer le secret'
+    'secret.saisie'           = "{0} pour le contexte '{1}' (Entree vide = ne rien changer)"
+    'secret.confirmerRemplacement' = "{0} : une valeur existe deja pour le contexte '{1}'. La remplacer ? (o/N)"
+    'secret.confirmerRetrait' = "{0} : retirer la valeur du contexte '{1}' ? (o/N)"
+    'secret.inchange'         = '{0} : inchange.'
+    'secret.rienARetirer'     = "{0} : aucune valeur au coffre pour le contexte '{1}', rien a retirer."
+    'secret.enregistre'       = "{0} : enregistre pour le contexte '{1}' ({2} caracteres)."
+    'secret.retire'           = "{0} : retire du contexte '{1}'."
+    'secret.recharger'        = "Ce shell garde l'ancienne valeur de {0} : relancez work {1} -NoCd pour charger la nouvelle."
     'new.cree'                = "Contexte '{0}' cree."
     'new.resteAFaire'         = 'Reste a faire, une seule fois :'
     'new.etape1'              = '1. Ajouter la cle publique au compte GitHub {0} :'
@@ -268,7 +287,7 @@
 
     'off.exemple'             = 'ctx-new {0} -Label ''Perso'' -Email ''<votre-email>'' '
     'off.exempleSuite'        = "-Root '{0}' -GithubLogin '<votre-login>'"
-    'new.jetonsCommande'      = 'Set-Secret -Vault DevContext -Name ''devctx/{0}/<cle>'' -SecureStringSecret $s'
+    'new.jetonsCommande'      = 'ctx secret <cle> -Name {0}   (une fois par cle, dans un terminal interactif)'
     'end.sshManuel1'          = "Retirer manuellement le bloc 'Host github-{0}' de {1}"
     'end.sshManuel2'          = 'et le bloc includeIf correspondant de {0}.'
     'end.projetIntact'        = "Le dossier projet {0} n'a pas ete touche."

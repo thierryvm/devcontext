@@ -43,6 +43,7 @@ src/                         DOT-SOURCED. Never invoked directly.
   Ctx.ps1                    ctx — the subcommand table, and the dispatcher behind it
   Exec.ps1                   ctx exec — build the child's environment, start it apart
   Init.ps1                   ctx init — what is missing here, and the command for each
+  Secret.ps1                 ctx secret — set, replace or remove one secret, through Read-CtxJeton
   Doctor.ps1                 ctx doctor — what works here, and on which account
   Fix.ps1                    ctx doctor -Fix — the repairs, and what stays manual
   Jetons.ps1                 ctx doctor -Live — do the tokens work, on the right account
@@ -381,6 +382,11 @@ commands disagreed on 19 August 2026.
 | At rest | SecretManagement vault `DevContext`, key `devctx/<context>/<name>` |
 | In transit | Environment variables set by `work`, inherited by child processes |
 | In files | **Never.** Generated configs reference `${VAR}`, or nothing at all |
+
+There are two ways in, `ctx new` and `ctx secret <key>`, and both go through
+`Read-CtxJeton`. Neither takes a value as an argument, since that would leave it
+in the shell's history, and neither prompts when input is redirected. A third
+way in that skipped the check would be the one people used.
 
 `.mcp.json` deliberately declares **no `env` block** for Supabase. A
 `"${SUPABASE_ACCESS_TOKEN}"` reference expands to an **empty string** when the

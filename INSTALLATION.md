@@ -203,7 +203,11 @@ ctx-new perso -Label 'Perso' -Email '...' -Root 'C:\Work\Apps' -GithubLogin '...
 ```
 
 `ctx-new` asks for each token in turn, with masked input. Press Enter to skip
-the ones you do not want to set yet.
+the ones you do not want to set yet. If pasting shows a single `*` (the masked
+prompt swallowed the paste), press Enter anyway: the entry is refused, nothing
+is stored, and you can choose to read the token from the clipboard instead. It
+is checked there too, never displayed, and the clipboard is overwritten
+afterwards.
 
 Then check the result:
 

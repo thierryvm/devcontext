@@ -224,6 +224,23 @@
     'new.jetonsPlusTard'      = 'Set them later, one at a time:'
     'new.jetonsCles'          = 'keys: {0}'
     'new.jetonsSaisie'        = 'Context tokens (Enter to skip)'
+    'new.jetonsCollage'       = 'Pasting shows a single * only? Press Enter anyway: the token can then be read from the clipboard.'
+
+    # --- token entry (Read-CtxJeton) ----------------------------------------------
+    'jeton.controle'          = '{0}: entry refused, it contains invisible characters ({1} character(s)). Nothing was stored.'
+    'jeton.court'             = '{0}: entry refused, {1} character(s) - too short for a token (minimum {2}). Nothing was stored.'
+    'jeton.format'            = '{0}: {1} character(s), unexpected format for this key (expected: {2}). Nothing stored yet.'
+    'jeton.collageRate'       = 'Only one * shown when pasting? The masked prompt swallowed the paste: choose 2 to read the token from the clipboard.'
+    'jeton.choix'             = '1 = type again   2 = read the clipboard (never displayed)   3 = skip this key'
+    'jeton.choixGarder'       = '4 = store this value anyway'
+    'jeton.choixInvite'       = 'Choice'
+    'jeton.ppVide'            = 'The clipboard is empty, or holds no text.'
+    'jeton.ppImporte'         = '{0}: token read from the clipboard ({1} characters), never displayed.'
+    'jeton.ppEcrase'          = 'Clipboard overwritten. Windows clipboard history (Win+V) may still hold the token: delete it there.'
+    'jeton.ppEcraseEchec'     = 'Could not overwrite the clipboard: copy something else over the token.'
+    'jeton.passe'             = '{0}: not stored.'
+    'jeton.abandon'           = '{0}: too many refused entries, key skipped. Nothing was stored.'
+    'jeton.enregistre'        = '{0}: stored ({1} characters).'
     'new.cree'                = "Context '{0}' created."
     'new.resteAFaire'         = 'Left to do, once:'
     'new.etape1'              = '1. Add the public key to the GitHub account {0}:'

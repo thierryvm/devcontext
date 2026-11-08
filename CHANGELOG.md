@@ -42,6 +42,28 @@
 
 ### Fixed
 
+- **A token pasted into `ctx-new` could be stored as one character, in
+  silence.** On 8 November 2026, on PowerShell 7.6.9 in Windows Terminal, a
+  44-character Supabase token pasted (right-click, then Ctrl+V) into the masked
+  prompt showed a single `*`, and the vault received a 1-character value. The
+  loop stored anything that was not empty, so the failure would only have
+  surfaced later, as a token the API refused, far from its cause.
+
+  Every masked token prompt now goes through one function, which checks the
+  value before anything is stored. An entry holding control or invisible
+  characters, or shorter than 8 characters, is never stored. A Supabase token
+  that does not match the pattern the Supabase CLI itself enforces
+  (`sbp_` + 40 lowercase hex) is stored only if you explicitly confirm it. In
+  each case the prompt names the key and the **length**, never the value, and
+  offers a choice: type again, read the token from the clipboard, or skip the
+  key. The clipboard is the way out because that is exactly where the token is
+  after a swallowed paste. It is validated the same way and never displayed.
+  The clipboard is overwritten once the token is taken, and the message
+  reminds you that Windows clipboard history (Win+V) may still hold it. Each
+  stored key now reports its length, so a wrong one is visible on the spot.
+  Pressing Enter on an empty prompt still skips the key, and the
+  non-interactive path is unchanged.
+
 - **The first design of `ctx exec` was wrong, and the security audit said so
   before it shipped.** It ran the command in the caller's process, with the
   environment swapped and restored in a `finally`. An environment belongs to the

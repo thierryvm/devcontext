@@ -304,6 +304,163 @@ function Set-CtxSecret {
     Set-Secret -Vault $script:VaultName -Name "devctx/$Name/$Key" -SecureStringSecret $Value
 }
 
+# ---------------------------------------------------------------------------
+# Saisie d'un jeton : UNE fonction pour toute invite masquee du module
+# ---------------------------------------------------------------------------
+#
+# Mesure le 8 novembre 2026 (PowerShell 7.6.9, Windows Terminal) : un jeton
+# Supabase de 44 caracteres colle par clic droit, puis par Ctrl+V, dans
+# `Read-Host -AsSecureString` n'affichait qu'UNE etoile, et le coffre a recu
+# une valeur d'un caractere. Rien ne l'a signale : la boucle stockait tout ce
+# qui n'etait pas vide, et l'echec ne serait apparu que plus tard, loin de sa
+# cause, sous la forme d'un jeton refuse par l'API.
+#
+# Une saisie invraisemblable n'est donc jamais stockee sans un mot : elle est
+# nommee (par sa LONGUEUR, jamais par son contenu) et l'utilisateur choisit --
+# ressaisir, lire le presse-papiers, passer. Le presse-papiers est la sortie
+# de secours parce que c'est exactement la que se trouve le jeton apres un
+# collage avale.
+
+# Le format de chaque cle quand il est connu ET stable. Une cle absente d'ici
+# ne recoit que les controles generiques. Supabase : le motif que la CLI
+# Supabase elle-meme exige avant tout appel (`ACCESS_TOKEN_PATTERN`, depot
+# supabase/cli) -- un jeton qui n'y correspond pas serait refuse par elle.
+# Un avertissement et non un blocage : le jour ou Supabase ajoute une variante,
+# un module en retard ne doit pas empecher de poser un jeton valide.
+$script:JetonFormats = @{
+    'supabase-token' = @{ Motif = '^sbp_(oauth_|v0_)?[0-9a-f]{40}$'; Attendu = 'sbp_ + 40 hex (44), sbp_v0_ + 40 hex (47), sbp_oauth_ + 40 hex (50)' }
+}
+
+# Aucun jeton ni mot de passe gere ici n'est aussi court : en dessous, c'est
+# une saisie ratee, pas un secret.
+$script:JetonLongueurMin = 8
+
+# Au-dela, la cle est passee : une invite qui boucle sans fin sur des reponses
+# refusees ne vaut pas mieux qu'une invite qui bloque.
+$script:JetonToursMax = 5
+
+function ConvertFrom-CtxSecureString {
+    param([AllowNull()][securestring]$Valeur)
+    if ($null -eq $Valeur) { return '' }
+    [System.Net.NetworkCredential]::new('', $Valeur).Password
+}
+
+function ConvertTo-CtxSecureString {
+    # Caractere par caractere plutot que ConvertTo-SecureString -AsPlainText :
+    # meme resultat, sans faire passer la valeur par un parametre de cmdlet.
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Texte)
+    $s = [securestring]::new()
+    foreach ($c in $Texte.ToCharArray()) { $s.AppendChar($c) }
+    $s
+}
+
+function Test-CtxJetonPlausible {
+    <#
+      Le verdict sur une valeur avant stockage : 'vide', 'controle', 'court',
+      'format' ou 'ok'. Pure : ni invite, ni coffre, ni presse-papiers.
+
+      'controle' et 'court' ne se stockent jamais -- aucun secret reel n'a ces
+      formes. 'format' se stocke sur choix explicite seulement.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Key,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Valeur
+    )
+    if ($Valeur.Length -eq 0) { return 'vide' }
+    # Cc : ce que laisse un Ctrl+V lu comme une touche (0x16), un retour a la
+    # ligne colle avec le jeton, les C1. Cf : les invisibles de mise en forme,
+    # comme l'espace sans chasse qu'apporte un copier depuis une page web.
+    if ($Valeur -match '[\p{Cc}\p{Cf}]') { return 'controle' }
+    if ($Valeur.Length -lt $script:JetonLongueurMin) { return 'court' }
+    $format = $script:JetonFormats[$Key]
+    if ($format -and $Valeur -cnotmatch $format.Motif) { return 'format' }
+    'ok'
+}
+
+function Read-CtxPressePapiers {
+    # Le texte du presse-papiers, sans le retour a la ligne final qu'emporte
+    # souvent un jeton copie depuis un tableau de bord. Les espaces, eux, sont
+    # gardes : un secret peut commencer ou finir par un espace, et le rogner
+    # stockerait une valeur que le service refuse. -Raw : sans lui, Get-Clipboard
+    # rend une ligne par element et le texte arriverait recompose.
+    try { "$(Get-Clipboard -Raw -ErrorAction Stop)" -replace '(\r?\n)+$', '' } catch { '' }
+}
+
+function Read-CtxJeton {
+    <#
+      Demande la valeur d'une cle de secret ; rend une [securestring] a
+      stocker, ou $null pour passer la cle. Entree vide d'emblee = passer,
+      comme avant.
+
+      Ne doit etre appelee que sur une entree interactive : c'est a l'appelant
+      de garder l'appel par [Console]::IsInputRedirected, comme New-DevContext
+      le fait.
+    #>
+    param([Parameter(Mandatory)][string]$Key)
+
+    $clair = ConvertFrom-CtxSecureString (Read-Host "    $Key" -AsSecureString)
+    if ($clair.Length -eq 0) { return $null }
+    $source = 'saisie'
+
+    for ($tour = 0; $tour -lt $script:JetonToursMax; $tour++) {
+        $verdict = Test-CtxJetonPlausible -Key $Key -Valeur $clair
+        $garder = $false
+
+        if ($verdict -ne 'ok') {
+            if ($verdict -eq 'vide') { Write-Host "    $(T 'jeton.ppVide')" -ForegroundColor Yellow }
+            elseif ($verdict -eq 'controle') { Write-Host "    $(T 'jeton.controle' $Key $clair.Length)" -ForegroundColor Yellow }
+            elseif ($verdict -eq 'court') { Write-Host "    $(T 'jeton.court' $Key $clair.Length $script:JetonLongueurMin)" -ForegroundColor Yellow }
+            else { Write-Host "    $(T 'jeton.format' $Key $clair.Length $script:JetonFormats[$Key].Attendu)" -ForegroundColor Yellow }
+            if ($source -eq 'saisie' -and $verdict -in @('controle', 'court')) {
+                Write-Host "    $(T 'jeton.collageRate')" -ForegroundColor DarkGray
+            }
+            Write-Host "    $(T 'jeton.choix')" -ForegroundColor Cyan
+            if ($verdict -eq 'format') { Write-Host "    $(T 'jeton.choixGarder')" -ForegroundColor Cyan }
+
+            $choix = "$(Read-Host "    $(T 'jeton.choixInvite')")".Trim()
+            if ($choix -eq '1') {
+                $clair = ConvertFrom-CtxSecureString (Read-Host "    $Key" -AsSecureString)
+                $source = 'saisie'
+                if ($clair.Length -eq 0) {
+                    Write-Host "    $(T 'jeton.passe' $Key)" -ForegroundColor DarkGray
+                    return $null
+                }
+                continue
+            }
+            elseif ($choix -eq '2') {
+                $clair = Read-CtxPressePapiers
+                $source = 'pp'
+                continue
+            }
+            elseif ($choix -eq '3') {
+                Write-Host "    $(T 'jeton.passe' $Key)" -ForegroundColor DarkGray
+                return $null
+            }
+            elseif ($choix -eq '4' -and $verdict -eq 'format') { $garder = $true }
+            else { continue }
+        }
+
+        if ($verdict -eq 'ok' -or $garder) {
+            if ($source -eq 'pp') {
+                Write-Host "    $(T 'jeton.ppImporte' $Key $clair.Length)" -ForegroundColor Green
+                # Ecraser, pas vider : Set-Clipboard sans texte n'a pas le meme
+                # comportement selon les versions, un espace si.
+                try {
+                    Set-Clipboard -Value ' ' -ErrorAction Stop
+                    Write-Host "    $(T 'jeton.ppEcrase')" -ForegroundColor DarkGray
+                }
+                catch {
+                    Write-Host "    $(T 'jeton.ppEcraseEchec')" -ForegroundColor Yellow
+                }
+            }
+            return (ConvertTo-CtxSecureString $clair)
+        }
+    }
+
+    Write-Host "    $(T 'jeton.abandon' $Key)" -ForegroundColor Yellow
+    $null
+}
+
 function Get-CtxManifests {
     if (-not (Test-Path $script:CtxRoot)) { return @() }
     Get-ChildItem $script:CtxRoot -Directory |
@@ -2482,9 +2639,13 @@ Host github-$Name
     else {
         Write-Host ""
         Write-Host "  $(T 'new.jetonsSaisie')" -ForegroundColor Cyan
+        Write-Host "  $(T 'new.jetonsCollage')" -ForegroundColor DarkGray
         foreach ($key in $script:SecretMap.Keys) {
-            $secure = Read-Host "    $key" -AsSecureString
-            if ($secure.Length -gt 0) { Set-CtxSecret -Name $Name -Key $key -Value $secure }
+            $secure = Read-CtxJeton -Key $key
+            if ($null -ne $secure) {
+                Set-CtxSecret -Name $Name -Key $key -Value $secure
+                Write-Host "    $(T 'jeton.enregistre' $key $secure.Length)" -ForegroundColor Green
+            }
         }
     }
 

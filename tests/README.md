@@ -49,7 +49,7 @@ interrogate it left it crashing in a loop on the user's screen.
 > **A test that stays green on broken code is worse than no test.** It
 > advertises coverage that does not exist.
 
-Two recorded cases, both found here:
+Three recorded cases, all found here:
 
 **13 August 2026 — the test that never built its own condition.** Shim tests
 were meant to run with no context active. They simply declined to *set*
@@ -62,6 +62,15 @@ variable explicitly.
 `SUPABASE_ACCESS_TOKEN` in its `finally` instead of restoring it. Everything
 after it saw no token, so the end-to-end leak check quietly skipped. Green
 suite, vanished coverage. **Restore, never remove.**
+
+**9 November 2026 — the test that borrowed the runner's strictness.** Three
+tests feed a vault double that reports a failed write with `Write-Error`, and
+assert that `ctx secret` and `ctx new` never announce success. They stayed green
+with the fix (`-ErrorAction Stop` in `Set-CtxSecret` and `Remove-CtxSecret`)
+removed: Pester runs every `It` under `$ErrorActionPreference = 'Stop'`, the
+double inherits it, and its `Write-Error` became terminating on its own. A
+user's shell runs under `Continue`, where the defect was real. The tests now set
+`Continue` themselves, so only the code under test can make the error stop.
 
 So: whenever a test matters, prove it bites. Break the code, watch it go red,
 restore.

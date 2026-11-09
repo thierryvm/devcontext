@@ -562,7 +562,14 @@ Describe 'Set-DevContextSecret jusqu au coffre' {
         # Un fournisseur de coffre peut signaler un echec d'ecriture par
         # Write-Error, sans lever. Sans -ErrorAction Stop dans Set-CtxSecret,
         # l'erreur s'affichait puis "enregistre" suivait, en vert.
+        #
+        # Pester execute chaque It sous $ErrorActionPreference = 'Stop', dont
+        # la doublure herite : son Write-Error y devenait bloquant TOUT SEUL,
+        # et ce test restait vert sans le correctif (mesure le 09/11/2026).
+        # On remet la preference d'un shell ordinaire, pour que seul le
+        # -ErrorAction du code teste puisse rendre l'erreur bloquante.
         InModuleScope DevContext {
+            $ErrorActionPreference = 'Continue'
             function Set-Secret {
                 [CmdletBinding()]
                 param([string]$Vault, [string]$Name, [securestring]$SecureStringSecret)
@@ -602,6 +609,8 @@ Describe 'Set-DevContextSecret jusqu au coffre' {
 
     It '-Remove : un refus du coffre leve, et le retrait n est jamais annonce' {
         InModuleScope DevContext {
+            # Preference d'un shell ordinaire : voir le test d'ecriture ci-dessus.
+            $ErrorActionPreference = 'Continue'
             function Remove-Secret {
                 [CmdletBinding()]
                 param([string]$Vault, [string]$Name)
@@ -633,6 +642,9 @@ Describe 'ctx new : un echec d ecriture au coffre se dit' {
 
     It 'Save-CtxJetonSaisi dit NON enregistre sur une erreur non bloquante, sans lever ni annoncer un succes' {
         InModuleScope DevContext {
+            # Preference d'un shell ordinaire : sous le 'Stop' de Pester, le
+            # Write-Error de la doublure levait sans l'aide du code teste.
+            $ErrorActionPreference = 'Continue'
             function Set-Secret {
                 [CmdletBinding()]
                 param([string]$Vault, [string]$Name, [securestring]$SecureStringSecret)

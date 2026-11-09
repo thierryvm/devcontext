@@ -209,6 +209,9 @@ is stored, and you can choose to read the token from the clipboard instead. It
 is checked there too, never displayed, and the clipboard is overwritten
 afterwards.
 
+A token skipped here can be set later, one key at a time, with the same checks:
+`ctx secret <key> -Name perso` (interactive terminal only).
+
 Then check the result:
 
 ```powershell

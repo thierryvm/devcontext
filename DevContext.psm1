@@ -198,7 +198,7 @@ $script:CtxDerogations = @('DEVCTX_ALLOW_PROD', 'DEVCTX_ALLOW_GH', 'DEVCTX_ALLOW
 # le second verrou : l'export réel est l'INTERSECTION des deux listes, et une
 # fonction ajoutée à une seule des deux devient invisible sans la moindre erreur.
 
-foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Agents.ps1', 'Shortcuts.ps1', 'Dashboard.ps1', 'Gh.ps1', 'Vercel.ps1', 'Init.ps1', 'Exec.ps1', 'Ctx.ps1')) {
+foreach ($fichier in @('Chemins.ps1', 'Langue.ps1', 'Doctor.ps1', 'Fix.ps1', 'Jetons.ps1', 'Mcp.ps1', 'Editors.ps1', 'Agents.ps1', 'Shortcuts.ps1', 'Dashboard.ps1', 'Gh.ps1', 'Vercel.ps1', 'Init.ps1', 'Exec.ps1', 'Secret.ps1', 'Ctx.ps1')) {
     . (Join-Path $PSScriptRoot 'src' $fichier)
 }
 
@@ -301,7 +301,32 @@ function Set-CtxSecret {
         [Parameter(Mandatory)][string]$Key,
         [Parameter(Mandatory)][securestring]$Value
     )
-    Set-Secret -Vault $script:VaultName -Name "devctx/$Name/$Key" -SecureStringSecret $Value
+    Set-Secret -Vault $script:VaultName -Name "devctx/$Name/$Key" -SecureStringSecret $Value -ErrorAction Stop
+}
+
+function Save-CtxJetonSaisi {
+    <#
+      ctx new : stocke UN jeton saisi et dit ce qui s'est vraiment passe.
+
+      Set-CtxSecret leve sur toute erreur du coffre, y compris non bloquante :
+      sans -ErrorAction Stop, un fournisseur qui refusait l'ecriture affichait
+      son erreur, puis « enregistre » en vert, et le jeton manquait plus tard,
+      loin de sa cause. Ici l'echec se dit, cle par cle, avec la commande qui
+      le reprend, et la creation du contexte continue : elle a deja ecrit la
+      configuration git et SSH, et l'interrompre la laisserait sans son resume.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Key,
+        [Parameter(Mandatory)][securestring]$Value
+    )
+    try { Set-CtxSecret -Name $Name -Key $Key -Value $Value }
+    catch {
+        Write-Host "    $(T 'jeton.echecEcriture' $Key $Name (Protect-CtxMessage $_.Exception.Message))" -ForegroundColor Red
+        return $false
+    }
+    Write-Host "    $(T 'jeton.enregistre' $Key $Value.Length)" -ForegroundColor Green
+    $true
 }
 
 # ---------------------------------------------------------------------------
@@ -354,6 +379,17 @@ function ConvertTo-CtxSecureString {
     $s
 }
 
+function Get-CtxJetonFormat {
+    # PURE. Le format attendu pour une cle, ou $null. La famille
+    # supabase-token-<projet> -- un jeton par compte Supabase -- est le meme
+    # jeton d'acces que 'supabase-token' ; sans cette lecture par famille, sa
+    # valeur ne recevait que les controles generiques.
+    param([Parameter(Mandatory)][string]$Key)
+    if ($script:JetonFormats.ContainsKey($Key)) { return $script:JetonFormats[$Key] }
+    if ($Key -cmatch $script:CtxCleSupabaseFamilleMotif) { return $script:JetonFormats['supabase-token'] }
+    $null
+}
+
 function Test-CtxJetonPlausible {
     <#
       Le verdict sur une valeur avant stockage : 'vide', 'controle', 'court',
@@ -372,7 +408,7 @@ function Test-CtxJetonPlausible {
     # comme l'espace sans chasse qu'apporte un copier depuis une page web.
     if ($Valeur -match '[\p{Cc}\p{Cf}]') { return 'controle' }
     if ($Valeur.Length -lt $script:JetonLongueurMin) { return 'court' }
-    $format = $script:JetonFormats[$Key]
+    $format = Get-CtxJetonFormat -Key $Key
     if ($format -and $Valeur -cnotmatch $format.Motif) { return 'format' }
     'ok'
 }
@@ -410,7 +446,7 @@ function Read-CtxJeton {
             if ($verdict -eq 'vide') { Write-Host "    $(T 'jeton.ppVide')" -ForegroundColor Yellow }
             elseif ($verdict -eq 'controle') { Write-Host "    $(T 'jeton.controle' $Key $clair.Length)" -ForegroundColor Yellow }
             elseif ($verdict -eq 'court') { Write-Host "    $(T 'jeton.court' $Key $clair.Length $script:JetonLongueurMin)" -ForegroundColor Yellow }
-            else { Write-Host "    $(T 'jeton.format' $Key $clair.Length $script:JetonFormats[$Key].Attendu)" -ForegroundColor Yellow }
+            else { Write-Host "    $(T 'jeton.format' $Key $clair.Length (Get-CtxJetonFormat -Key $Key).Attendu)" -ForegroundColor Yellow }
             if ($source -eq 'saisie' -and $verdict -in @('controle', 'court')) {
                 Write-Host "    $(T 'jeton.collageRate')" -ForegroundColor DarkGray
             }
@@ -2643,8 +2679,7 @@ Host github-$Name
         foreach ($key in $script:SecretMap.Keys) {
             $secure = Read-CtxJeton -Key $key
             if ($null -ne $secure) {
-                Set-CtxSecret -Name $Name -Key $key -Value $secure
-                Write-Host "    $(T 'jeton.enregistre' $key $secure.Length)" -ForegroundColor Green
+                $null = Save-CtxJetonSaisi -Name $Name -Key $key -Value $secure
             }
         }
     }
@@ -3434,7 +3469,8 @@ $exportedFunctions = @(
     'Get-DevEditorList', 'New-DevShortcut', 'Set-DevContextRoot',
     'Test-CtxGhGuard', 'Test-CtxGhEcriture', 'Test-CtxVercelGuard', 'Invoke-DevGh',
     'Invoke-DevCtx', 'Resolve-CtxPathSansVides', 'Invoke-DevContextInit',
-    'Invoke-DevContextDashboard', 'Invoke-DevContextGuard', 'Invoke-DevContextExec'
+    'Invoke-DevContextDashboard', 'Invoke-DevContextGuard', 'Invoke-DevContextExec',
+    'Set-DevContextSecret'
 )
 # Les alias ctx-<nom> sont DERIVES de la meme table que les alias eux-memes.
 # Ils y etaient recopies a la main jusqu'a la 1.8.0, et le defaut a frappe des

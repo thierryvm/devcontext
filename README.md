@@ -228,6 +228,7 @@ Internals: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | `ctx-mcp` | Write MCP configuration for this project, bound to its own credentials |
 | `ctx-list` | Every context on this machine |
 | `ctx-new` | Create a context — `-NoKey` when nothing can answer a passphrase prompt |
+| `ctx-secret` | Set, replace or remove one token of a context, through the validated masked prompt |
 | `ctx-root` | Where contexts are stored, and change it |
 | `ctx-who` | Which context owns this folder |
 | `ctx-editors` | Which editors are installed, and can each one be isolated? |

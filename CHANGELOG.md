@@ -40,7 +40,58 @@
   receives the names bare and every value as a quoted literal, so no argument
   is ever evaluated.
 
+- **`ctx secret <key>`: set, replace or remove one token later, through the
+  validated prompt.** A token skipped during `ctx new`, or one that expired,
+  could only go in through a raw `Set-Secret`, and that is the command
+  `ctx new` itself printed as its non-interactive advice. It bypasses the check
+  added after the swallowed paste of 8 November 2026, so the advice kept that
+  incident's door open one step to the side. `ctx new` now points to
+  `ctx secret <key> -Name <context>` instead.
+
+  Without `-Name` it acts on the context that **owns the current folder**, never
+  on `$env:DEVCTX`: the folder decides, as everywhere else in the module. It
+  refuses, and asks for `-Name`, when the folder belongs to no context, when
+  its owner is ambiguous, or when the shell is in a different context than the
+  folder. Reading the session there would have stored a token meant for the
+  current project under another identity. The key must be one
+  the module manages (`github-token`, `vercel-token`, `supabase-token`,
+  `supabase-db`, `sentry-token`), or `supabase-token-<project>`, the
+  one-token-per-Supabase-account family a project's Supabase map points to;
+  its value gets the same Supabase format check, and such a name is never
+  mistaken for a pasted token. Any other key is refused with the list. An
+  unknown key is never echoed, because the command line is where a token
+  pasted too early lands, and when what was typed looks like a token the
+  message says it is in the window's history (and in the history file if
+  PSReadLine is set to keep everything) and should be revoked. A value typed
+  after the key, `ctx secret <key> <value>`, is refused before anything else
+  with the same advice, and never echoed: PowerShell's own binding error used
+  to quote it in clear. A
+  short key-shaped word counts as a token when it is far from every valid key
+  (a password), and not when it is close to one (a typo). A context name as
+  long as a secret value is not echoed when the context does not exist. The
+  value is never an argument: it is asked for by the same masked prompt as
+  `ctx new`, with the same refusals and the same clipboard way out. Only the
+  key and the length are reported. A key that already holds a value is
+  replaced only after an explicit yes, and a vault that cannot be read is
+  never taken to mean "no value yet". Presence is read again just before the
+  write, so a value another window stored while you typed is never silently
+  overwritten. A write, read or removal the vault refuses, even as a
+  non-terminating error, is reported as a failure and never as done, in the
+  module's words and with any credential masked. `-Remove` deletes a key, after
+  confirmation. With input redirected (a script, a CI job, an AI agent's
+  shell) it refuses before any prompt or vault access, since nothing could
+  answer. A shell where the context is active keeps the old value until
+  `work <context> -NoCd` is run again, and the command says so.
+
 ### Fixed
+
+- **`ctx new` announced a token as stored when the vault had refused it.**
+  `Set-CtxSecret` called `Set-Secret` without `-ErrorAction Stop`, so a vault
+  provider that reports a failed write as a non-terminating error printed its
+  error, and then "stored" in green; the missing token surfaced later, far
+  from its cause. Every vault write now fails loudly. `ctx new` reports each
+  refused key as NOT stored, with the `ctx secret <key> -Name <context>`
+  command that sets it later, and finishes creating the context.
 
 - **A token pasted into `ctx-new` could be stored as one character, in
   silence.** On 8 November 2026, on PowerShell 7.6.9 in Windows Terminal, a

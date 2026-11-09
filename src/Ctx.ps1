@@ -60,6 +60,7 @@ $script:CtxSousCommandes = [ordered]@{
     'off'      = 'Clear-DevContext'
     'root'     = 'Set-DevContextRoot'
     'sb'       = 'Get-DevSupabaseMap'
+    'secret'   = 'Set-DevContextSecret'
     'shortcut' = 'New-DevShortcut'
     'who'      = 'Resolve-DevContextForPath'
 }

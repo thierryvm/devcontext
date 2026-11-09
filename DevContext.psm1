@@ -379,6 +379,17 @@ function ConvertTo-CtxSecureString {
     $s
 }
 
+function Get-CtxJetonFormat {
+    # PURE. Le format attendu pour une cle, ou $null. La famille
+    # supabase-token-<projet> -- un jeton par compte Supabase -- est le meme
+    # jeton d'acces que 'supabase-token' ; sans cette lecture par famille, sa
+    # valeur ne recevait que les controles generiques.
+    param([Parameter(Mandatory)][string]$Key)
+    if ($script:JetonFormats.ContainsKey($Key)) { return $script:JetonFormats[$Key] }
+    if ($Key -cmatch $script:CtxCleSupabaseFamilleMotif) { return $script:JetonFormats['supabase-token'] }
+    $null
+}
+
 function Test-CtxJetonPlausible {
     <#
       Le verdict sur une valeur avant stockage : 'vide', 'controle', 'court',
@@ -397,7 +408,7 @@ function Test-CtxJetonPlausible {
     # comme l'espace sans chasse qu'apporte un copier depuis une page web.
     if ($Valeur -match '[\p{Cc}\p{Cf}]') { return 'controle' }
     if ($Valeur.Length -lt $script:JetonLongueurMin) { return 'court' }
-    $format = $script:JetonFormats[$Key]
+    $format = Get-CtxJetonFormat -Key $Key
     if ($format -and $Valeur -cnotmatch $format.Motif) { return 'format' }
     'ok'
 }
@@ -435,7 +446,7 @@ function Read-CtxJeton {
             if ($verdict -eq 'vide') { Write-Host "    $(T 'jeton.ppVide')" -ForegroundColor Yellow }
             elseif ($verdict -eq 'controle') { Write-Host "    $(T 'jeton.controle' $Key $clair.Length)" -ForegroundColor Yellow }
             elseif ($verdict -eq 'court') { Write-Host "    $(T 'jeton.court' $Key $clair.Length $script:JetonLongueurMin)" -ForegroundColor Yellow }
-            else { Write-Host "    $(T 'jeton.format' $Key $clair.Length $script:JetonFormats[$Key].Attendu)" -ForegroundColor Yellow }
+            else { Write-Host "    $(T 'jeton.format' $Key $clair.Length (Get-CtxJetonFormat -Key $Key).Attendu)" -ForegroundColor Yellow }
             if ($source -eq 'saisie' -and $verdict -in @('controle', 'court')) {
                 Write-Host "    $(T 'jeton.collageRate')" -ForegroundColor DarkGray
             }

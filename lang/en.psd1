@@ -247,7 +247,9 @@
     # --- ctx secret (Set-DevContextSecret) ----------------------------------------
     'secret.usage'            = 'Usage: ctx secret <key> [-Name <context>] [-Remove]'
     'secret.cleInconnue'      = "Unknown key. Valid keys: {0}. The key is the secret's NAME; its value is asked for afterwards, masked."
-    'secret.cleRessembleJeton' = 'What was typed looks like a secret value. If it is one, it is now in the PowerShell history (PSReadLine): revoke it at the provider.'
+    'secret.cleRessembleJeton' = 'What was typed looks like a secret value. If it is one, it is in this window''s history (and in the history file if PSReadLine is set to keep everything): revoke it at the provider.'
+    'secret.echecLecture'     = "{0}: nothing was done for context '{1}', the vault could not be read. Detail: {2}"
+    'secret.echecRetrait'     = "{0}: NOT removed from context '{1}', the vault refused the removal. Detail: {2}"
     'secret.redirige'         = '{0}: refused, standard input is redirected and nobody could answer the masked prompt. Run ctx secret {0} in an interactive terminal.'
     'secret.sansContexte'     = "{0}: this folder belongs to no context, and the folder is what decides. Name the context (ctx secret {0} -Name <context>) or run the command from inside one of the context's folders."
     'secret.dossierAutre'     = "{0}: refused, this folder belongs to context '{1}' but this shell is in context '{2}'. Nothing was touched: name the target (ctx secret {0} -Name <context>)."

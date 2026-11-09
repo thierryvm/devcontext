@@ -247,7 +247,9 @@
     # --- ctx secret (Set-DevContextSecret) ----------------------------------------
     'secret.usage'            = 'Usage : ctx secret <cle> [-Name <contexte>] [-Remove]'
     'secret.cleInconnue'      = 'Cle inconnue. Cles valides : {0}. La cle est le NOM du secret ; sa valeur est demandee ensuite, masquee.'
-    'secret.cleRessembleJeton' = "Ce qui a ete tape ressemble a une valeur de secret. Si c'en est une, elle est maintenant dans l'historique PowerShell (PSReadLine) : revoquez-la chez le fournisseur."
+    'secret.cleRessembleJeton' = "Ce qui a ete tape ressemble a une valeur de secret. Si c'en est une, elle est dans l'historique de cette fenetre (et dans le fichier d'historique si PSReadLine est configure pour tout garder) : revoquez-la chez le fournisseur."
+    'secret.echecLecture'     = "{0} : rien n'a ete fait pour le contexte '{1}', le coffre n'a pas pu etre lu. Detail : {2}"
+    'secret.echecRetrait'     = "{0} : NON retire du contexte '{1}', le coffre a refuse la suppression. Detail : {2}"
     'secret.redirige'         = "{0} : refuse, l'entree standard est redirigee et personne ne pourrait repondre a l'invite masquee. Lancez ctx secret {0} dans un terminal interactif."
     'secret.sansContexte'     = "{0} : ce dossier n'appartient a aucun contexte, et c'est le dossier qui decide. Precisez le contexte (ctx secret {0} -Name <contexte>) ou lancez la commande depuis un dossier du contexte."
     'secret.dossierAutre'     = "{0} : refuse, ce dossier appartient au contexte '{1}' mais ce shell est dans le contexte '{2}'. Rien n'a ete touche : nommez la cible (ctx secret {0} -Name <contexte>)."

@@ -123,6 +123,54 @@ Describe 'Set-DevContextSecret' {
             }
         }
 
+        It 'accepte la famille supabase-token-<projet>, sans jamais la prendre pour un jeton : <_>' -ForEach @(
+            # La plus longue depasse le seuil de 16 caracteres : c'est elle qui
+            # declenchait la fausse alerte "revoquez" (revue du 09/11/2026).
+            'supabase-token-2', 'supabase-token-acme', 'supabase-token-projetavecunnomlong', 'Supabase-Token-Acme'
+        ) {
+            InModuleScope DevContext -Parameters @{ k = $_ } { param($k)
+                $v = Get-CtxVerdictSecret -Key $k -ClesValides @($script:SecretMap.Keys) -Contexte 'perso'
+                $v.Etat | Should -Be 'ok'
+                $v.Cle | Should -BeExactly $k.ToLowerInvariant()
+                $v.Jeton | Should -BeFalse
+            }
+        }
+
+        It 'un nom mal forme de la famille supabase-token reste refuse, sans crier au loup : <_>' -ForEach @(
+            'supabase-token-', 'supabase-token_projet-trop-long', 'supabase-tokenprojetlong'
+        ) {
+            InModuleScope DevContext -Parameters @{ k = $_ } { param($k)
+                $v = Get-CtxVerdictSecret -Key $k -ClesValides @($script:SecretMap.Keys) -Contexte 'perso'
+                $v.Etat | Should -Be 'cle-inconnue'
+                $v.Jeton | Should -BeFalse
+            }
+        }
+
+        It 'la famille supabase-token-<projet> recoit le format Supabase de supabase-token' {
+            InModuleScope DevContext -Parameters @{ v = $script:Valide } { param($v)
+                Test-CtxJetonPlausible -Key 'supabase-token-acme' -Valeur ('Ab3' * 8) | Should -Be 'format'
+                Test-CtxJetonPlausible -Key 'supabase-token-acme' -Valeur $v | Should -Be 'ok'
+                # Le format ne deborde pas sur une cle hors de la famille.
+                Test-CtxJetonPlausible -Key 'github-token' -Valeur ('Ab3' * 8) | Should -Be 'ok'
+            }
+        }
+
+        It 'un nom de contexte introuvable, long comme une valeur, n est pas repete' {
+            # -Name passe le filtre de forme s'il n'a que minuscules, chiffres et
+            # tirets : un jeton hexadecimal colle la aussi.
+            InModuleScope DevContext {
+                Mock Read-CtxManifest { throw (T 'manifeste.introuvable' $Name "C:\x\$Name\context.json") }
+                $long = ('0123456789abcdef' * 2).Substring(3, 20)
+                $e = { Set-DevContextSecret -Key 'github-token' -Name $long } | Should -Throw -PassThru
+                $e.Exception.Message | Should -Not -Match ([regex]::Escape($long.Substring(0, 12)))
+                $e.Exception.Message | Should -BeExactly (T 'manifeste.introuvable' ('*' * 8) ('*' * 8))
+                # Court, c'est une faute de frappe : le nom aide, on le garde.
+                $e = { Set-DevContextSecret -Key 'github-token' -Name 'acme' } | Should -Throw -PassThru
+                $e.Exception.Message | Should -Match ([regex]::Escape("'acme'"))
+                Should -Invoke Get-SecretInfo -Times 0 -Exactly
+            }
+        }
+
         It 'une faute de frappe courte, proche d une cle valide, ne crie pas au loup : <_>' -ForEach @(
             'githubtoken', 'gh-token', 'supabasedb', 'vercel-tokn', 'sentry'
         ) {
@@ -212,6 +260,19 @@ Describe 'Set-DevContextSecret' {
                 Should -Invoke Read-Host -ParameterFilter { -not $AsSecureString } -Times 0 -Exactly
                 ($script:TestSecret.Sortie -join "`n") |
                     Should -Match ([regex]::Escape((T 'secret.enregistre' 'supabase-token' 'perso' $v.Length)))
+            }
+        }
+
+        It 'pose une cle de la famille supabase-token-<projet> sous son nom, avec la variable Supabase' {
+            InModuleScope DevContext -Parameters @{ v = $script:Valide } { param($v)
+                $env:DEVCTX = 'perso'
+                $script:TestSecret.Saisies.Enqueue($v)
+                Set-DevContextSecret -Key 'supabase-token-acme' -Name 'perso'
+                $script:TestSecret.Stockes.Count | Should -Be 1
+                $script:TestSecret.Stockes[0].Key | Should -BeExactly 'supabase-token-acme'
+                $script:TestSecret.Stockes[0].Valeur | Should -BeExactly $v
+                ($script:TestSecret.Sortie -join "`n") |
+                    Should -Match ([regex]::Escape((T 'secret.recharger' 'SUPABASE_ACCESS_TOKEN' 'perso')))
             }
         }
 
@@ -330,7 +391,9 @@ Describe 'Set-DevContextSecret' {
             # "absent" par defaut ecraserait une valeur sans demander.
             InModuleScope DevContext {
                 Mock Get-SecretInfo { throw 'coffre verrouille' }
-                { Set-DevContextSecret -Key 'github-token' -Name 'perso' } | Should -Throw
+                $e = { Set-DevContextSecret -Key 'github-token' -Name 'perso' } | Should -Throw -PassThru
+                # Dit dans la langue du module, detail du fournisseur a la fin.
+                $e.Exception.Message | Should -BeExactly (T 'secret.echecLecture' 'github-token' 'perso' 'coffre verrouille')
                 Should -Invoke Read-Host -Times 0 -Exactly
                 $script:TestSecret.Stockes.Count | Should -Be 0
             }
@@ -620,9 +683,58 @@ Describe 'Set-DevContextSecret jusqu au coffre' {
             $script:TestCoffre.Existant = 'devctx/perso/vercel-token'
             $script:TestCoffre.Reponse = 'o'
 
-            { Set-DevContextSecret -Key 'vercel-token' -Name 'perso' -Remove } | Should -Throw
+            $e = { Set-DevContextSecret -Key 'vercel-token' -Name 'perso' -Remove } | Should -Throw -PassThru
+            $e.Exception.Message | Should -BeExactly (T 'secret.echecRetrait' 'vercel-token' 'perso' 'TEST : le fournisseur refuse la suppression')
             ($script:TestCoffre.Sortie -join "`n") |
                 Should -Not -Match ([regex]::Escape((T 'secret.retire' 'vercel-token' 'perso')))
+        }
+    }
+}
+
+Describe 'Set-DevContextSecret : lecture du coffre en erreur NON bloquante' {
+    # Sonde de la revue securite du 09/11/2026. Le test "une erreur de lecture
+    # du coffre n est pas lue comme une absence" LEVE dans sa doublure : il
+    # restait vert sans le -ErrorAction Stop de Test-CtxSecretPresent. Ici la
+    # doublure fait Write-Error, sous la preference d'un shell ordinaire, et
+    # porte la vraie signature -- pas de Mock, qui serait un alias passant
+    # devant elle. Sans le correctif, la commande lisait "absent" et ECRIVAIT,
+    # sans demander, par-dessus un jeton peut-etre present.
+    BeforeEach {
+        $script:DevctxAvant = $env:DEVCTX
+        $env:DEVCTX = 'autre'
+    }
+
+    AfterEach {
+        InModuleScope DevContext { Remove-Variable -Name Sonde -Scope Script -ErrorAction SilentlyContinue }
+        if ($null -eq $script:DevctxAvant) { Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue }
+        else { $env:DEVCTX = $script:DevctxAvant }
+    }
+
+    It 'une erreur non bloquante de Get-SecretInfo ne mene jamais a une ecriture' {
+        InModuleScope DevContext {
+            $ErrorActionPreference = 'Continue'
+            $script:Sonde = @{ Poses = 0; Saisies = 0 }
+            Mock Test-CtxEntreeRedirigee { $false }
+            Mock Read-CtxManifest { [pscustomobject]@{ name = 'perso' } }
+            Mock Test-CtxVault { }
+            Mock Write-Host { }
+            Mock Get-Secret { throw 'TEST : le vrai coffre a ete atteint (Get-Secret)' }
+            Mock Read-Host -ParameterFilter { $AsSecureString } { $script:Sonde.Saisies++; ConvertTo-CtxSecureString ('Ab3' * 8) }
+            Mock Read-Host -ParameterFilter { -not $AsSecureString } { 'n' }
+            function Get-SecretInfo {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name)
+                Write-Error 'TEST : coffre illisible (erreur non bloquante)'
+            }
+            function Set-Secret {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name, [securestring]$SecureStringSecret)
+                $script:Sonde.Poses++
+            }
+            $e = { Set-DevContextSecret -Key 'github-token' -Name 'perso' } | Should -Throw -PassThru
+            $e.Exception.Message | Should -Match ([regex]::Escape((T 'secret.echecLecture' 'github-token' 'perso' 'X').TrimEnd('X')))
+            $script:Sonde.Poses | Should -Be 0
+            $script:Sonde.Saisies | Should -Be 0
         }
     }
 }
@@ -704,6 +816,21 @@ Describe 'ctx secret : commande, alias et conseil non interactif' {
         $code = "Import-Module '$script:Module'; try { $_ ; 'AUCUN-REFUS' } catch { 'MSG=' + `$_.Exception.Message }"
         $sortie = ('' | pwsh -NoProfile -NonInteractive -Command $code 2>&1) -join "`n"
         $sortie | Should -Match ([regex]::Escape("MSG=$attendu"))
+        $sortie | Should -Not -Match 'AUCUN-REFUS'
+    }
+
+    It 'une valeur tapee apres la cle est refusee avant tout, sans jamais etre repetee : <_>' -ForEach @('ctx secret github-token', 'ctx-secret github-token') {
+        # `commande nom valeur` est l'habitude la plus probable. Sans le
+        # parametre de surplus, l'erreur de LIAISON de PowerShell recopiait la
+        # valeur en clair -- avant tout refus du module, et sans conseil de
+        # revocation. Shell neuf, entree redirigee : le refus du surplus doit
+        # passer AVANT celui de la redirection. Valeur fabriquee ici.
+        $faux = 'sbp_' + ('fedcba9876543210' * 3).Substring(0, 40)
+        $attendu = InModuleScope DevContext { (T 'secret.usage') + "`n" + (T 'secret.cleRessembleJeton') }
+        $code = "Import-Module '$script:Module'; try { $_ $faux ; 'AUCUN-REFUS' } catch { 'MSG=' + `$_.Exception.Message }"
+        $sortie = ('' | pwsh -NoProfile -NonInteractive -Command $code 2>&1) -join "`n"
+        $sortie | Should -Match ([regex]::Escape("MSG=$attendu"))
+        $sortie | Should -Not -Match ([regex]::Escape($faux.Substring(4, 12)))
         $sortie | Should -Not -Match 'AUCUN-REFUS'
     }
 

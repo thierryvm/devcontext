@@ -55,20 +55,29 @@
   folder. Reading the session there would have stored a token meant for the
   current project under another identity. The key must be one
   the module manages (`github-token`, `vercel-token`, `supabase-token`,
-  `supabase-db`, `sentry-token`); any other is refused with the list. An
+  `supabase-db`, `sentry-token`), or `supabase-token-<project>`, the
+  one-token-per-Supabase-account family a project's Supabase map points to;
+  its value gets the same Supabase format check, and such a name is never
+  mistaken for a pasted token. Any other key is refused with the list. An
   unknown key is never echoed, because the command line is where a token
   pasted too early lands, and when what was typed looks like a token the
-  message says it is now in the PowerShell history and should be revoked. A
+  message says it is in the window's history (and in the history file if
+  PSReadLine is set to keep everything) and should be revoked. A value typed
+  after the key, `ctx secret <key> <value>`, is refused before anything else
+  with the same advice, and never echoed: PowerShell's own binding error used
+  to quote it in clear. A
   short key-shaped word counts as a token when it is far from every valid key
-  (a password), and not when it is close to one (a typo). The
+  (a password), and not when it is close to one (a typo). A context name as
+  long as a secret value is not echoed when the context does not exist. The
   value is never an argument: it is asked for by the same masked prompt as
   `ctx new`, with the same refusals and the same clipboard way out. Only the
   key and the length are reported. A key that already holds a value is
   replaced only after an explicit yes, and a vault that cannot be read is
   never taken to mean "no value yet". Presence is read again just before the
   write, so a value another window stored while you typed is never silently
-  overwritten. A write or removal the vault refuses, even as a non-terminating
-  error, is reported as a failure and never as done. `-Remove` deletes a key, after
+  overwritten. A write, read or removal the vault refuses, even as a
+  non-terminating error, is reported as a failure and never as done, in the
+  module's words and with any credential masked. `-Remove` deletes a key, after
   confirmation. With input redirected (a script, a CI job, an AI agent's
   shell) it refuses before any prompt or vault access, since nothing could
   answer. A shell where the context is active keeps the old value until

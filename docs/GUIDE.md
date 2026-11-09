@@ -143,9 +143,14 @@ To add a token later, or replace one that expired, set that one key:
 
 ```powershell
 ctx secret supabase-token             # the context that owns this folder
+ctx secret supabase-token-acme       # a Supabase account of its own
 ctx secret vercel-token -Name acme    # another context
 ctx secret sentry-token -Remove       # delete a key, after confirmation
 ```
+
+The keys are the ones `ctx new` asks for, plus `supabase-token-<project>`: one
+Supabase token per account, the name a project's Supabase map points to. Its
+value gets the same Supabase format check as `supabase-token`.
 
 Without `-Name`, the folder decides, as everywhere else in DevContext: the key
 goes to the context that owns the current folder, never to whatever the shell
@@ -156,10 +161,11 @@ context than the folder.
 It uses the same masked prompt and the same checks, reports the length and
 never the value, and asks before replacing a value that is already stored. If
 a value appears in the vault while you are typing (another window), nothing is
-written. A write the vault refuses is reported as a failure, never as stored.
-The
-value is never typed on the command line, where it would stay in the PowerShell
-history. It needs an interactive terminal and refuses when input is
+written. A write the vault refuses is reported as a failure, never as stored. The
+value is never typed on the command line, where it would stay in the window's
+history (and in the history file if PSReadLine is set to keep everything):
+`ctx secret <key> <value>` is refused without echoing the value, with the
+advice to revoke it. It needs an interactive terminal and refuses when input is
 redirected. In a shell where that context is active, run `work <context> -NoCd`
 afterwards to load the new value.
 

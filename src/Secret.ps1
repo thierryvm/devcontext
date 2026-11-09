@@ -19,20 +19,31 @@
 # WHAT IT NEVER DOES
 #
 # Print the value, take it as an argument, or overwrite an existing value
-# without asking. A value passed on the command line lands in the PSReadLine
-# history file in clear; the only way in is the masked prompt.
+# without asking. A value passed on the command line stays in the window's
+# history (PSReadLine keeps a line holding "secret" in memory only by default,
+# and writes it to the history file if its filter was changed), in $Error and
+# in any transcript; the only way in is the masked prompt.
+#
+# The family `supabase-token-<project>` is accepted next to the fixed keys:
+# it is what Get-CtxSupabaseKeys reads, one token per Supabase account.
 
 # Le nom d'un contexte, tel que `ctx new` l'impose. Le nom entre dans le chemin
 # du manifeste ET dans le nom du secret au coffre : un '..' ou un '/' y
 # designerait autre chose que ce que l'utilisateur croit viser.
 $script:CtxNomContexteMotif = '^[a-z0-9][a-z0-9-]*$'
 
+# Un jeton Supabase par compte : la famille que lit Get-CtxSupabaseKeys et que
+# designe la carte Supabase d'un projet. Elle prend le format de
+# 'supabase-token' (voir Get-CtxJetonFormat) et sa variable d'environnement.
+$script:CtxCleSupabaseFamilleMotif = '^supabase-token(-[a-z0-9]+)+$'
+
 function Get-CtxVerdictSecret {
     <#
       PURE. Peut-on demander ce secret ? Rend une table @{ Etat; Cle; Jeton } :
 
         cle-absente       aucune cle donnee : l'appelant affiche l'usage
-        cle-inconnue      pas une cle de $script:SecretMap
+        cle-inconnue      ni une cle de $script:SecretMap, ni une cle de la
+                          famille supabase-token-<projet>
         entree-redirigee  personne ne peut repondre a une invite
         dossier-ambigu    sans -Name, et le proprietaire du dossier est ambigu
         dossier-autre     sans -Name, et le dossier appartient a un autre
@@ -70,7 +81,17 @@ function Get-CtxVerdictSecret {
     foreach ($c in $ClesValides) {
         if ([string]::Equals($c, $demande, [System.StringComparison]::OrdinalIgnoreCase)) { $canonique = $c; break }
     }
+    if (-not $canonique -and $demande.ToLowerInvariant() -cmatch $script:CtxCleSupabaseFamilleMotif) {
+        $canonique = $demande.ToLowerInvariant()
+    }
     if (-not $canonique) {
+        # Un nom qui commence comme la famille Supabase est une cle mal tapee,
+        # jamais un jeton : aucun fournisseur ne prefixe ses valeurs ainsi, et
+        # crier au loup ferait revoquer un jeton sain (supabase-token-* faisait
+        # 31 caracteres, au-dela du seuil, le 9 novembre 2026).
+        if ($demande.StartsWith('supabase-token', [System.StringComparison]::OrdinalIgnoreCase)) {
+            return @{ Etat = 'cle-inconnue'; Cle = $null; Jeton = $false }
+        }
         # Une cle est un mot court en minuscules et tirets. Long, ou portant
         # autre chose, c'est presque surement une valeur collee a sa place.
         $jeton = ($demande.Length -ge 2 * $script:JetonLongueurMin) -or ($demande -cnotmatch '^[a-z0-9-]+$')
@@ -153,6 +174,18 @@ function Test-CtxSecretPresent {
     $trouves.Count -gt 0
 }
 
+function Read-CtxSecretPresence {
+    # Test-CtxSecretPresent, avec un echec dit dans la langue du module et
+    # passe par Protect-CtxMessage : un fournisseur de coffre est libre de
+    # citer ce qu'il veut dans son exception.
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Key
+    )
+    try { Test-CtxSecretPresent -Name $Name -Key $Key }
+    catch { throw (T 'secret.echecLecture' $Key $Name (Protect-CtxMessage $_.Exception.Message)) }
+}
+
 function Remove-CtxSecret {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
         Justification = 'Aide privee, non exportee : -WhatIf ne peut pas lui parvenir. La commande publique qui l appelle porte la confirmation.')]
@@ -202,7 +235,8 @@ function Set-DevContextSecret {
 
     .PARAMETER Key
         The secret's name: github-token, vercel-token, supabase-token,
-        supabase-db or sentry-token. Without it, the valid keys are listed.
+        supabase-db or sentry-token, or supabase-token-<project> for a
+        Supabase account of its own. Without it, the valid keys are listed.
 
     .PARAMETER Name
         The context. Defaults to the one that owns the current folder.
@@ -210,8 +244,16 @@ function Set-DevContextSecret {
     .PARAMETER Remove
         Delete the key from the vault instead of setting it, after confirmation.
 
+    .PARAMETER Surplus
+        Never meant to be used: it catches a value typed after the key, so that
+        it can be refused WITHOUT being echoed. Without it, PowerShell's own
+        binding error would quote the value in clear.
+
     .EXAMPLE
         ctx secret supabase-token
+
+    .EXAMPLE
+        ctx secret supabase-token-acme
 
     .EXAMPLE
         ctx secret vercel-token -Name acme
@@ -223,10 +265,20 @@ function Set-DevContextSecret {
     param(
         [Parameter(Position = 0)][string]$Key,
         [string]$Name,
-        [switch]$Remove
+        [switch]$Remove,
+        [Parameter(ValueFromRemainingArguments, DontShow)][string[]]$Surplus
     )
 
+    # AVANT TOUT, y compris l'usage et la redirection : `ctx secret <cle>
+    # <valeur>` est l'habitude `commande nom valeur`, donc l'erreur la plus
+    # probable. Le surplus n'est jamais repete, ni en entier ni en partie.
+    # Usage + conseil de revocation, sans cle nouvelle : les tables de textes
+    # sont a 500 cles, la limite d'Import-PowerShellDataFile avant PowerShell
+    # 7.2 (au-dela, le fichier entier est refuse et le module parle en cles).
+    if ($Surplus -and $Surplus.Count -gt 0) { throw ((T 'secret.usage') + "`n" + (T 'secret.cleRessembleJeton')) }
+
     $cles = @($script:SecretMap.Keys)
+    $clesAffichees = (@($cles) + 'supabase-token-<project>') -join ', '
 
     # LE DOSSIER DECIDE, jamais la session. Sans -Name, le secret va au
     # contexte qui POSSEDE le dossier courant -- le verdict complet, celui que
@@ -252,12 +304,12 @@ function Set-DevContextSecret {
     if ($verdict.Etat -eq 'cle-absente') {
         Write-Host ''
         Write-Host "  $(T 'secret.usage')" -ForegroundColor Cyan
-        Write-Host "    $(T 'new.jetonsCles' ($cles -join ', '))" -ForegroundColor DarkGray
+        Write-Host "    $(T 'new.jetonsCles' $clesAffichees)" -ForegroundColor DarkGray
         Write-Host ''
         return
     }
     if ($verdict.Etat -eq 'cle-inconnue') {
-        $message = T 'secret.cleInconnue' ($cles -join ', ')
+        $message = T 'secret.cleInconnue' $clesAffichees
         if ($verdict.Jeton) { $message += "`n" + (T 'secret.cleRessembleJeton') }
         throw $message
     }
@@ -269,16 +321,27 @@ function Set-DevContextSecret {
 
     $cle = $verdict.Cle
     # Leve si le contexte n'existe pas : poser un secret pour un contexte que
-    # rien n'utilisera est une faute de frappe, pas une intention.
-    $null = Read-CtxManifest $contexte
+    # rien n'utilisera est une faute de frappe, pas une intention. Le message
+    # de Read-CtxManifest repete le nom : -Name a deja passe le filtre de
+    # forme, mais une valeur faite de minuscules, chiffres et tirets (un jeton
+    # hexadecimal) le passe aussi. Long comme une valeur, le nom n'est pas
+    # repete -- meme seuil que pour une cle ; le message garde sa forme, le nom
+    # et le chemin masques.
+    try { $null = Read-CtxManifest $contexte }
+    catch {
+        if ($contexte.Length -ge 2 * $script:JetonLongueurMin) { throw (T 'manifeste.introuvable' ('*' * 8) ('*' * 8)) }
+        throw (Protect-CtxMessage $_.Exception.Message)
+    }
 
     $cible = "devctx/$contexte/$cle"
     $action = if ($Remove) { T 'secret.actionRetirer' } else { T 'secret.actionPoser' }
     if (-not $PSCmdlet.ShouldProcess($cible, $action)) { return }
 
     Test-CtxVault
-    $present = Test-CtxSecretPresent -Name $contexte -Key $cle
-    $variable = $script:SecretMap[$cle]
+    $present = Read-CtxSecretPresence -Name $contexte -Key $cle
+    # La famille supabase-token-<projet> se charge, elle aussi, dans la
+    # variable de 'supabase-token' (DEVCTX_SUPABASE_KEY la designe).
+    $variable = if ($script:SecretMap.Contains($cle)) { $script:SecretMap[$cle] } else { $script:SecretMap['supabase-token'] }
     $actifIci = ($env:DEVCTX -eq $contexte)
 
     Write-Host ''
@@ -293,7 +356,8 @@ function Set-DevContextSecret {
             Write-Host ''
             return
         }
-        Remove-CtxSecret -Name $contexte -Key $cle
+        try { Remove-CtxSecret -Name $contexte -Key $cle }
+        catch { throw (T 'secret.echecRetrait' $cle $contexte (Protect-CtxMessage $_.Exception.Message)) }
         Write-Host "  $(T 'secret.retire' $cle $contexte)" -ForegroundColor Green
         if ($actifIci) { Write-Host "  $(T 'secret.recharger' $variable $contexte)" -ForegroundColor Yellow }
         Write-Host ''
@@ -326,7 +390,7 @@ function Set-DevContextSecret {
     # d'une ancienne version, ni un Set-Secret tape a la main. Pour une
     # commande interactive d'un seul utilisateur, la relecture ferme la seule
     # fenetre qui compte : celle ou un humain tape.
-    if (-not $present -and (Test-CtxSecretPresent -Name $contexte -Key $cle)) {
+    if (-not $present -and (Read-CtxSecretPresence -Name $contexte -Key $cle)) {
         throw (T 'secret.apparu' $cle $contexte)
     }
 

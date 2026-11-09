@@ -242,13 +242,18 @@
     'jeton.passe'             = '{0} : non enregistre.'
     'jeton.abandon'           = '{0} : trop de saisies refusees, cle passee. Rien n a ete enregistre.'
     'jeton.enregistre'        = '{0} : enregistre ({1} caracteres).'
+    'jeton.echecEcriture'     = "{0} : NON enregistre, le coffre a refuse l'ecriture. Posez-le plus tard avec ctx secret {0} -Name {1}. Detail : {2}"
 
     # --- ctx secret (Set-DevContextSecret) ----------------------------------------
     'secret.usage'            = 'Usage : ctx secret <cle> [-Name <contexte>] [-Remove]'
     'secret.cleInconnue'      = 'Cle inconnue. Cles valides : {0}. La cle est le NOM du secret ; sa valeur est demandee ensuite, masquee.'
     'secret.cleRessembleJeton' = "Ce qui a ete tape ressemble a une valeur de secret. Si c'en est une, elle est maintenant dans l'historique PowerShell (PSReadLine) : revoquez-la chez le fournisseur."
     'secret.redirige'         = "{0} : refuse, l'entree standard est redirigee et personne ne pourrait repondre a l'invite masquee. Lancez ctx secret {0} dans un terminal interactif."
-    'secret.sansContexte'     = "{0} : aucun contexte actif. Precisez-le (ctx secret {0} -Name <contexte>) ou entrez d'abord dans un contexte (work <contexte>)."
+    'secret.sansContexte'     = "{0} : ce dossier n'appartient a aucun contexte, et c'est le dossier qui decide. Precisez le contexte (ctx secret {0} -Name <contexte>) ou lancez la commande depuis un dossier du contexte."
+    'secret.dossierAutre'     = "{0} : refuse, ce dossier appartient au contexte '{1}' mais ce shell est dans le contexte '{2}'. Rien n'a ete touche : nommez la cible (ctx secret {0} -Name <contexte>)."
+    'secret.dossierAmbigu'    = "{0} : refuse, le proprietaire de ce dossier est ambigu. {1} Nommez la cible (ctx secret {0} -Name <contexte>)."
+    'secret.apparu'           = "{0} : une valeur est apparue au coffre pour le contexte '{1}' pendant la saisie (une autre fenetre ?). Rien n'a ete ecrit : relancez ctx secret {0} pour la remplacer en connaissance de cause."
+    'secret.echecEcriture'    = "{0} : NON enregistre pour le contexte '{1}', le coffre a refuse l'ecriture. Detail : {2}"
     'secret.contexteInvalide' = 'Nom de contexte invalide : minuscules, chiffres et tirets seulement, comme a la creation (ctx new).'
     'secret.actionPoser'      = 'poser le secret'
     'secret.actionRetirer'    = 'retirer le secret'

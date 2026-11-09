@@ -48,23 +48,41 @@
   incident's door open one step to the side. `ctx new` now points to
   `ctx secret <key> -Name <context>` instead.
 
-  It acts on the active context, or on `-Name <context>`. The key must be one
+  Without `-Name` it acts on the context that **owns the current folder**, never
+  on `$env:DEVCTX`: the folder decides, as everywhere else in the module. It
+  refuses, and asks for `-Name`, when the folder belongs to no context, when
+  its owner is ambiguous, or when the shell is in a different context than the
+  folder. Reading the session there would have stored a token meant for the
+  current project under another identity. The key must be one
   the module manages (`github-token`, `vercel-token`, `supabase-token`,
   `supabase-db`, `sentry-token`); any other is refused with the list. An
   unknown key is never echoed, because the command line is where a token
   pasted too early lands, and when what was typed looks like a token the
-  message says it is now in the PowerShell history and should be revoked. The
+  message says it is now in the PowerShell history and should be revoked. A
+  short key-shaped word counts as a token when it is far from every valid key
+  (a password), and not when it is close to one (a typo). The
   value is never an argument: it is asked for by the same masked prompt as
   `ctx new`, with the same refusals and the same clipboard way out. Only the
   key and the length are reported. A key that already holds a value is
   replaced only after an explicit yes, and a vault that cannot be read is
-  never taken to mean "no value yet". `-Remove` deletes a key, after
+  never taken to mean "no value yet". Presence is read again just before the
+  write, so a value another window stored while you typed is never silently
+  overwritten. A write or removal the vault refuses, even as a non-terminating
+  error, is reported as a failure and never as done. `-Remove` deletes a key, after
   confirmation. With input redirected (a script, a CI job, an AI agent's
   shell) it refuses before any prompt or vault access, since nothing could
   answer. A shell where the context is active keeps the old value until
   `work <context> -NoCd` is run again, and the command says so.
 
 ### Fixed
+
+- **`ctx new` announced a token as stored when the vault had refused it.**
+  `Set-CtxSecret` called `Set-Secret` without `-ErrorAction Stop`, so a vault
+  provider that reports a failed write as a non-terminating error printed its
+  error, and then "stored" in green; the missing token surfaced later, far
+  from its cause. Every vault write now fails loudly. `ctx new` reports each
+  refused key as NOT stored, with the `ctx secret <key> -Name <context>`
+  command that sets it later, and finishes creating the context.
 
 - **A token pasted into `ctx-new` could be stored as one character, in
   silence.** On 8 November 2026, on PowerShell 7.6.9 in Windows Terminal, a

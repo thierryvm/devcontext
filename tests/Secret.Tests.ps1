@@ -38,8 +38,25 @@ Describe 'Set-DevContextSecret' {
                 Sortie        = [System.Collections.Generic.List[string]]::new()
                 Stockes       = [System.Collections.Generic.List[object]]::new()
                 Retires       = [System.Collections.Generic.List[string]]::new()
+                # Le proprietaire du dossier courant, tel que Get-CtxProprietaire
+                # le rendrait. Personne par defaut : le resultat ne doit jamais
+                # dependre des contextes de la machine qui lance la suite.
+                Proprio       = $null
+                ProprioAmbigu = $false
             }
             Mock Test-CtxEntreeRedirigee { $false }
+            Mock Get-CtxProprietaire {
+                $p = $script:TestSecret.Proprio
+                if ($script:TestSecret.ProprioAmbigu) {
+                    [pscustomobject]@{ Etat = 'ambigu'; Manifeste = $null; Contexte = $null; Raison = 'racine-dupliquee'; Candidats = @('autre', 'perso'); CheminPhysique = 'C:\x' }
+                }
+                elseif ($p) {
+                    [pscustomobject]@{ Etat = 'proprietaire'; Manifeste = [pscustomobject]@{ name = $p }; Contexte = $p; Raison = $null; Candidats = @($p); CheminPhysique = 'C:\x' }
+                }
+                else {
+                    [pscustomobject]@{ Etat = 'aucun'; Manifeste = $null; Contexte = $null; Raison = $null; Candidats = @(); CheminPhysique = 'C:\x' }
+                }
+            }
             Mock Read-CtxManifest { [pscustomobject]@{ name = 'perso' } }
             Mock Test-CtxVault { }
             # Le coffre rend les METADONNEES de ce qui existe, rien d'autre.
@@ -103,6 +120,42 @@ Describe 'Set-DevContextSecret' {
             InModuleScope DevContext {
                 $e = { Set-DevContextSecret -Key 'githb-token' -Name 'perso' } | Should -Throw -PassThru
                 $e.Exception.Message | Should -Not -Match ([regex]::Escape((T 'secret.cleRessembleJeton')))
+            }
+        }
+
+        It 'une faute de frappe courte, proche d une cle valide, ne crie pas au loup : <_>' -ForEach @(
+            'githubtoken', 'gh-token', 'supabasedb', 'vercel-tokn', 'sentry'
+        ) {
+            InModuleScope DevContext -Parameters @{ k = $_ } { param($k)
+                $v = Get-CtxVerdictSecret -Key $k -ClesValides @($script:SecretMap.Keys) -Contexte 'perso'
+                $v.Etat | Should -Be 'cle-inconnue'
+                $v.Jeton | Should -BeFalse
+            }
+        }
+
+        It 'un mot de passe court en forme de cle, loin de toute cle valide, est signale : <_>' -ForEach @(
+            'motdepasse26', 'azertyuiop'
+        ) {
+            # Minuscules et chiffres, moins de 16 caracteres : la forme d'une
+            # cle. Seule la distance aux cles valides le distingue d'une faute
+            # de frappe, et c'est lui qui finit dans l'historique.
+            InModuleScope DevContext -Parameters @{ k = $_ } { param($k)
+                $v = Get-CtxVerdictSecret -Key $k -ClesValides @($script:SecretMap.Keys) -Contexte 'perso'
+                $v.Etat | Should -Be 'cle-inconnue'
+                $v.Jeton | Should -BeTrue
+                $e = { Set-DevContextSecret -Key $k -Name 'perso' } | Should -Throw -PassThru
+                $e.Exception.Message | Should -Match ([regex]::Escape((T 'secret.cleRessembleJeton')))
+                $e.Exception.Message | Should -Not -Match ([regex]::Escape($k))
+            }
+        }
+
+        It 'Get-CtxDistanceEdition compte insertions, suppressions et substitutions' {
+            InModuleScope DevContext {
+                Get-CtxDistanceEdition -A '' -B '' | Should -Be 0
+                Get-CtxDistanceEdition -A 'abc' -B '' | Should -Be 3
+                Get-CtxDistanceEdition -A 'githb-token' -B 'github-token' | Should -Be 1
+                Get-CtxDistanceEdition -A 'kitten' -B 'sitting' | Should -Be 3
+                Get-CtxDistanceEdition -A 'Ab' -B 'ab' | Should -Be 1
             }
         }
 
@@ -170,9 +223,16 @@ Describe 'Set-DevContextSecret' {
             }
         }
 
-        It 'agit sur le contexte actif quand -Name est absent' {
+        It 'sans -Name, agit sur le contexte qui possede le dossier quand la session s accorde' {
+            # Ce test disait auparavant "agit sur le contexte ACTIF" et ne
+            # construisait que le cas ou session et dossier coincident -- le
+            # seul ou les deux lectures donnent la meme reponse. L'attente
+            # elle-meme contredisait la doctrine du module (le dossier decide) ;
+            # elle est corrigee ici, a voix haute, et les cas ou les deux
+            # divergent sont construits dans le Context suivant.
             $env:DEVCTX = 'perso'
             InModuleScope DevContext {
+                $script:TestSecret.Proprio = 'perso'
                 $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
                 Set-DevContextSecret -Key 'vercel-token'
                 $script:TestSecret.Stockes[0].Name | Should -BeExactly 'perso'
@@ -275,12 +335,107 @@ Describe 'Set-DevContextSecret' {
                 $script:TestSecret.Stockes.Count | Should -Be 0
             }
         }
+
+        It 'une valeur apparue pendant la saisie n est pas ecrasee sans accord' {
+            # La presence se lit avant l'invite ; une autre fenetre peut poser
+            # la cle pendant que l'utilisateur tape. Premiere lecture : absente.
+            # Relecture juste avant l'ecriture : presente.
+            InModuleScope DevContext {
+                $script:TestSecret.Lectures = 0
+                Mock Get-SecretInfo {
+                    $script:TestSecret.Lectures++
+                    if ($script:TestSecret.Lectures -ge 2) { [pscustomobject]@{ Name = 'devctx/perso/github-token' } }
+                }
+                $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
+                { Set-DevContextSecret -Key 'github-token' -Name 'perso' } |
+                    Should -Throw -ExpectedMessage (T 'secret.apparu' 'github-token' 'perso')
+                $script:TestSecret.Stockes.Count | Should -Be 0
+                ($script:TestSecret.Sortie -join "`n") |
+                    Should -Not -Match ([regex]::Escape((T 'secret.enregistre' 'github-token' 'perso' 24)))
+            }
+        }
+
+        It 'sans valeur apparue, la relecture laisse passer l ecriture' {
+            InModuleScope DevContext {
+                $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
+                Set-DevContextSecret -Key 'github-token' -Name 'perso'
+                $script:TestSecret.Stockes.Count | Should -Be 1
+                Should -Invoke Get-SecretInfo -Times 2 -Exactly
+            }
+        }
+    }
+
+    Context 'sans -Name, le dossier decide, jamais la session' {
+        It 'dossier possede, aucun contexte actif : le secret va au proprietaire du dossier' {
+            $env:DEVCTX = ''
+            InModuleScope DevContext {
+                $script:TestSecret.Proprio = 'perso'
+                $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
+                Set-DevContextSecret -Key 'github-token'
+                $script:TestSecret.Stockes.Count | Should -Be 1
+                $script:TestSecret.Stockes[0].Name | Should -BeExactly 'perso'
+                Should -Invoke Get-CtxProprietaire -Times 1 -Exactly
+            }
+        }
+
+        It 'dossier a personne, session active : refuse au lieu de prendre la session' {
+            # LE defaut corrige. L'ancienne lecture de $env:DEVCTX rangeait ici
+            # le jeton sous 'perso', pour un dossier que 'perso' ne possede pas.
+            $env:DEVCTX = 'perso'
+            InModuleScope DevContext {
+                $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
+                { Set-DevContextSecret -Key 'github-token' } |
+                    Should -Throw -ExpectedMessage (T 'secret.sansContexte' 'github-token')
+                Should -Invoke Read-CtxManifest -Times 0 -Exactly
+                Should -Invoke Get-SecretInfo -Times 0 -Exactly
+                Should -Invoke Read-Host -Times 0 -Exactly
+                $script:TestSecret.Stockes.Count | Should -Be 0
+            }
+        }
+
+        It 'dossier d un contexte, session d un autre : refuse en nommant les deux, sans toucher au coffre' {
+            $env:DEVCTX = 'autre'
+            InModuleScope DevContext {
+                $script:TestSecret.Proprio = 'perso'
+                $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
+                { Set-DevContextSecret -Key 'github-token' } |
+                    Should -Throw -ExpectedMessage (T 'secret.dossierAutre' 'github-token' 'perso' 'autre')
+                Should -Invoke Read-CtxManifest -Times 0 -Exactly
+                Should -Invoke Test-CtxVault -Times 0 -Exactly
+                Should -Invoke Get-SecretInfo -Times 0 -Exactly
+                Should -Invoke Read-Host -Times 0 -Exactly
+                $script:TestSecret.Stockes.Count | Should -Be 0
+            }
+        }
+
+        It 'proprietaire ambigu : refuse avec le message d ambiguite, meme quand la session pourrait trancher' {
+            $env:DEVCTX = 'perso'
+            InModuleScope DevContext {
+                $script:TestSecret.ProprioAmbigu = $true
+                $attendu = T 'secret.dossierAmbigu' 'github-token' (T 'proprietaire.ambigu.racines' 'autre, perso')
+                { Set-DevContextSecret -Key 'github-token' } | Should -Throw -ExpectedMessage $attendu
+                Should -Invoke Read-CtxManifest -Times 0 -Exactly
+                Should -Invoke Get-SecretInfo -Times 0 -Exactly
+                $script:TestSecret.Stockes.Count | Should -Be 0
+            }
+        }
+
+        It 'avec -Name, le dossier n est meme pas consulte' {
+            InModuleScope DevContext {
+                $script:TestSecret.Proprio = 'autre'
+                $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
+                Set-DevContextSecret -Key 'github-token' -Name 'perso'
+                $script:TestSecret.Stockes[0].Name | Should -BeExactly 'perso'
+                Should -Invoke Get-CtxProprietaire -Times 0 -Exactly
+            }
+        }
     }
 
     Context 'le shell courant' {
         It 'dit de relancer work quand le contexte modifie est actif dans ce shell' {
             $env:DEVCTX = 'perso'
             InModuleScope DevContext {
+                $script:TestSecret.Proprio = 'perso'
                 $script:TestSecret.Saisies.Enqueue('Ab3' * 8)
                 Set-DevContextSecret -Key 'github-token'
                 ($script:TestSecret.Sortie -join "`n") | Should -Match ([regex]::Escape((T 'secret.recharger' 'GH_TOKEN' 'perso')))
@@ -341,33 +496,181 @@ Describe 'Set-DevContextSecret' {
 }
 
 Describe 'Set-DevContextSecret jusqu au coffre' {
-    It 'le chemin reel passe par Set-CtxSecret et atteint Set-Secret une fois' {
-        # Les autres tests simulent Set-CtxSecret ; celui-ci le laisse
-        # s'executer, pour qu'un stockage qui le contournerait se voie. Set-Secret
-        # est simule sans filtre : sa signature differe entre le vrai module et
-        # un module de remplacement, le nombre d'appels non.
-        $avant = $env:DEVCTX
-        try {
-            InModuleScope DevContext {
-                $script:TestSaisie = 'Ab3' * 8
-                Mock Test-CtxEntreeRedirigee { $false }
-                Mock Read-CtxManifest { [pscustomobject]@{ name = 'perso' } }
-                Mock Test-CtxVault { }
-                Mock Get-SecretInfo { }
-                Mock Get-Secret { throw 'TEST : le vrai coffre a ete atteint (Get-Secret)' }
-                Mock Remove-Secret { throw 'TEST : le vrai coffre a ete atteint (Remove-Secret)' }
-                Mock Read-Host -ParameterFilter { $AsSecureString } { ConvertTo-CtxSecureString $script:TestSaisie }
-                Mock Read-Host -ParameterFilter { -not $AsSecureString } { '' }
-                Mock Write-Host { }
-                Mock Set-Secret { }
-                Set-DevContextSecret -Key 'github-token' -Name 'perso'
-                Should -Invoke Set-Secret -Times 1 -Exactly
-                Remove-Variable -Name TestSaisie -Scope Script
+    # Les autres tests simulent Set-CtxSecret et Remove-CtxSecret ; ceux-ci les
+    # laissent s'executer, pour qu'un stockage ou une suppression qui les
+    # contournerait -- ou viserait un autre nom -- se voie.
+    #
+    # Set-Secret et Remove-Secret n'y sont PAS simules par Mock : un module de
+    # remplacement n'a pas la signature du vrai, et un Mock copie la signature
+    # de ce qu'il remplace, donc ses arguments nommes deviendraient illisibles.
+    # Chaque test definit a la place, DANS son bloc, une doublure portant les
+    # parametres du vrai SecretManagement ; la portee dynamique de PowerShell la
+    # fait trouver par Set-CtxSecret avant toute commande importee. Un appel qui
+    # passerait un parametre que le vrai module n'a pas echouerait a la liaison.
+    # Pas de Mock sur ces deux noms ici : un Mock Pester est un ALIAS, qui
+    # passerait devant la doublure.
+    BeforeEach {
+        $script:DevctxAvant = $env:DEVCTX
+        $env:DEVCTX = 'autre'
+        InModuleScope DevContext {
+            $script:TestCoffre = @{
+                Saisie   = 'Ab3' * 8
+                Reponse  = ''
+                Existant = $null
+                Sortie   = [System.Collections.Generic.List[string]]::new()
             }
+            Mock Test-CtxEntreeRedirigee { $false }
+            Mock Read-CtxManifest { [pscustomobject]@{ name = 'perso' } }
+            Mock Test-CtxVault { }
+            Mock Get-SecretInfo { if ($script:TestCoffre.Existant) { [pscustomobject]@{ Name = $script:TestCoffre.Existant } } }
+            Mock Get-Secret { throw 'TEST : le vrai coffre a ete atteint (Get-Secret)' }
+            Mock Read-Host -ParameterFilter { $AsSecureString } { ConvertTo-CtxSecureString $script:TestCoffre.Saisie }
+            Mock Read-Host -ParameterFilter { -not $AsSecureString } { $script:TestCoffre.Reponse }
+            Mock Write-Host { $script:TestCoffre.Sortie.Add("$Object") }
         }
-        finally {
-            if ($null -eq $avant) { Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue } else { $env:DEVCTX = $avant }
+    }
+
+    AfterEach {
+        InModuleScope DevContext { Remove-Variable -Name TestCoffre -Scope Script -ErrorAction SilentlyContinue }
+        if ($null -eq $script:DevctxAvant) { Remove-Item Env:DEVCTX -ErrorAction SilentlyContinue }
+        else { $env:DEVCTX = $script:DevctxAvant }
+    }
+
+    It 'Set-Secret recoit le coffre DevContext, le nom complet et la valeur saisie en SecureString' {
+        InModuleScope DevContext {
+            $poses = [System.Collections.Generic.List[object]]::new()
+            function Set-Secret {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name, [securestring]$SecureStringSecret)
+                $poses.Add([pscustomobject]@{ Vault = $Vault; Name = $Name; Valeur = $SecureStringSecret })
+            }
+            function Remove-Secret { throw 'TEST : Remove-Secret appele pendant une pose' }
+
+            Set-DevContextSecret -Key 'github-token' -Name 'perso'
+
+            $poses.Count | Should -Be 1
+            $poses[0].Vault | Should -BeExactly 'DevContext'
+            $poses[0].Name | Should -BeExactly 'devctx/perso/github-token'
+            $poses[0].Valeur | Should -BeOfType [securestring]
+            ConvertFrom-CtxSecureString $poses[0].Valeur | Should -BeExactly $script:TestCoffre.Saisie
+            ($script:TestCoffre.Sortie -join "`n") |
+                Should -Match ([regex]::Escape((T 'secret.enregistre' 'github-token' 'perso' 24)))
         }
+    }
+
+    It 'une erreur NON bloquante du coffre leve, et le succes n est jamais annonce' {
+        # Un fournisseur de coffre peut signaler un echec d'ecriture par
+        # Write-Error, sans lever. Sans -ErrorAction Stop dans Set-CtxSecret,
+        # l'erreur s'affichait puis "enregistre" suivait, en vert.
+        InModuleScope DevContext {
+            function Set-Secret {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name, [securestring]$SecureStringSecret)
+                Write-Error 'TEST : le fournisseur refuse l ecriture'
+            }
+            function Remove-Secret { throw 'TEST : Remove-Secret appele pendant une pose' }
+
+            $e = { Set-DevContextSecret -Key 'github-token' -Name 'perso' } | Should -Throw -PassThru
+            $e.Exception.Message | Should -Match ([regex]::Escape((T 'secret.echecEcriture' 'github-token' 'perso' 'X').TrimEnd('X')))
+            ($script:TestCoffre.Sortie -join "`n") |
+                Should -Not -Match ([regex]::Escape((T 'secret.enregistre' 'github-token' 'perso' 24)))
+        }
+    }
+
+    It '-Remove passe par le vrai Remove-CtxSecret : coffre DevContext et nom complet' {
+        InModuleScope DevContext {
+            $retires = [System.Collections.Generic.List[object]]::new()
+            function Remove-Secret {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name)
+                $retires.Add([pscustomobject]@{ Vault = $Vault; Name = $Name })
+            }
+            function Set-Secret { throw 'TEST : Set-Secret appele pendant un retrait' }
+            $script:TestCoffre.Existant = 'devctx/perso/vercel-token'
+            $script:TestCoffre.Reponse = 'o'
+
+            Set-DevContextSecret -Key 'vercel-token' -Name 'perso' -Remove
+
+            $retires.Count | Should -Be 1
+            $retires[0].Vault | Should -BeExactly 'DevContext'
+            $retires[0].Name | Should -BeExactly 'devctx/perso/vercel-token'
+            Should -Invoke Read-Host -ParameterFilter { $AsSecureString } -Times 0 -Exactly
+            ($script:TestCoffre.Sortie -join "`n") |
+                Should -Match ([regex]::Escape((T 'secret.retire' 'vercel-token' 'perso')))
+        }
+    }
+
+    It '-Remove : un refus du coffre leve, et le retrait n est jamais annonce' {
+        InModuleScope DevContext {
+            function Remove-Secret {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name)
+                Write-Error 'TEST : le fournisseur refuse la suppression'
+            }
+            function Set-Secret { throw 'TEST : Set-Secret appele pendant un retrait' }
+            $script:TestCoffre.Existant = 'devctx/perso/vercel-token'
+            $script:TestCoffre.Reponse = 'o'
+
+            { Set-DevContextSecret -Key 'vercel-token' -Name 'perso' -Remove } | Should -Throw
+            ($script:TestCoffre.Sortie -join "`n") |
+                Should -Not -Match ([regex]::Escape((T 'secret.retire' 'vercel-token' 'perso')))
+        }
+    }
+}
+
+Describe 'ctx new : un echec d ecriture au coffre se dit' {
+    BeforeEach {
+        InModuleScope DevContext {
+            $script:TestNew = [System.Collections.Generic.List[string]]::new()
+            Mock Write-Host { $script:TestNew.Add("$Object") }
+            Mock Get-Secret { throw 'TEST : le vrai coffre a ete atteint (Get-Secret)' }
+        }
+    }
+
+    AfterEach {
+        InModuleScope DevContext { Remove-Variable -Name TestNew -Scope Script -ErrorAction SilentlyContinue }
+    }
+
+    It 'Save-CtxJetonSaisi dit NON enregistre sur une erreur non bloquante, sans lever ni annoncer un succes' {
+        InModuleScope DevContext {
+            function Set-Secret {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name, [securestring]$SecureStringSecret)
+                Write-Error 'TEST : le fournisseur refuse l ecriture'
+            }
+            $valeur = ConvertTo-CtxSecureString ('Ab3' * 8)
+            $r = Save-CtxJetonSaisi -Name 'perso' -Key 'github-token' -Value $valeur
+            $r | Should -BeFalse
+            $tout = $script:TestNew -join "`n"
+            $tout | Should -Match ([regex]::Escape((T 'jeton.echecEcriture' 'github-token' 'perso' 'X').TrimEnd('X')))
+            $tout | Should -Not -Match ([regex]::Escape((T 'jeton.enregistre' 'github-token' 24)))
+        }
+    }
+
+    It 'Save-CtxJetonSaisi annonce le succes apres une ecriture reussie, au bon nom' {
+        InModuleScope DevContext {
+            $poses = [System.Collections.Generic.List[string]]::new()
+            function Set-Secret {
+                [CmdletBinding()]
+                param([string]$Vault, [string]$Name, [securestring]$SecureStringSecret)
+                $poses.Add("$Vault|$Name")
+            }
+            $r = Save-CtxJetonSaisi -Name 'perso' -Key 'github-token' -Value (ConvertTo-CtxSecureString ('Ab3' * 8))
+            $r | Should -BeTrue
+            $poses | Should -Be @('DevContext|devctx/perso/github-token')
+            ($script:TestNew -join "`n") | Should -Match ([regex]::Escape((T 'jeton.enregistre' 'github-token' 24)))
+        }
+    }
+
+    It 'New-DevContext stocke chaque jeton par Save-CtxJetonSaisi, jamais par Set-CtxSecret en direct' {
+        # Un appel direct a Set-CtxSecret suivi d'un "enregistre" est
+        # exactement la forme du defaut : l'annonce ne depend pas du resultat.
+        $ast = InModuleScope DevContext { (Get-Command New-DevContext).ScriptBlock.Ast }
+        $noms = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) |
+                ForEach-Object { $_.GetCommandName() })
+        $noms | Should -Contain 'Save-CtxJetonSaisi'
+        $noms | Should -Not -Contain 'Set-CtxSecret'
+        $noms | Should -Not -Contain 'Set-Secret'
     }
 }
 

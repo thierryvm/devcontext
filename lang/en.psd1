@@ -242,13 +242,18 @@
     'jeton.passe'             = '{0}: not stored.'
     'jeton.abandon'           = '{0}: too many refused entries, key skipped. Nothing was stored.'
     'jeton.enregistre'        = '{0}: stored ({1} characters).'
+    'jeton.echecEcriture'     = '{0}: NOT stored, the vault refused the write. Set it later with ctx secret {0} -Name {1}. Detail: {2}'
 
     # --- ctx secret (Set-DevContextSecret) ----------------------------------------
     'secret.usage'            = 'Usage: ctx secret <key> [-Name <context>] [-Remove]'
     'secret.cleInconnue'      = "Unknown key. Valid keys: {0}. The key is the secret's NAME; its value is asked for afterwards, masked."
     'secret.cleRessembleJeton' = 'What was typed looks like a secret value. If it is one, it is now in the PowerShell history (PSReadLine): revoke it at the provider.'
     'secret.redirige'         = '{0}: refused, standard input is redirected and nobody could answer the masked prompt. Run ctx secret {0} in an interactive terminal.'
-    'secret.sansContexte'     = '{0}: no active context. Name it (ctx secret {0} -Name <context>) or enter a context first (work <context>).'
+    'secret.sansContexte'     = "{0}: this folder belongs to no context, and the folder is what decides. Name the context (ctx secret {0} -Name <context>) or run the command from inside one of the context's folders."
+    'secret.dossierAutre'     = "{0}: refused, this folder belongs to context '{1}' but this shell is in context '{2}'. Nothing was touched: name the target (ctx secret {0} -Name <context>)."
+    'secret.dossierAmbigu'    = '{0}: refused, the owner of this folder is ambiguous. {1} Name the target (ctx secret {0} -Name <context>).'
+    'secret.apparu'           = "{0}: a value appeared in the vault for context '{1}' while you were typing (another window?). Nothing was written: run ctx secret {0} again to replace it knowingly."
+    'secret.echecEcriture'    = "{0}: NOT stored for context '{1}', the vault refused the write. Detail: {2}"
     'secret.contexteInvalide' = 'Invalid context name: lowercase letters, digits and hyphens only, as at creation (ctx new).'
     'secret.actionPoser'      = 'Set secret'
     'secret.actionRetirer'    = 'Remove secret'

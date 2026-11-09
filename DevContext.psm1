@@ -301,7 +301,32 @@ function Set-CtxSecret {
         [Parameter(Mandatory)][string]$Key,
         [Parameter(Mandatory)][securestring]$Value
     )
-    Set-Secret -Vault $script:VaultName -Name "devctx/$Name/$Key" -SecureStringSecret $Value
+    Set-Secret -Vault $script:VaultName -Name "devctx/$Name/$Key" -SecureStringSecret $Value -ErrorAction Stop
+}
+
+function Save-CtxJetonSaisi {
+    <#
+      ctx new : stocke UN jeton saisi et dit ce qui s'est vraiment passe.
+
+      Set-CtxSecret leve sur toute erreur du coffre, y compris non bloquante :
+      sans -ErrorAction Stop, un fournisseur qui refusait l'ecriture affichait
+      son erreur, puis « enregistre » en vert, et le jeton manquait plus tard,
+      loin de sa cause. Ici l'echec se dit, cle par cle, avec la commande qui
+      le reprend, et la creation du contexte continue : elle a deja ecrit la
+      configuration git et SSH, et l'interrompre la laisserait sans son resume.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Key,
+        [Parameter(Mandatory)][securestring]$Value
+    )
+    try { Set-CtxSecret -Name $Name -Key $Key -Value $Value }
+    catch {
+        Write-Host "    $(T 'jeton.echecEcriture' $Key $Name (Protect-CtxMessage $_.Exception.Message))" -ForegroundColor Red
+        return $false
+    }
+    Write-Host "    $(T 'jeton.enregistre' $Key $Value.Length)" -ForegroundColor Green
+    $true
 }
 
 # ---------------------------------------------------------------------------
@@ -2643,8 +2668,7 @@ Host github-$Name
         foreach ($key in $script:SecretMap.Keys) {
             $secure = Read-CtxJeton -Key $key
             if ($null -ne $secure) {
-                Set-CtxSecret -Name $Name -Key $key -Value $secure
-                Write-Host "    $(T 'jeton.enregistre' $key $secure.Length)" -ForegroundColor Green
+                $null = Save-CtxJetonSaisi -Name $Name -Key $key -Value $secure
             }
         }
     }

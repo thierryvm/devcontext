@@ -142,13 +142,22 @@ single `*`.
 To add a token later, or replace one that expired, set that one key:
 
 ```powershell
-ctx secret supabase-token             # the active context
+ctx secret supabase-token             # the context that owns this folder
 ctx secret vercel-token -Name acme    # another context
 ctx secret sentry-token -Remove       # delete a key, after confirmation
 ```
 
+Without `-Name`, the folder decides, as everywhere else in DevContext: the key
+goes to the context that owns the current folder, never to whatever the shell
+happens to hold. It refuses, and asks for `-Name`, when the folder belongs to
+no context, when its owner is ambiguous, or when the shell is in a different
+context than the folder.
+
 It uses the same masked prompt and the same checks, reports the length and
-never the value, and asks before replacing a value that is already stored. The
+never the value, and asks before replacing a value that is already stored. If
+a value appears in the vault while you are typing (another window), nothing is
+written. A write the vault refuses is reported as a failure, never as stored.
+The
 value is never typed on the command line, where it would stay in the PowerShell
 history. It needs an interactive terminal and refuses when input is
 redirected. In a shell where that context is active, run `work <context> -NoCd`

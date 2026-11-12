@@ -171,6 +171,7 @@
     # --- vault and manifest -----------------------------------------------------
     'vault.absent'            = "SecretManagement module missing. Install it:`n  Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser"
     'vault.creation'          = "Creating vault '{0}'..."
+    'secret.illisible'        = "Vault '{1}' could not be read for key '{0}': {2}"
     'manifeste.introuvable'   = "Context '{0}' not found ({1}). Run 'ctx-list' to see the existing ones."
 
     # --- ctx-off ---------------------------------------------------------------
@@ -516,6 +517,8 @@
     'work.compte'             = 'Account : {0}'
     'work.secrets'            = 'Secrets : {0}'
     'work.secretsAucun'       = 'none loaded'
+    'work.illisibles'         = "Incomplete activation: vault '{1}' could not be read for {0}. Those variables were cleared; no value from another context remains. Run 'work' again; if the vault is locked: Unlock-SecretStore."
+    'work.nomManifeste'       = "Context '{0}' carries a manifest named '{1}'. Nothing was applied: secrets would be read under two names, two contexts' worth. Fix 'name' in context.json, or rename the folder."
 
     'vercel.token'            = 'token loaded'
     'vercel.session'          = 'dedicated session'
@@ -579,5 +582,6 @@
     'exec.tampon'             = "ctx exec: context '{0}' - secrets: {1}"
     'exec.demarrage'          = 'ctx exec: could not start pwsh: {0}'
     'exec.plateforme'         = 'ctx exec: Windows only for now -- the base environment is read from the registry. Command not run.'
+    'exec.secretIllisible'    = "ctx exec: {0} Command not run: without that secret it would run under another account, or none. Run it again; if the vault is locked: Unlock-SecretStore."
     'exec.aucunSecret'        = 'none'
 }

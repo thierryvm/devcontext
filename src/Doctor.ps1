@@ -546,26 +546,26 @@ function Get-DevContextDoctor {
     }
 
     # --- git ---------------------------------------------------------------
-    Push-Location -LiteralPath $dossier
-    try {
-        $estDepot = (git rev-parse --is-inside-work-tree 2>$null) -eq 'true'
-        if ($estDepot) {
-            $emailReel = (git config user.email 2>$null)
-            $origine   = Get-CtxOrigineConfigGit (git config --show-origin user.email 2>$null)
-            $emailAttendu = if ($manifeste) { Get-CtxProp $manifeste 'email' } else { $null }
-            $checks.Add((Test-CtxDoctorIdentiteGit -EmailAttendu $emailAttendu `
-                        -EmailReel $emailReel -Origine $origine))
+    # `git -C`, jamais Push-Location : se deplacer declenche le crochet de dossier,
+    # et un diagnostic ne doit pas pouvoir retirer le jeton de la session qui le
+    # lance. Audit du 7 novembre 2026, voir Get-CtxBranchesPour.
+    $depot = try { (Resolve-Path -LiteralPath $dossier -ErrorAction Stop).ProviderPath } catch { $dossier }
+    $estDepot = (git -C $depot rev-parse --is-inside-work-tree 2>$null) -eq 'true'
+    if ($estDepot) {
+        $emailReel = (git -C $depot config user.email 2>$null)
+        $origine   = Get-CtxOrigineConfigGit (git -C $depot config --show-origin user.email 2>$null)
+        $emailAttendu = if ($manifeste) { Get-CtxProp $manifeste 'email' } else { $null }
+        $checks.Add((Test-CtxDoctorIdentiteGit -EmailAttendu $emailAttendu `
+                    -EmailReel $emailReel -Origine $origine))
 
-            $push = (git remote get-url --push origin 2>$null)
-            $checks.Add((Test-CtxDoctorRemote -UrlPush $push `
-                        -AliasAttendu $(if ($proprio) { "github-$proprio" } else { $null })))
-        }
-        else {
-            $checks.Add((New-CtxCheck -Domaine 'git' -Sujet 'depot' -Verdict 'INFO' `
-                        -Detail (T 'doc.git.pasDepot')))
-        }
+        $push = (git -C $depot remote get-url --push origin 2>$null)
+        $checks.Add((Test-CtxDoctorRemote -UrlPush $push `
+                    -AliasAttendu $(if ($proprio) { "github-$proprio" } else { $null })))
     }
-    finally { Pop-Location }
+    else {
+        $checks.Add((New-CtxCheck -Domaine 'git' -Sujet 'depot' -Verdict 'INFO' `
+                    -Detail (T 'doc.git.pasDepot')))
+    }
 
     # --- binaires ----------------------------------------------------------
     $checks.Add((Test-CtxDoctorBinaire -Nom 'git' -Installations @(Get-CtxBinaireFacts 'git') `

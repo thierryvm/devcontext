@@ -285,12 +285,117 @@ function Test-CtxVault {
     }
 }
 
+# Waits between two reads of the vault. Two entries: three reads in all, and
+# at worst about half a second per key on a vault that never answers -- a
+# locked one, typically. Unbounded, that would be a hang.
+$script:SecretLectureDelaisMs = @(50, 200)
+
+function New-CtxSecretIllisibleError {
+    <#
+      The error every caller recognises by its id, DevCtxSecretIllisible.
+
+      It carries the key NAME as its target, never a value, and its cause goes
+      through Protect-CtxMessage: nothing in SecretStore is known to quote a
+      value in an error, and "is known to" is not a guarantee.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Fonction pure : construit un enregistrement d erreur, ne modifie aucun etat.')]
+    param(
+        [Parameter(Mandatory)][string]$Key,
+        [AllowNull()][AllowEmptyString()][string]$Cause
+    )
+    $message = T 'secret.illisible' $Key $script:VaultName (Protect-CtxMessage $Cause)
+    [System.Management.Automation.ErrorRecord]::new(
+        [System.InvalidOperationException]::new($message),
+        'DevCtxSecretIllisible',
+        [System.Management.Automation.ErrorCategory]::ReadError,
+        $Key)
+}
+
+function Test-CtxSecretIllisible {
+    param([AllowNull()]$ErrorRecord)
+    [bool]($ErrorRecord -is [System.Management.Automation.ErrorRecord] -and
+        $ErrorRecord.FullyQualifiedErrorId -like 'DevCtxSecretIllisible*')
+}
+
+function Get-CtxTexteCause {
+    # The message of the first failure, with its innermost cause: "a pipeline
+    # is already running" or "a password is required" is what tells the user
+    # what to do, and it sits two exceptions deep.
+    param([AllowNull()]$Panne)
+    $exception = if ($Panne -is [System.Management.Automation.ErrorRecord]) { $Panne.Exception } else { $Panne }
+    if ($exception -isnot [Exception]) { return [string]$Panne }
+    $interne = $exception
+    while ($interne.InnerException) { $interne = $interne.InnerException }
+    if ($interne -ne $exception) { "$($exception.Message) ($($interne.Message))" } else { $exception.Message }
+}
+
 function Get-CtxSecret {
+    <#
+      The value, $null when the vault has no such secret, and a
+      DevCtxSecretIllisible error when the vault could not be READ.
+
+      Those last two used to be the same $null, and every caller took it for
+      "no such secret". Reads from several runspaces of one process fail with
+      `Unable to get secret ... from vault` (inner cause: a pipeline is already
+      running); reads from separate processes do not. The measurements are in
+      CHANGELOG.md, beside this fix.
+
+      The shape of that failure decides the rule. A concurrent read reports
+      TWO errors, GetSecretInvalidOperation and THEN GetSecretNotFound, so
+      "it says not found" proves nothing. The secret is absent only when there
+      is at least one error and EVERY error is GetSecretNotFound. An absent
+      vault is a terminating error that -ErrorAction SilentlyContinue does not
+      stop, hence the catch.
+
+      A non-terminating failure is tried again a bounded number of times,
+      because the measured cause is transient. An absent secret is never
+      retried: it is an answer, not a fault.
+    #>
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string]$Key
     )
-    Get-Secret -Vault $script:VaultName -Name "devctx/$Name/$Key" -AsPlainText -ErrorAction SilentlyContinue
+    $nomComplet = "devctx/$Name/$Key"
+    $delais = @($script:SecretLectureDelaisMs)
+
+    for ($essai = 0; ; $essai++) {
+        $erreurs = @()
+        $valeur = $null
+        $terminale = $false
+        try {
+            $valeur = Get-Secret -Vault $script:VaultName -Name $nomComplet -AsPlainText `
+                -ErrorAction SilentlyContinue -ErrorVariable lecture
+            $erreurs = @($lecture)
+        }
+        # No case for Ctrl+C: a pipeline stop runs no catch at all, only
+        # finally -- callers that must clean up do it there.
+        catch { $erreurs = @($_); $terminale = $true }
+
+        if ($null -ne $valeur) { return $valeur }
+
+        # The id is what precedes the comma; what follows names the command.
+        $pannes = @($erreurs | Where-Object {
+                -not ($_ -is [System.Management.Automation.ErrorRecord] -and
+                    ($_.FullyQualifiedErrorId -split ',')[0] -eq 'GetSecretNotFound')
+            })
+        # Absence must be PROVED: no value and no error at all is ambiguous,
+        # and ambiguous is never read as absent. Nor is a TERMINATING error,
+        # whatever its id: the real cmdlet reports an absent name as
+        # non-terminating, so a terminating one is a fault of the call.
+        if (-not $terminale -and $erreurs.Count -gt 0 -and $pannes.Count -eq 0) { return $null }
+        if ($erreurs.Count -eq 0) { $pannes = @('Get-Secret returned neither a value nor an error') }
+        elseif ($pannes.Count -eq 0) { $pannes = $erreurs }
+
+        # A terminating error (absent vault) will not heal in 250 ms.
+        if ($terminale -or $essai -ge $delais.Count) {
+            throw (New-CtxSecretIllisibleError -Key $Key -Cause (Get-CtxTexteCause $pannes[0]))
+        }
+
+        # Jittered: parallel readers that retry in step collide again in step.
+        $attente = $delais[$essai]
+        Start-Sleep -Milliseconds ($attente + (Get-Random -Maximum ($attente + 1)))
+    }
 }
 
 function Set-CtxSecret {
@@ -942,15 +1047,46 @@ function Use-DevContext {
     )
 
     $m = Read-CtxManifest $Name
+    # La boucle ci-dessous lit devctx/<dossier>/*, Sync-CtxSupabaseEnv lit
+    # devctx/<nom du manifeste>/* : s'ils different, un meme shell porte les
+    # jetons de deux contextes. Un dossier de contexte copie a la main suffit.
+    # Mesure par l'audit du 30 octobre 2026. Rien n'est applique avant ce refus.
+    if ($m.name -ne $Name) { throw (T 'work.nomManifeste' $Name $m.name) }
     $ctx = Get-CtxPath $Name
+
+    # Les secrets du contexte precedent partent AVANT que l'identite change, et
+    # avant meme de verifier le coffre. Un `work` interrompu pendant une lecture
+    # -- Ctrl+C a une demande de mot de passe, ou pendant une attente entre deux
+    # essais -- n'est vu par aucun catch ; sans cela il laissait un shell
+    # etiquete B qui portait les jetons de A (audit du 29 octobre 2026). Et si
+    # Test-CtxVault leve, le shim d'editeur ouvre l'editeur quand meme. Un shell
+    # sans jeton echoue ; un shell aux jetons d'un autre compte reussit, au
+    # mauvais endroit.
+    foreach ($envVar in @($script:SecretMap.Values) + 'DEVCTX_SUPABASE_KEY') {
+        Remove-Item -Path "Env:$envVar" -ErrorAction SilentlyContinue
+    }
     Test-CtxVault
 
     # Les secrets sous le nom DONNE a `work`, comme avant la mise en commun :
     # c'est lui qui a designe le dossier du contexte, et c'est la que le coffre
     # les range. Le champ `name` du manifeste ne le remplace pas.
+    #
+    # Une cle que le coffre n'a pas pu LIRE devient $null -- donc retiree, comme
+    # une cle absente -- mais elle est notee : `work` termine l'activation, puis
+    # echoue, pour qu'un `work x && cmd` s'arrete. Une List et non `+=` : ce bloc
+    # est appele avec `&` depuis Get-CtxVariablesContexte, ou `+=` remplirait
+    # une copie locale et perdrait la note.
+    $notes = [System.Collections.Generic.List[string]]::new()
     $variables = Get-CtxVariablesContexte -Manifeste $m -DossierContexte $ctx -NomCoffre $Name -LireSecret {
-        param($Contexte, $Cle) Get-CtxSecret -Name $Contexte -Key $Cle
+        param($Contexte, $Cle)
+        try { Get-CtxSecret -Name $Contexte -Key $Cle }
+        catch {
+            if (-not (Test-CtxSecretIllisible $_)) { throw }
+            $notes.Add($script:SecretMap[$Cle])
+            $null
+        }
     }
+    $illisibles = @($notes)
     $loaded = @()
     foreach ($nomVar in $variables.Keys) {
         $valeur = $variables[$nomVar]
@@ -973,7 +1109,29 @@ function Use-DevContext {
 
     # APRES le Set-Location : le jeton Supabase depend du dossier ou l'on arrive,
     # pas de celui d'ou l'on vient. Ecrase la valeur posee par la boucle SecretMap.
-    Sync-CtxSupabaseEnv
+    #
+    # Le jeton Supabase a donc deux sources, et c'est la DERNIERE qui dit vrai :
+    # une lecture de la boucle en echec que Sync rattrape n'est plus illisible,
+    # et une lecture reussie que Sync efface n'est plus chargee.
+    $syncIllisible = $false
+    try { Sync-CtxSupabaseEnv }
+    catch {
+        if (-not (Test-CtxSecretIllisible $_)) { throw }
+        $syncIllisible = $true
+    }
+    if ($syncIllisible) {
+        if ($illisibles -notcontains 'SUPABASE_ACCESS_TOKEN') { $illisibles += 'SUPABASE_ACCESS_TOKEN' }
+    }
+    elseif ($env:DEVCTX_SUPABASE_KEY -and $env:SUPABASE_ACCESS_TOKEN) {
+        $illisibles = @($illisibles | Where-Object { $_ -ne 'SUPABASE_ACCESS_TOKEN' })
+        if ($loaded -notcontains 'SUPABASE_ACCESS_TOKEN') { $loaded += 'SUPABASE_ACCESS_TOKEN' }
+    }
+    # Sync efface le jeton quand il leve, mais aussi sans lever quand le secret
+    # du dossier est ABSENT (un index perime) : la liste suit l'etat reel, pas
+    # ce que la boucle a cru.
+    if (-not $env:SUPABASE_ACCESS_TOKEN) {
+        $loaded = @($loaded | Where-Object { $_ -ne 'SUPABASE_ACCESS_TOKEN' })
+    }
 
     if ($env:DEVCTX_SUPABASE_KEY -and $env:DEVCTX_SUPABASE_KEY -ne 'supabase-token') {
         $loaded = $loaded | ForEach-Object {
@@ -986,6 +1144,24 @@ function Use-DevContext {
     Write-Host "  $(T 'work.compte' (Get-CtxProp $m 'email'))"  -ForegroundColor DarkGray
     Write-Host "  $(T 'work.secrets' $(if ($loaded) { $loaded -join ', ' } else { T 'work.secretsAucun' }))" -ForegroundColor DarkGray
     Write-Host ""
+
+    if ($illisibles) {
+        # `throw` et non un simple affichage : $? doit rendre faux, et un
+        # `work x && supabase ...` ne doit pas partir sans son jeton -- la CLI
+        # retomberait sur sa connexion globale, c'est-a-dire sur le dernier
+        # compte connecte. Le message part sur le flux d'erreur, donc sur stderr
+        # pour un processus parent.
+        #
+        # Un identifiant a lui, et non DevCtxSecretIllisible : celui-la designe
+        # UNE cle, avec la cle pour cible. Un meme identifiant portant deux
+        # formes d'enregistrement, c'est la meme question tranchee a deux
+        # endroits.
+        throw [System.Management.Automation.ErrorRecord]::new(
+            [System.InvalidOperationException]::new((T 'work.illisibles' ($illisibles -join ', ') $script:VaultName)),
+            'DevCtxActivationIncomplete',
+            [System.Management.Automation.ErrorCategory]::ReadError,
+            ($illisibles -join ','))
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -1019,9 +1195,25 @@ $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
         try { & $script:PreviousLocationChangedAction $Source $Emplacement }
         catch { Write-Verbose "handler LocationChanged tiers en echec : $($_.Exception.Message)" }
     }
-    # Meme raison : jamais bloquant.
+    Sync-CtxSupabaseEnvSurDeplacement
+}
+
+function Sync-CtxSupabaseEnvSurDeplacement {
+    # Hors du hook, qui est un delegue EventHandler et non un scriptblock : on
+    # ne peut ni l'appeler avec `&` ni capturer ses flux, donc rien de ce qu'il
+    # contient ne se teste.
+    #
+    # Jamais bloquant, meme raison que le handler tiers. Mais une lecture du
+    # coffre en echec n'est pas un detail de journal verbeux : le jeton vient
+    # d'etre efface, et la commande suivante partirait sans lui. On le dit,
+    # sans lever.
     try { Sync-CtxSupabaseEnv }
-    catch { Write-Verbose "Sync-CtxSupabaseEnv en echec : $($_.Exception.Message)" }
+    catch {
+        # -WarningAction Continue : avec $WarningPreference = 'Stop', l'avertissement
+        # leverait lui-meme, depuis ce catch, et casserait le `cd`.
+        if (Test-CtxSecretIllisible $_) { Write-Warning $_.Exception.Message -WarningAction Continue }
+        else { Write-Verbose "Sync-CtxSupabaseEnv en echec : $($_.Exception.Message)" }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -1793,8 +1985,21 @@ function Sync-CtxSupabaseEnv {
 
     if (-not $env:DEVCTX) { return }
 
-    $variables = Get-CtxVariablesSupabase -Contexte $env:DEVCTX -Chemin $Path -LireSecret {
-        param($Contexte, $Cle) Get-CtxSecret -Name $Contexte -Key $Cle
+    # Efface AVANT de lever. L'ordre inverse serait pire que le silence qu'il
+    # remplace : apres un `cd` du projet A vers le projet B, le jeton de A
+    # resterait charge. Dans un finally et non un catch : un Ctrl+C a une
+    # demande de mot de passe n'execute aucun catch (audit du 30 octobre 2026).
+    $variables = $null
+    try {
+        $variables = Get-CtxVariablesSupabase -Contexte $env:DEVCTX -Chemin $Path -LireSecret {
+            param($Contexte, $Cle) Get-CtxSecret -Name $Contexte -Key $Cle
+        }
+    }
+    finally {
+        if ($null -eq $variables) {
+            Remove-Item Env:SUPABASE_ACCESS_TOKEN -ErrorAction SilentlyContinue
+            Remove-Item Env:DEVCTX_SUPABASE_KEY   -ErrorAction SilentlyContinue
+        }
     }
     foreach ($nomVar in $variables.Keys) {
         if ($variables[$nomVar]) { Set-Item -LiteralPath "Env:$nomVar" -Value $variables[$nomVar] }
@@ -2105,7 +2310,8 @@ function Test-CtxSupabaseGuard {
     # deux contextes le revendiquent, ou que le chemin et les fichiers n'ont pas
     # le meme, il n'y a pas UN index a lire : repondre « pas de production »
     # serait affirmer ce qu'on n'a pas pu verifier. Les seules commandes
-    # refusees sont celles que ce garde-fou protege deja ; les lectures passent.
+    # refusees sont celles que ce garde-fou protege deja. Tout le reste passe,
+    # y compris des ecritures comme `functions deploy` : SECURITY.md le dit.
     if ($Ambiguite -and ($destructive -or $branchBound) -and -not $Override) {
         return [pscustomobject]@{ Allowed = $false; Rule = 'proprietaire-ambigu'; Reason = $Ambiguite }
     }
@@ -2204,18 +2410,21 @@ function Get-CtxBranchesPour {
     $vide = [pscustomobject]@{ Courante = $null; Defaut = $null }
     if (-not $Dossier -or -not (Test-Path -LiteralPath $Dossier)) { return $vide }
 
-    # Le drapeau, et non un Pop-Location dans un finally inconditionnel : si le
-    # Push echoue, ce finally depilerait l'emplacement de QUELQU'UN D'AUTRE et
-    # laisserait l'appelant ailleurs qu'il ne croit.
-    $pousse = $false
+    # `git -C`, JAMAIS Push-Location. Se deplacer declenche le crochet de dossier,
+    # donc une lecture du coffre -- dans un shim, ou un echec efface un jeton
+    # valide juste avant de lancer le CLI. Mesure par l'audit du 7 novembre 2026 :
+    # token=SET en entrant dans le shim, UNSET dans le CLI, code 0. Une question
+    # posee a git n'a aucune raison de changer ou l'on se tient.
+    #
+    # Le chemin de FOURNISSEUR, resolu ici : git ne connait pas les lecteurs
+    # PowerShell, et son echec vaudrait « laisse passer ».
     try {
-        Push-Location -LiteralPath $Dossier -ErrorAction Stop
-        $pousse = $true
+        $depot = (Resolve-Path -LiteralPath $Dossier -ErrorAction Stop).ProviderPath
 
-        $courante = git rev-parse --abbrev-ref HEAD 2>$null
+        $courante = git -C $depot rev-parse --abbrev-ref HEAD 2>$null
         if ($LASTEXITCODE -ne 0 -or $courante -eq 'HEAD') { $courante = $null }
 
-        $defaut = git symbolic-ref --short refs/remotes/origin/HEAD 2>$null
+        $defaut = git -C $depot symbolic-ref --short refs/remotes/origin/HEAD 2>$null
         if ($LASTEXITCODE -eq 0 -and $defaut) {
             # Retirer le prefixe du remote, et LUI SEUL. Un `-split '/'` suivi de
             # [-1] tronquait une branche hierarchique : avec
@@ -2227,7 +2436,7 @@ function Get-CtxBranchesPour {
         else {
             $defaut = $null
             foreach ($candidat in 'main', 'master') {
-                git show-ref --verify --quiet "refs/heads/$candidat" 2>$null
+                git -C $depot show-ref --verify --quiet "refs/heads/$candidat" 2>$null
                 if ($LASTEXITCODE -eq 0) { $defaut = $candidat; break }
             }
         }
@@ -2235,7 +2444,6 @@ function Get-CtxBranchesPour {
         [pscustomobject]@{ Courante = $courante; Defaut = $defaut }
     }
     catch { $vide }
-    finally { if ($pousse) { Pop-Location } }
 }
 
 function Resolve-CtxSupabaseVerdict {
